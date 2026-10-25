@@ -1,0 +1,27 @@
+# Shared offline cover/manual selection for API and native consumer workflows.
+# Other native media roles are selected by the separate server importer.
+schema_version: 1
+target: es-de
+title_mode: catalog
+selection:
+  description:
+    scope: game
+    order: [language, source]
+    languages: [ru, en]
+    sources: [screenscraper, launchbox, openvgdb, igdb]
+  media:
+    cover:
+      scope: game
+      # Explicit cover-only policy; other profiles/roles retain legacy defaults.
+      order: [region, region-preference, style, variant, source, scope, format]
+      styles: [flat-front, unknown, front-spine]
+      variants: [original, unknown, reconstructed, fanart]
+      regions: ['$release', world, unspecified, usa, japan, europe, '*']
+      sources: [emumovies, launchbox, screenscraper, igdb, openvgdb]
+      formats: [png, jpg, webp]
+    manual:
+      scope: game
+      order: [region, source, format]
+      regions: ['$release', world, unspecified, usa, japan, europe, '*']
+      sources: [screenscraper, emumovies, launchbox]
+      formats: [pdf, md, txt]

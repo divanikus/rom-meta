@@ -1,0 +1,1695 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RomMeta</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101418;
+      --panel: #161d23;
+      --panel-2: #1d252d;
+      --line: #2a3641;
+      --text: #e8edf2;
+      --muted: #9aa8b4;
+      --accent: #48c7e8;
+      --accent-2: #8bd450;
+      --warn: #ffb14a;
+      --bad: #ff5d8a;
+      --shadow: rgba(0, 0, 0, .24);
+      font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 280px 360px minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
+      height: 100vh;
+    }
+
+    header {
+      min-height: 48px;
+      flex-wrap: wrap;
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--line);
+      background: #121920;
+      box-shadow: 0 1px 0 var(--shadow);
+    }
+
+    .brand {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      min-width: 0;
+      white-space: nowrap;
+    }
+
+    .video-placeholder { display: grid; place-items: center; min-height: 120px; color: var(--accent); }
+
+    .nav {
+      display: inline-flex;
+      gap: 6px;
+    }
+
+    a.tab-button { text-decoration: none; }
+
+    .tab-button,
+    .icon-button {
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      min-height: 32px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .tab-button:hover,
+    .icon-button:hover {
+      color: var(--text);
+      border-color: #3a4b59;
+      background: #17212a;
+    }
+
+    .tab-button.active {
+      color: var(--accent);
+      border-color: #357488;
+      background: #12232b;
+    }
+
+    .top-status {
+      margin-left: auto;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    aside,
+    main,
+    section {
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .platforms,
+    .games {
+      border-right: 1px solid var(--line);
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .pane-head {
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 8px;
+    }
+
+    .pane-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .search {
+      width: 100%;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      background: #0f151b;
+      color: var(--text);
+      border-radius: 6px;
+      padding: 6px 10px;
+      outline: none;
+    }
+
+    .search:focus {
+      border-color: #3f8ba3;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      user-select: none;
+    }
+
+    .scroll {
+      overflow: auto;
+      min-height: 0;
+    }
+
+    .platform-item,
+    .game-item {
+      width: 100%;
+      border: 0;
+      border-bottom: 1px solid rgba(42, 54, 65, .75);
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      cursor: pointer;
+      padding: 10px 12px;
+      display: grid;
+      gap: 5px;
+    }
+
+    .platform-item:hover,
+    .game-item:hover {
+      background: #1a242d;
+    }
+
+    .platform-item.active,
+    .game-item.active {
+      background: #122833;
+      box-shadow: inset 3px 0 0 var(--accent);
+    }
+
+    .game-item.missing {
+      box-shadow: inset 3px 0 0 var(--bad);
+    }
+
+    .game-item.active.missing {
+      background: #2a1721;
+      box-shadow: inset 3px 0 0 var(--bad);
+    }
+
+    .primary {
+      font-weight: 650;
+      color: var(--text);
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .secondary {
+      color: var(--muted);
+      font-size: 12px;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .chip {
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: #121920;
+      border-radius: 5px;
+      padding: 2px 6px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .chip.good {
+      color: var(--accent-2);
+      border-color: rgba(139, 212, 80, .42);
+    }
+
+    .chip.warn {
+      color: var(--warn);
+      border-color: rgba(255, 177, 74, .45);
+    }
+
+    .chip.bad {
+      color: var(--bad);
+      border-color: rgba(255, 93, 138, .45);
+    }
+
+    .details,
+    .stats {
+      background: #0f1419;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .detail-head {
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 8px;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      font-weight: 750;
+    }
+
+    h1 {
+      font-size: 24px;
+    }
+
+    h2 {
+      font-size: 18px;
+    }
+
+    h3 {
+      font-size: 15px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .detail-body {
+      padding: 16px 20px 24px;
+      overflow: auto;
+      display: grid;
+      gap: 18px;
+    }
+
+    .profile-layout {
+      display: grid;
+      grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+      grid-template-areas:
+        "cover content"
+        "facts content";
+      gap: 18px;
+      align-items: start;
+    }
+
+    .profile-layout > .cover-panel {
+      grid-area: cover;
+    }
+
+    .profile-layout > .profile-content {
+      grid-area: content;
+    }
+
+    .profile-layout > .side-panel {
+      grid-area: facts;
+    }
+
+    .cover-panel,
+    .side-panel {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .cover-image,
+    .cover-placeholder {
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      display: grid;
+      place-items: center;
+      background: #0b1015;
+      color: var(--muted);
+      text-align: center;
+      padding: 14px;
+    }
+
+    .cover-image {
+      object-fit: contain;
+      padding: 0;
+    }
+
+    .media-open {
+      border: 0;
+      background: #0b1015;
+      color: inherit;
+      padding: 0;
+      display: block;
+      width: 100%;
+      cursor: zoom-in;
+      text-align: inherit;
+    }
+
+    .media-open:hover img,
+    .media-open:hover video,
+    .media-open:focus-visible img,
+    .media-open:focus-visible video {
+      filter: brightness(1.08);
+    }
+
+    .media-open:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+    }
+
+    .profile-content {
+      min-width: 0;
+      display: grid;
+      gap: 18px;
+    }
+
+    .profile-lists {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
+      gap: 18px;
+      align-items: start;
+    }
+
+    .description {
+      color: #c6d4de;
+      line-height: 1.62;
+      max-width: 86ch;
+    }
+
+    .description p {
+      margin: 0 0 12px;
+    }
+
+    .description p:last-child {
+      margin-bottom: 0;
+    }
+
+    .description-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .description-item {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 6px;
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .description-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    .fact-list {
+      display: grid;
+    }
+
+    .fact-row {
+      display: grid;
+      grid-template-columns: minmax(110px, .8fr) minmax(0, 1fr);
+      gap: 12px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .fact-row:last-child {
+      border-bottom: 0;
+    }
+
+    .fact-label {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    .fact-value {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .title-list,
+    .match-list {
+      display: grid;
+      gap: 5px;
+    }
+
+    .title-list,
+    .release-list {
+      display: grid;
+      gap: 5px;
+    }
+
+    .title-item,
+    .release-item,
+    .match-item {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 6px;
+      padding: 10px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .title-item {
+      grid-template-columns: minmax(160px, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      padding: 7px 10px;
+    }
+
+    .title-item .primary,
+    .title-item .secondary {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .title-item .secondary {
+      justify-self: end;
+    }
+
+    .release-list {
+      gap: 5px;
+    }
+
+    .release-item {
+      grid-template-columns: minmax(170px, 1.35fr) minmax(70px, .7fr) auto;
+      align-items: center;
+      gap: 12px;
+      padding: 7px 10px;
+    }
+
+    .release-item .primary,
+    .release-item .secondary {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .release-item .chips {
+      justify-content: flex-end;
+      flex-wrap: nowrap;
+    }
+
+    .media-head {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .media-head h3 {
+      margin-right: 4px;
+    }
+
+    .source-readable {
+      display: grid;
+      gap: 14px;
+    }
+
+    .source-top {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+      gap: 14px;
+      align-items: start;
+    }
+
+    details.raw-details {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    details.raw-details summary {
+      cursor: pointer;
+      padding: 10px 12px;
+      color: var(--muted);
+      user-select: none;
+    }
+
+    details.raw-details pre {
+      border: 0;
+      border-top: 1px solid var(--line);
+      border-radius: 0;
+    }
+
+    .section {
+      display: grid;
+      gap: 10px;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+    }
+
+    .field {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 6px;
+      padding: 10px;
+      min-width: 0;
+    }
+
+    .field label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .field div {
+      overflow-wrap: anywhere;
+    }
+
+    .source-tabs {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    pre {
+      margin: 0;
+      border: 1px solid var(--line);
+      background: #0b1015;
+      border-radius: 6px;
+      padding: 12px;
+      overflow: auto;
+      color: #d8e4ed;
+      line-height: 1.4;
+      font-family: Consolas, "Cascadia Mono", monospace;
+      font-size: 12px;
+      max-height: 46vh;
+    }
+
+    .media-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+    }
+
+    .media-item {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 6px;
+      overflow: hidden;
+      display: grid;
+      gap: 0;
+    }
+
+    .media-item img,
+    .media-item video {
+      display: block;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      object-fit: contain;
+      background: #0b1015;
+    }
+
+    .media-caption {
+      padding: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 12px;
+      padding: 16px;
+      background: rgba(4, 7, 10, .9);
+    }
+
+    .lightbox.hidden {
+      display: none;
+    }
+
+    .lightbox-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .lightbox-title {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text);
+      font-weight: 650;
+    }
+
+    .lightbox-stage {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      place-items: center;
+    }
+
+    .lightbox-stage img,
+    .lightbox-stage video {
+      display: block;
+      max-width: 100%;
+      max-height: calc(100vh - 90px);
+      background: #0b1015;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, .42);
+    }
+
+    .lightbox-stage video {
+      width: min(100%, 1280px);
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 18px;
+      background: rgba(22, 29, 35, .65);
+    }
+
+    .stats-view {
+      grid-column: 1 / -1;
+      background: #0f1419;
+      overflow: auto;
+      padding: 18px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 6px;
+      padding: 12px;
+    }
+
+    .metric-value {
+      font-size: 24px;
+      font-weight: 750;
+      color: var(--text);
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      background: var(--panel-2);
+    }
+
+    td.number {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .loading {
+      color: var(--warn);
+    }
+
+    .error {
+      color: var(--bad);
+    }
+
+    @media (max-width: 980px) {
+      body {
+        overflow: auto;
+      }
+
+      .app {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 260px 320px minmax(420px, 1fr);
+        min-height: 100vh;
+        height: auto;
+      }
+
+      header,
+      .stats-view {
+        grid-column: 1;
+      }
+
+      .platforms,
+      .games {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .profile-layout,
+      .source-top,
+      .profile-lists {
+        grid-template-columns: 1fr;
+      }
+
+      .profile-layout {
+        grid-template-areas:
+          "cover"
+          "content"
+          "facts";
+      }
+
+      .release-item {
+        grid-template-columns: 1fr;
+      }
+
+      .title-item {
+        grid-template-columns: 1fr;
+      }
+
+      .release-item .primary,
+      .release-item .secondary,
+      .title-item .primary,
+      .title-item .secondary {
+        white-space: normal;
+      }
+
+      .release-item .chips {
+        justify-content: flex-start;
+        flex-wrap: wrap;
+      }
+
+      .title-item .secondary {
+        justify-self: start;
+      }
+
+      .cover-panel {
+        max-width: 260px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <header>
+      <div class="brand">RomMeta</div>
+      <nav class="nav" aria-label="views">
+        <button class="tab-button active" id="browse-tab" type="button">Browse</button>
+        <button class="tab-button" id="stats-tab" type="button">Stats</button>
+        <a class="tab-button" href="/api" target="_blank" rel="noopener">API</a>
+        <a class="tab-button" href="/docs" target="_blank" rel="noopener">API docs</a>
+      </nav>
+      <div class="top-status" id="top-status">Loading...</div>
+    </header>
+
+    <aside class="platforms" id="platform-pane">
+      <div class="pane-head">
+        <div class="pane-title">
+          <span>Platforms</span>
+          <span id="platform-count">0</span>
+        </div>
+      </div>
+      <div class="scroll" id="platform-list"></div>
+    </aside>
+
+    <main class="games" id="game-pane">
+      <div class="pane-head">
+        <div class="pane-title">
+          <span>Games</span>
+          <span id="game-count">0</span>
+        </div>
+        <input class="search" id="game-search" type="search" placeholder="Filter games">
+        <label class="toggle-row">
+          <input type="checkbox" id="missing-only">
+          Missing metadata only
+        </label>
+        <div class="secondary" id="game-progress"></div>
+      </div>
+      <div class="scroll" id="game-list"></div>
+    </main>
+
+    <section class="details" id="detail-pane">
+      <div class="detail-head">
+        <h1 id="detail-title">Select a game</h1>
+        <div class="chips" id="detail-chips"></div>
+      </div>
+      <div class="detail-body" id="detail-body">
+        <div class="empty">Choose a platform and game from the lists.</div>
+      </div>
+    </section>
+
+    <section class="stats-view hidden" id="stats-pane"></section>
+  </div>
+
+  <div class="lightbox hidden" id="media-lightbox" role="dialog" aria-modal="true" aria-labelledby="lightbox-title">
+    <div class="lightbox-toolbar">
+      <div class="lightbox-title" id="lightbox-title"></div>
+      <button class="icon-button" id="lightbox-close" type="button">Close</button>
+    </div>
+    <div class="lightbox-stage" id="lightbox-stage"></div>
+  </div>
+
+  <script>
+    const state = {
+      platforms: [],
+      platform: "",
+      games: [],
+      game: null,
+      selectedFolder: "",
+      platformRequestID: 0,
+      gameRequestID: 0,
+      platformController: null,
+      gameController: null,
+      listLimit: 100,
+      mediaSource: "all",
+      sourceIndex: 0,
+      stats: null,
+      statsController: null,
+      statsProgress: "",
+      view: "browse"
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    $("browse-tab").addEventListener("click", () => setView("browse"));
+    $("stats-tab").addEventListener("click", () => setView("stats"));
+    $("stats-pane").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-stats-all], [data-stats-selected]");
+      if (button) loadStats(button.hasAttribute("data-stats-all"));
+    });
+    function filterGames() {
+      state.listLimit = 100;
+      $("game-list").scrollTop = 0;
+      renderGames();
+    }
+    $("game-search").addEventListener("input", filterGames);
+    $("missing-only").addEventListener("change", filterGames);
+    $("game-list").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-game], [data-more-games]");
+      if (!button) return;
+      if (button.hasAttribute("data-more-games")) {
+        state.listLimit += 100;
+        renderGames();
+      } else {
+        selectGame(button.dataset.game);
+      }
+    });
+    $("lightbox-close").addEventListener("click", closeLightbox);
+    $("media-lightbox").addEventListener("click", (event) => {
+      if (event.target === $("media-lightbox") || event.target === $("lightbox-stage")) {
+        closeLightbox();
+      }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeLightbox();
+      }
+    });
+    document.addEventListener("click", (event) => {
+      const trigger = event.target.closest("[data-lightbox-src]");
+      if (!trigger) return;
+      event.preventDefault();
+      openLightbox(trigger.dataset.lightboxSrc, trigger.dataset.lightboxType, trigger.dataset.lightboxTitle);
+    });
+
+    function setView(view) {
+      state.view = view;
+      $("browse-tab").classList.toggle("active", view === "browse");
+      $("stats-tab").classList.toggle("active", view === "stats");
+      $("platform-pane").classList.toggle("hidden", view !== "browse");
+      $("game-pane").classList.toggle("hidden", view !== "browse");
+      $("detail-pane").classList.toggle("hidden", view !== "browse");
+      $("stats-pane").classList.toggle("hidden", view !== "stats");
+      if (view === "stats") {
+        state.platformController?.abort();
+        state.gameController?.abort();
+        loadStats();
+      } else {
+        state.statsController?.abort();
+        if (state.platform) selectPlatform(state.platform);
+      }
+    }
+
+    async function fetchJSON(path, signal) {
+      const response = await fetch(path, {headers: {"Accept": "application/json"}, signal});
+      if (!response.ok) {
+        let message = response.statusText;
+        try {
+          const body = await response.json();
+          message = body.error || message;
+        } catch {
+          // keep status text
+        }
+        throw new Error(message);
+      }
+      return response.json();
+    }
+
+    async function loadPlatforms() {
+      setStatus("Reading platforms...");
+      try {
+        state.platforms = await fetchJSON("/api/platforms");
+        $("platform-count").textContent = formatNumber(state.platforms.length);
+        renderPlatforms();
+        if (state.platforms.length > 0) {
+          if (state.view === "browse") await selectPlatform(state.platforms[0].platform);
+        } else {
+          setStatus("No platforms found");
+        }
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
+    async function selectPlatform(platform) {
+      state.platformController?.abort();
+      state.gameController?.abort();
+      const controller = new AbortController();
+      state.platformController = controller;
+      state.platform = platform;
+      state.selectedFolder = "";
+      state.games = [];
+      state.game = null;
+      state.listLimit = 100;
+      $("game-progress").textContent = "";
+      $("game-list").scrollTop = 0;
+      const requestID = ++state.platformRequestID;
+      state.gameRequestID++;
+      renderPlatforms();
+      renderGames();
+      renderDetails();
+      setStatus("Reading games...");
+      try {
+        const response = await fetchJSON("/api/games?names=1&platform=" + encodeURIComponent(platform), controller.signal);
+        if (requestID !== state.platformRequestID || state.platform !== platform) {
+          return;
+        }
+        state.games = response.games || [];
+        $("game-count").textContent = formatNumber(state.games.length);
+        renderGames();
+        if (state.games.length > 0) {
+          await selectGame(state.games[0].folder);
+          if (!controller.signal.aborted) {
+            await loadGameSummaries(platform, requestID, controller.signal);
+          }
+        } else {
+          setStatus(platform + ": no games");
+        }
+      } catch (error) {
+        if (error.name === "AbortError") return;
+        if (requestID !== state.platformRequestID || state.platform !== platform) {
+          return;
+        }
+        setStatus(error.message, true);
+      }
+    }
+
+    async function loadGameSummaries(platform, requestID, signal) {
+      const games = state.games;
+      const byFolder = new Map(games.map((game) => [game.folder, game]));
+      const folders = games.map((game) => game.folder);
+      try {
+        for (let offset = 0; offset < folders.length; offset += 32) {
+          if (signal.aborted) return;
+          const params = new URLSearchParams({platform});
+          folders.slice(offset, offset + 32).forEach((folder) => params.append("game", folder));
+          const response = await fetchJSON("/api/games?" + params, signal);
+          if (requestID !== state.platformRequestID || signal.aborted) return;
+          for (const summary of response.games || []) {
+            const game = byFolder.get(summary.folder);
+            if (game) Object.assign(game, summary);
+          }
+          const read = Math.min(offset + 32, folders.length);
+          $("game-progress").textContent = "Reading list details: " + formatNumber(read) + "/" + formatNumber(folders.length);
+          renderGames();
+        }
+        const failures = games.filter((game) => game.summary_error).length;
+        $("game-progress").textContent = failures ? formatNumber(failures) + " games could not be read" : "";
+        games.sort((a, b) => (a.title || a.folder).toLowerCase().localeCompare((b.title || b.folder).toLowerCase()) || a.folder.localeCompare(b.folder));
+        renderGames();
+      } catch (error) {
+        if (error.name !== "AbortError" && requestID === state.platformRequestID) {
+          $("game-progress").textContent = "List details: " + error.message;
+        }
+      }
+    }
+
+    async function selectGame(folder) {
+      state.gameController?.abort();
+      const controller = new AbortController();
+      state.gameController = controller;
+      const platform = state.platform;
+      const requestID = ++state.gameRequestID;
+      state.selectedFolder = folder;
+      state.sourceIndex = 0;
+      // Selecting a card must not rebuild thousands of list rows or reset scroll.
+      $("game-list").querySelectorAll("[data-game]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.game === folder);
+      });
+      state.game = null;
+      $("detail-title").textContent = folder;
+      $("detail-chips").innerHTML = "";
+      $("detail-body").innerHTML = '<div class="loading">Reading game...</div>';
+      setStatus("Reading game...");
+      try {
+        const response = await fetchJSON("/api/game?platform=" + encodeURIComponent(platform) + "&game=" + encodeURIComponent(folder), controller.signal);
+        if (requestID !== state.gameRequestID || state.platform !== platform || state.selectedFolder !== folder) {
+          return;
+        }
+        state.game = response;
+        renderDetails();
+        setStatus(platform);
+      } catch (error) {
+        if (error.name === "AbortError") return;
+        if (requestID !== state.gameRequestID || state.platform !== platform || state.selectedFolder !== folder) {
+          return;
+        }
+        setStatus(error.message, true);
+        $("detail-body").innerHTML = '<div class="error">' + escapeHTML(error.message) + '</div>';
+      }
+    }
+
+    async function fetchStats(platform, signal, onProgress) {
+      const response = await fetch("/api/stats?platform=" + encodeURIComponent(platform) + "&stream=1", {signal, headers: {Accept: "application/x-ndjson"}});
+      if (!response.ok) { let message = response.statusText; try { message = (await response.json()).error || message; } catch {} throw new Error(message); }
+      // Keep JSON clients and non-streaming test environments usable.
+      if (!response.body?.getReader) return response.json();
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "", result;
+      function frame(line) {
+        if (!line.trim()) return;
+        const value = JSON.parse(line);
+        if (value.error) throw new Error(value.error);
+        if (value.progress) onProgress(value.progress);
+        if (value.result) result = value.result;
+      }
+      try {
+        while (true) {
+          const {done, value} = await reader.read();
+          buffer += decoder.decode(value, {stream: !done});
+          let end;
+          while ((end = buffer.indexOf("\n")) >= 0) { frame(buffer.slice(0,end)); buffer = buffer.slice(end + 1); }
+          if (done) break;
+        }
+        frame(buffer);
+        if (!result) throw new Error("Stats stream ended before completion");
+        return result;
+      } finally { await reader.cancel(); }
+    }
+
+    function mergeStats(total, part) {
+      for (const [key, value] of Object.entries(part)) {
+        if (typeof value === "number") total[key] = (total[key] || 0) + value;
+      }
+      total.DataRoot = part.DataRoot;
+      total.Platforms.push(...(part.Platforms || []));
+      for (const source of part.SourceCounts || []) {
+        let saved = total.SourceCounts.find((item) => item.Source === source.Source);
+        if (!saved) { saved = {Source: source.Source}; total.SourceCounts.push(saved); }
+        for (const key of ["GameCount", "MatchedGameCount", "NoMatchGameCount"]) saved[key] = (saved[key] || 0) + (source[key] || 0);
+      }
+      total.SourceCounts.sort((a,b) => a.Source.localeCompare(b.Source));
+    }
+
+    async function loadStats(all = false) {
+      state.statsController?.abort();
+      const controller = new AbortController();
+      state.statsController = controller;
+      const total = {Platforms: [], SourceCounts: []};
+      state.stats = total;
+      state.statsProgress = "Reading platform list...";
+      renderStats();
+      try {
+        let platforms = await fetchJSON("/api/platforms", controller.signal);
+        if (!all) platforms = state.platform ? platforms.filter((item) => item.platform === state.platform) : platforms.slice(0,1);
+        for (let index = 0; index < platforms.length; index++) {
+          const platform = platforms[index].platform;
+          state.statsProgress = "Scanning " + platform + " (" + (index + 1) + "/" + platforms.length + "). Metadata and media inventories; return to Browse to cancel.";
+          renderStats();
+          const part = await fetchStats(platform, controller.signal, (progress) => {
+            if (controller.signal.aborted || state.statsController !== controller) return;
+            state.statsProgress = "Scanning " + platform + " (" + (index + 1) + "/" + platforms.length + "): " + progress.Stage + (progress.Current ? " | " + formatNumber(progress.Current) + (progress.Total ? "/" + formatNumber(progress.Total) : "") + " games" : "") + ". Return to Browse to cancel.";
+            renderStats();
+          });
+          if (controller.signal.aborted || state.statsController !== controller) return;
+          mergeStats(total, part);
+        }
+        if (controller.signal.aborted || state.statsController !== controller) return;
+        state.statsProgress = all ? "Catalog scan complete. Totals include all scanned platforms." : "Platform scan complete. Catalog totals require Scan entire catalog.";
+        renderStats();
+      } catch (error) {
+        if (error.name === "AbortError" || state.statsController !== controller) return;
+        state.statsProgress = "Scan incomplete: " + error.message;
+        renderStats();
+      }
+    }
+
+    function renderPlatforms() {
+      const items = state.platforms.map((item) => {
+        const active = item.platform === state.platform ? " active" : "";
+        const summary = formatNumber(item.game_count) + ' games' + (item.release_count > 0 ? ', ' + formatNumber(item.release_count) + ' releases' : '');
+        const hasCoverage = item.matched_game_count > 0 || item.missing_metadata_count > 0 || item.checked_no_match_count > 0 || item.not_checked_count > 0;
+        const coverage = hasCoverage
+          ? '<span class="chips"><span class="chip good">' + formatNumber(item.matched_game_count) + ' matched</span><span class="chip bad">' + formatNumber(item.missing_metadata_count) + ' missing</span></span>'
+          : '';
+        return '<button class="platform-item' + active + '" type="button" data-platform="' + escapeAttr(item.platform) + '">' +
+          '<span class="primary">' + escapeHTML(item.platform) + '</span>' +
+          '<span class="secondary">' + summary + '</span>' +
+          coverage +
+          '</button>';
+      }).join("");
+      $("platform-list").innerHTML = items || '<div class="empty">No platform folders found.</div>';
+      $("platform-list").querySelectorAll("[data-platform]").forEach((button) => {
+        button.addEventListener("click", () => selectPlatform(button.dataset.platform));
+      });
+    }
+
+    function renderGames() {
+      const query = $("game-search").value.trim().toLowerCase();
+      const missingOnly = $("missing-only").checked;
+      const filtered = state.games.filter((game) => {
+        const title = (game.title || game.folder || "").toLowerCase();
+        const folder = (game.folder || "").toLowerCase();
+        if (query && !title.includes(query) && !folder.includes(query)) {
+          return false;
+        }
+        if (missingOnly && (!game.summary_loaded || !game.missing_metadata)) {
+          return false;
+        }
+        return true;
+      });
+      $("game-count").textContent = formatNumber(filtered.length) + "/" + formatNumber(state.games.length);
+      const visible = filtered.slice(0, state.listLimit);
+      const more = filtered.length > visible.length
+        ? '<button class="game-item" type="button" data-more-games>Show more (' + formatNumber(filtered.length - visible.length) + ' remaining)</button>' : '';
+      $("game-list").innerHTML = visible.map(renderGameListItem).join("") + more || '<div class="empty">No games match the filter.</div>';
+    }
+
+    function renderGameListItem(game) {
+      const active = game.folder === state.selectedFolder ? " active" : "";
+      const missing = game.missing_metadata ? " missing" : "";
+      const title = game.title || game.folder;
+      const status = metadataStatusChip(game);
+      const media = game.source_media_url_count > 0 ? '<span class="chip">' + formatNumber(game.source_media_url_count) + ' media URLs</span>' : "";
+      return '<button class="game-item' + active + missing + '" type="button" data-game="' + escapeAttr(game.folder) + '">' +
+        '<span class="primary">' + escapeHTML(title) + '</span>' +
+        '<span class="secondary">' + escapeHTML(game.default_release || game.folder) + '</span>' +
+        '<span class="chips">' + status + (game.summary_loaded ? '<span class="chip">' + formatNumber(game.release_count) + ' releases</span>' : '') + media + '</span>' +
+        '</button>';
+    }
+
+    function metadataStatusChip(game) {
+      if (game.summary_error) {
+        return '<span class="chip bad" title="' + escapeAttr(game.summary_error) + '">read error</span>';
+      }
+      if (!game.summary_loaded) {
+        return '<span class="chip">loading details</span>';
+      }
+      if (game.has_metadata) {
+        return '<span class="chip good">matched</span>';
+      }
+      if (game.checked_no_match) {
+        return '<span class="chip bad">not matched</span>';
+      }
+      return '<span class="chip warn">not checked</span>';
+    }
+
+    function renderDetails() {
+      const response = state.game;
+      if (!response) {
+        $("detail-title").textContent = "Select a game";
+        $("detail-chips").innerHTML = "";
+        $("detail-body").innerHTML = '<div class="empty">Choose a platform and game from the lists.</div>';
+        return;
+      }
+      const game = response.game;
+      const profile = response.profile || {};
+      $("detail-title").textContent = profile.title || game.title || game.folder;
+      $("detail-chips").innerHTML = [
+        response.has_metadata ? '<span class="chip good">metadata matched</span>' : '<span class="chip bad">no metadata found</span>',
+        profile.release_date ? '<span class="chip">' + escapeHTML(yearOf(profile.release_date)) + '</span>' : '',
+        chips((profile.genres || []).slice(0, 3), ''),
+        '<span class="chip">' + escapeHTML(profile.platform || game.platform) + '</span>',
+        '<span class="chip">' + formatNumber((game.releases || []).length) + ' releases</span>',
+        '<span class="chip">' + formatNumber((response.local_media || []).length) + ' local media</span>'
+      ].flat().filter(Boolean).join("");
+      $("detail-body").innerHTML = renderProfile(response) + renderSourceSection(response) + renderMediaSection(response);
+      document.querySelectorAll("[data-source-index]").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.sourceIndex = Number(button.dataset.sourceIndex);
+          renderDetails();
+        });
+      });
+      document.querySelectorAll("[data-media-source]").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.mediaSource = button.dataset.mediaSource || "all";
+          renderDetails();
+        });
+      });
+    }
+
+    function renderProfile(response) {
+      const game = response.game;
+      const profile = response.profile || {};
+      const cover = bestCover(response.local_media || []);
+      const coverHTML = cover
+        ? '<button class="media-open" type="button" aria-label="Open media preview" data-lightbox-type="image" data-lightbox-src="' + escapeAttr(cover.url) + '" data-lightbox-title="' + escapeAttr(cover.name) + '"><img class="cover-image" src="' + escapeAttr(cover.url) + '" alt="' + escapeAttr(cover.name) + '" loading="lazy"></button>'
+        : '<div class="cover-placeholder">No local cover</div>';
+      const description = profile.description
+        ? '<div class="description">' + paragraphs(profile.description) + '</div>'
+        : '<div class="empty">No description available from fetched sources.</div>';
+      const factRows = [
+        fact("Release date", profile.release_date),
+        fact("Developer", profile.developer),
+        fact("Publisher", profile.publisher),
+        fact("Genres", listText(profile.genres)),
+        fact("Themes", listText(profile.themes)),
+        fact("Players", profile.players),
+        fact("Rating", ratingText(profile)),
+        fact("Collections", listText(profile.collections)),
+        fact("Franchises", listText(profile.franchises)),
+        fact("Platform", profile.platform || game.platform),
+        fact("Default release", game.default_release),
+        fact("Source", profile.source)
+      ].filter(Boolean).join("");
+      const aliases = renderTitleVariants(profile.alternate_titles || [], game.aliases || []);
+      const releases = renderReleases(game.releases || []);
+      const lists = [aliases, releases].filter(Boolean).join("");
+      return '<div class="profile-layout">' +
+        '<div class="cover-panel">' + coverHTML + '</div>' +
+        '<div class="profile-content">' +
+          '<div class="section"><h3>Overview</h3>' + description + '</div>' +
+          (lists ? '<div class="profile-lists">' + lists + '</div>' : '') +
+        '</div>' +
+        '<aside class="side-panel"><div class="fact-list">' + (factRows || fact("Folder", game.folder)) + '</div></aside>' +
+        '</div>';
+    }
+
+    function renderSourceSection(response) {
+      const blocks = response.source_blocks || [];
+      if (blocks.length === 0) {
+        return '<div class="section"><h3>Sources</h3><div class="empty">No source stanzas.</div></div>';
+      }
+      const index = Math.min(state.sourceIndex, blocks.length - 1);
+      const tabs = blocks.map((block, i) => {
+        const active = i === index ? " active" : "";
+        const cls = block.match_count > 0 ? " good" : " warn";
+        return '<button class="tab-button' + active + '" type="button" data-source-index="' + i + '">' +
+          escapeHTML(block.source) + ' <span class="chip' + cls + '">' + formatNumber(block.match_count) + '</span>' +
+          '</button>';
+      }).join("");
+      const block = blocks[index];
+      const raw = block.raw || block.source + ":\n  status: " + (block.status || "unknown");
+      const profile = block.profile || {};
+      return '<div class="section">' +
+        '<h3>Sources</h3>' +
+        '<div class="source-tabs">' + tabs + '</div>' +
+        '<div class="source-readable">' +
+          '<div class="source-top">' +
+            '<div>' +
+              '<h2>' + escapeHTML(profile.title || block.source) + '</h2>' +
+              renderDescriptions(profile.descriptions || [], profile.description, profile.description_language, '') +
+            '</div>' +
+            '<div class="side-panel"><div class="fact-list">' + renderSourceFacts(profile, block) + '</div></div>' +
+          '</div>' +
+          renderSourceMatches(block.matches || []) +
+          '<details class="raw-details"><summary>Raw source YAML</summary><pre>' + escapeHTML(raw) + '</pre></details>' +
+        '</div>' +
+        '</div>';
+    }
+
+    function renderMediaSection(response) {
+      const files = response.local_media || [];
+      if (files.length === 0) {
+        return '<div class="section"><h3>Media</h3><div class="empty">No local media files yet.</div></div>';
+      }
+      const sourceCounts = mediaSourceCounts(files);
+      const availableSources = Object.keys(sourceCounts).sort();
+      const selected = state.mediaSource !== "all" && sourceCounts[state.mediaSource] ? state.mediaSource : "all";
+      const visibleFiles = selected === "all" ? files : files.filter((file) => mediaSourceKey(file) === selected);
+      const tabs = ['<button class="tab-button' + (selected === "all" ? " active" : "") + '" type="button" data-media-source="all">all <span class="chip">' + formatNumber(files.length) + '</span></button>']
+        .concat(availableSources.map((source) => {
+          const active = source === selected ? " active" : "";
+          return '<button class="tab-button' + active + '" type="button" data-media-source="' + escapeAttr(source) + '">' +
+            escapeHTML(mediaSourceLabel(source)) + ' <span class="chip">' + formatNumber(sourceCounts[source]) + '</span>' +
+            '</button>';
+        })).join("");
+      const items = visibleFiles.map((file) => {
+        const media = file.type === "video"
+          ? '<button class="media-open" type="button" aria-label="Play video" data-lightbox-type="video" data-lightbox-src="' + escapeAttr(file.url) + '" data-lightbox-title="' + escapeAttr(file.name) + '"><span class="video-placeholder">Play video</span></button>'
+          : '<button class="media-open" type="button" aria-label="Open media preview" data-lightbox-type="image" data-lightbox-src="' + escapeAttr(file.url) + '" data-lightbox-title="' + escapeAttr(file.name) + '"><img src="' + escapeAttr(file.url) + '" alt="' + escapeAttr(file.name) + '" loading="lazy"></button>';
+        return '<div class="media-item">' +
+          media +
+          '<div class="media-caption">' +
+          '<strong>' + escapeHTML(file.kind) + '</strong><br>' +
+          '<span class="secondary">' + escapeHTML(mediaSourceLabel(mediaSourceKey(file))) + '</span><br>' +
+          escapeHTML(file.name) +
+          '</div></div>';
+      }).join("");
+      return '<div class="section"><div class="media-head"><h3>Media</h3><div class="source-tabs">' + tabs + '</div></div><div class="media-grid">' + items + '</div></div>';
+    }
+
+    function openLightbox(src, type, title) {
+      if (!src) return;
+      $("lightbox-title").textContent = title || "Media preview";
+      $("lightbox-stage").innerHTML = type === "video"
+        ? '<video src="' + escapeAttr(src) + '" controls autoplay></video>'
+        : '<img src="' + escapeAttr(src) + '" alt="' + escapeAttr(title || "Media preview") + '">';
+      $("media-lightbox").classList.remove("hidden");
+    }
+
+    function closeLightbox() {
+      $("media-lightbox").classList.add("hidden");
+      $("lightbox-stage").innerHTML = "";
+      $("lightbox-title").textContent = "";
+    }
+
+    function renderTitleVariants(variants, aliases) {
+      const items = [];
+      const seen = new Set();
+      for (const variant of variants) {
+        const title = variant.title || "";
+        if (!title) continue;
+        const key = title.toLowerCase() + "|" + (variant.region || "").toLowerCase() + "|" + (variant.language || "").toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const meta = [variant.region, variant.language].filter(Boolean).join(" / ");
+        items.push('<div class="title-item"><div class="primary">' + escapeHTML(title) + '</div><div class="secondary">' + escapeHTML(meta) + '</div></div>');
+      }
+      for (const alias of aliases) {
+        const title = String(alias || "");
+        if (!title) continue;
+        const key = title.toLowerCase() + "||";
+        if (seen.has(key)) continue;
+        seen.add(key);
+        items.push('<div class="title-item"><div class="primary">' + escapeHTML(title) + '</div><div class="secondary">catalog alias</div></div>');
+      }
+      if (items.length === 0) {
+        return "";
+      }
+      return '<div class="section"><h3>Alternate Names</h3><div class="title-list">' + items.slice(0, 18).join("") + '</div></div>';
+    }
+
+    function renderReleases(releases) {
+      if (!releases.length) {
+        return "";
+      }
+      const items = releases.slice(0, 32).map((release) => {
+        const meta = []
+          .concat(release.regions || [])
+          .concat(release.tags || [])
+          .filter(Boolean)
+          .join(" / ");
+        return '<div class="release-item"><div class="primary">' + escapeHTML(release.name || "") + '</div>' +
+          (release.title ? '<div class="secondary">' + escapeHTML(release.title) + '</div>' : '') +
+          (meta ? '<div class="chips">' + chips(meta.split(" / "), '') + '</div>' : '') +
+          '</div>';
+      }).join("");
+      return '<div class="section"><h3>Releases</h3><div class="release-list">' + items + '</div></div>';
+    }
+
+    function renderSourceFacts(profile, block) {
+      return [
+        fact("Status", block.match_count > 0 ? "matched" : (block.status || "not matched")),
+        fact("Release date", profile.release_date),
+        fact("Developer", profile.developer),
+        fact("Publisher", profile.publisher),
+        fact("Genres", listText(profile.genres)),
+        fact("Themes", listText(profile.themes)),
+        fact("Players", profile.players),
+        fact("Rating", ratingText(profile)),
+        fact("Collections", listText(profile.collections)),
+        fact("Franchises", listText(profile.franchises)),
+        fact("Platform", profile.platform),
+        fact("Description", profile.description_language ? profile.description_language : "")
+      ].filter(Boolean).join("") || fact("Status", "no readable fields");
+    }
+
+    function renderSourceMatches(matches) {
+      if (!matches.length) {
+        return "";
+      }
+      const items = matches.slice(0, 8).map((match) => {
+        const releases = match.release ? [match.release] : (match.releases || []);
+        const title = match.title || releases[0] || "Match";
+        const meta = [
+          match.region,
+          match.release_date,
+          listText(match.genres),
+          match.match_score ? "score " + match.match_score : ""
+        ].filter(Boolean).join(" | ");
+        const media = match.media_counts ? Object.entries(match.media_counts).map(([key, value]) => key + " " + value).join(", ") : "";
+        return '<div class="match-item">' +
+          '<div class="primary">' + escapeHTML(title) + '</div>' +
+          (releases.length ? '<div class="secondary">' + escapeHTML(releases.join(", ")) + '</div>' : '') +
+          (meta ? '<div class="secondary">' + escapeHTML(meta) + '</div>' : '') +
+          (media ? '<div class="chips">' + chips(media.split(", "), '') + '</div>' : '') +
+          '</div>';
+      }).join("");
+      return '<div class="section"><h3>Matches</h3><div class="match-list">' + items + '</div></div>';
+    }
+
+    function renderDescriptions(descriptions, fallbackText, fallbackLanguage, fallbackSource) {
+      const items = [];
+      const seen = new Set();
+      for (const description of descriptions || []) {
+        const text = String(description.text || "").trim();
+        if (!text) continue;
+        const language = description.language || "";
+        const source = description.source || fallbackSource || "";
+        const key = language.toLowerCase() + "|" + source.toLowerCase() + "|" + text;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        items.push(descriptionBlock(language, source, text));
+      }
+      if (!items.length && fallbackText) {
+        items.push(descriptionBlock(fallbackLanguage || "", fallbackSource || "", fallbackText));
+      }
+      if (!items.length) {
+        return '<div class="empty">No description available from fetched sources.</div>';
+      }
+      return '<div class="description-list">' + items.join("") + '</div>';
+    }
+
+    function descriptionBlock(language, source, text) {
+      const meta = [
+        language ? language.toUpperCase() : "",
+        source
+      ].filter(Boolean);
+      return '<div class="description-item">' +
+        (meta.length ? '<div class="description-head">' + chips(meta, '') + '</div>' : '') +
+        '<div class="description">' + paragraphs(text) + '</div>' +
+        '</div>';
+    }
+
+    function bestCover(files) {
+      const images = files.filter((file) => file.type === "image");
+      if (!images.length) return null;
+      const ranked = images.slice().sort((left, right) => {
+        const score = coverRank(left) - coverRank(right);
+        if (score !== 0) return score;
+        return String(left.path || left.name).localeCompare(String(right.path || right.name));
+      });
+      return ranked[0];
+    }
+
+    function coverRank(file) {
+      const kind = normalizedMediaKind(file);
+      const preferred = ["box-front", "cover", "box-3d", "cart-front", "logo", "fanart", "title-screen", "screenshot"];
+      for (let index = 0; index < preferred.length; index++) {
+        const prefix = preferred[index];
+        if (kind === prefix || kind.startsWith(prefix + "-")) {
+          return index;
+        }
+      }
+      return 99;
+    }
+
+    function normalizedMediaKind(file) {
+      return String((file && (file.kind || file.name)) || "").toLowerCase().replaceAll("_", "-");
+    }
+
+    function mediaSourceCounts(files) {
+      return files.reduce((counts, file) => {
+        const source = mediaSourceKey(file);
+        counts[source] = (counts[source] || 0) + 1;
+        return counts;
+      }, {});
+    }
+
+    function mediaSourceKey(file) {
+      return String((file && file.source) || "unknown").trim() || "unknown";
+    }
+
+    function mediaSourceLabel(source) {
+      return source === "unknown" ? "unknown source" : source;
+    }
+
+    function paragraphs(value) {
+      return String(value || "")
+        .split(/\n{2,}/)
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .map((part) => '<p>' + escapeHTML(part) + '</p>')
+        .join("");
+    }
+
+    function fact(label, value) {
+      if (value === undefined || value === null || String(value).trim() === "") {
+        return "";
+      }
+      return '<div class="fact-row"><div class="fact-label">' + escapeHTML(label) + '</div><div class="fact-value">' + escapeHTML(String(value)) + '</div></div>';
+    }
+
+    function listText(values) {
+      return (values || []).filter(Boolean).join(", ");
+    }
+
+    function ratingText(profile) {
+      const rating = profile.rating || "";
+      if (!rating) return "";
+      return rating + (profile.rating_count ? " (" + profile.rating_count + ")" : "");
+    }
+
+    function chips(values, cls) {
+      return (values || []).filter(Boolean).map((value) => '<span class="chip' + (cls ? ' ' + cls : '') + '">' + escapeHTML(value) + '</span>').join("");
+    }
+
+    function yearOf(value) {
+      const match = String(value || "").match(/\d{4}/);
+      return match ? match[0] : value;
+    }
+
+    function renderStats() {
+      const stats = state.stats || {};
+      const sourceRows = (stats.SourceCounts || []).map((source) => {
+        const checked = source.GameCount || 0;
+        return '<tr>' +
+          '<td>' + escapeHTML(source.Source) + '</td>' +
+          '<td class="number">' + formatNumber(source.MatchedGameCount || 0) + '</td>' +
+          '<td class="number">' + formatNumber(source.NoMatchGameCount || 0) + '</td>' +
+          '<td class="number">' + formatNumber(checked) + '</td>' +
+          '<td class="number">' + percent(source.MatchedGameCount || 0, checked) + '</td>' +
+          '</tr>';
+      }).join("");
+      const platformRows = (stats.Platforms || []).map((platform) => {
+        return '<tr>' +
+          '<td>' + escapeHTML(platform.Platform) + '</td>' +
+          '<td class="number">' + formatNumber(platform.GameCount || 0) + '</td>' +
+          '<td class="number">' + formatNumber(platform.GamesWithSourceMatches || 0) + '</td>' +
+          '<td class="number">' + formatNumber(platform.GamesCheckedNoMatches || 0) + '</td>' +
+          '<td class="number">' + formatNumber(platform.EmptyPlaceholderCount || 0) + '</td>' +
+          '</tr>';
+      }).join("");
+      $("stats-pane").innerHTML =
+        '<div class="section">' +
+        '<h2>Catalog status</h2>' +
+        '<div class="source-tabs"><button class="tab-button" data-stats-selected type="button">Scan selected platform</button><button class="tab-button" data-stats-all type="button">Scan entire catalog</button></div>' +
+        '<p class="secondary">Full catalog scans read every game and media inventory and can take many minutes on HDD or network storage.</p>' +
+        '<p role="status">' + escapeHTML(state.statsProgress) + '</p>' +
+        '<div class="secondary">' + escapeHTML(stats.DataRoot || "") + '</div>' +
+        '<div class="stats-grid">' +
+        metric(stats.PlatformCount, "platforms") +
+        metric(stats.GameCount, "games") +
+        metric(stats.ReleaseCount, "releases") +
+        metric(stats.GamesWithSourceMatches, "games with metadata") +
+        metric(stats.GamesCheckedNoMatches, "not matched") +
+        metric(stats.EmptyPlaceholderCount, "empty - no metadata found") +
+        metric(stats.LocalMediaFileCount, "local media files") +
+        metric(stats.SourceMediaURLCount, "source media URLs") +
+        '</div></div>' +
+        '<div class="section"><h3>Sources</h3><table><thead><tr><th>Source</th><th>Matched</th><th>Not matched</th><th>Checked</th><th>Match rate</th></tr></thead><tbody>' + sourceRows + '</tbody></table></div>' +
+        '<div class="section"><h3>Platforms</h3><table><thead><tr><th>Platform</th><th>Games</th><th>Matched</th><th>Not matched</th><th>Empty</th></tr></thead><tbody>' + platformRows + '</tbody></table></div>';
+    }
+
+    function field(label, value) {
+      return '<div class="field"><label>' + escapeHTML(label) + '</label><div>' + escapeHTML(String(value || "None")) + '</div></div>';
+    }
+
+    function metric(value, label) {
+      return '<div class="metric"><div class="metric-value">' + formatNumber(value || 0) + '</div><div class="metric-label">' + escapeHTML(label) + '</div></div>';
+    }
+
+    function setStatus(text, isError) {
+      const element = $("top-status");
+      element.textContent = text;
+      element.classList.toggle("error", Boolean(isError));
+    }
+
+    function formatNumber(value) {
+      return Number(value || 0).toLocaleString("en-US");
+    }
+
+    function percent(part, total) {
+      if (!total) {
+        return "0%";
+      }
+      return Math.round((part / total) * 100) + "%";
+    }
+
+    function escapeHTML(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function escapeAttr(value) {
+      return escapeHTML(value);
+    }
+
+    loadPlatforms();
+  </script>
+</body>
+</html>

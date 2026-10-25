@@ -1,0 +1,47 @@
+# Reviewed PS3 disc identities. Source game pages can also list demos, DLC,
+# other platforms and content editions: never import their IDs indiscriminately.
+# Only the explicitly reviewed disc serials below participate in fold.
+version: 1
+families:
+  - id: quantum-of-solace
+    title: "007: Quantum of Solace"
+    source: https://serialstation.com/games/d7892862-025a-4796-ba55-62d91538741a
+    reviewed: "2026-10-01"
+    notes: "PS3 original and Collector's Edition discs; PS2 identifiers are excluded."
+    serials: [BLES00406, BLES00407, BLES00411, BLJM60137, BLKS20088, BLUS30198, BLUS30199]
+  - id: fifa-world-cup-2010
+    title: "2010 FIFA World Cup South Africa"
+    source: https://serialstation.com/games/170292ea-b81a-4c76-a144-f6b08baac771
+    reviewed: "2026-10-01"
+    notes: "PS3 retail discs only; PSP and PSN demos are excluded."
+    serials: [BLAS50201, BLES00796, BLJM60222, BLKS20180, BLUS30474]
+  - id: infamous
+    title: "inFamous"
+    source: https://serialstation.com/games/47a1cf4d-b0b3-452c-ac04-1eb3d9c7e740
+    reviewed: "2026-10-01"
+    notes: "PS3 full-game discs and retail reissues; demo and digital identifiers are excluded."
+    serials: [BCAS20074, BCAS20180, BCES00220, BCES00591, BCES00609, BCJS30037, BCJS70018, BCKS10082, BCKS10172, BCUS90943, BCUS98119]
+  - id: split-second
+    title: "Split/Second"
+    source: https://www.serialstation.com/games/e259d7a6-5a57-4bc1-a052-7411042eaf03
+    reviewed: "2026-10-01"
+    notes: "Retail PS3 discs only; BCAS20192 is listed as Sample and is deliberately excluded."
+    serials: [BCKS10180, BLES00780, BLES00781, BLJM60251, BLUS30300]
+  - id: injustice
+    title: "Injustice: Gods Among Us"
+    source: https://serialstation.com/games/12fa7bfa-a743-48a1-95b1-2d107af701c8
+    reviewed: "2026-10-01"
+    notes: "Only original PS3 discs explicitly listed in the disc table. Ultimate Edition is a separate identity."
+    serials: [BLES01673, BLJM60515, BLUS31018]
+  - id: injustice-ultimate
+    title: "Injustice: Gods Among Us: Ultimate Edition"
+    source: https://serialstation.com/games/7459fc2f-42a4-4bcc-953b-ec13a9917485
+    reviewed: "2026-10-01"
+    notes: "The explicitly listed PS3 Ultimate disc; PS4, Vita and PSN identifiers are excluded."
+    serials: [BLES01967]
+  - id: fifa-11
+    title: "FIFA 11"
+    source: https://serialstation.com/games/f99c395a-a13d-4f2b-88e4-c3f44dc8c334
+    reviewed: "2026-10-01"
+    notes: "PS3 retail discs and EA Best Hits; BLED demo, PS2 and PSP identifiers are excluded."
+    serials: [BLAS50229, BLES01059, BLJM60274, BLJM61011, BLKS20215, BLUS30630]

@@ -1,0 +1,22 @@
+# Example preferences, not RomMeta defaults. English alone is the default.
+schema_version: 1
+target: es-de
+title_mode: catalog
+selection:
+  description:
+    order: [language, source]
+    languages: [ru, en]
+    sources: [launchbox, screenscraper, openvgdb, igdb]
+  fields:
+    publisher:
+      order: [source]
+      sources: [launchbox, screenscraper, igdb]
+  media:
+    cover:
+      order: [region, source, format]
+      regions: ['$release', world, unspecified]
+      sources: [emumovies, launchbox, screenscraper, igdb, openvgdb]
+      formats: [png, jpg, webp]
+    screenshot: {}
+    logo: {}
+    video: {}

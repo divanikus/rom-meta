@@ -1,0 +1,5 @@
+FROM scratch
+COPY --chmod=755 bin/linux-amd64/rom-meta /rom-meta
+USER 568:568
+EXPOSE 8787
+ENTRYPOINT ["/rom-meta", "serve"]

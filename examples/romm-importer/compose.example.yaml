@@ -1,0 +1,22 @@
+# Copy to the server deployment directory and set deployment.env host paths.
+# API is a separately configured read-only service named rommeta-api on this network.
+services:
+  importer:
+    image: rommeta-romm-importer:local
+    profiles: [tools]
+    user: '${ROMM_UID:?set in deployment.env}:${ROMM_GID:?set in deployment.env}'
+    env_file:
+      - path: ./private/romm.env
+        format: raw
+      - path: ./private/api.env
+        format: raw
+    volumes:
+      - '${ROMM_CONFIG_DIR:?set in deployment.env}:/romm/config:ro'
+      - '${ROMM_ROMS_DIR:?set in deployment.env}:/romm/library/roms:ro'
+      - '${ROMM_RESOURCES_DIR:?set in deployment.env}:/romm/resources'
+      - '${ROMMETA_WORK_DIR:?set in deployment.env}:/work'
+    networks: [romm]
+networks:
+  romm:
+    external: true
+    name: '${ROMM_NETWORK:?existing native network}'

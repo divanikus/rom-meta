@@ -1,0 +1,492 @@
+aliases:
+  - match: "ScummVM"
+    keys: [scummvm, scumm-vm]
+    display: "ScummVM"
+    launchbox: "ScummVM"
+    screenscraper: "ScummVM"
+    screenscraper_id: 123
+    emumovies: "ScummVM"
+  - match: "Arcade"
+    keys: ["MAME Arcade"]
+    openvgdb: "Arcade"
+    launchbox: "Arcade"
+    emumovies: "MAME"
+    igdb: "Arcade"
+    screenscraper: "Mame"
+    screenscraper_id: 75
+  - match: "3DO Interactive Multiplayer"
+    keys: [3do]
+    emumovies: "Panasonic 3DO"
+    igdb: "3DO Interactive Multiplayer"
+    launchbox: "3DO Interactive Multiplayer"
+    openvgdb: "3DO Interactive Multiplayer"
+    screenscraper: "3DO"
+    screenscraper_id: 29
+  - match: "Atari - Atari 2600"
+    keys: [atari2600]
+    display: "Atari 2600"
+    igdb: "Atari 2600"
+    launchbox: "Atari 2600"
+    openvgdb: "Atari 2600"
+    screenscraper_id: 26
+  - match: "Atari - Atari 5200"
+    keys: [atari5200]
+    display: "Atari 5200"
+    igdb: "Atari 5200"
+    launchbox: "Atari 5200"
+    openvgdb: "Atari 5200"
+    screenscraper_id: 40
+  - match: "Atari - Atari 7800 (BIN)"
+    keys: [atari7800]
+    display: "Atari 7800"
+    emumovies: "Atari 7800"
+    igdb: "Atari 7800"
+    launchbox: "Atari 7800"
+    openvgdb: "Atari 7800"
+    screenscraper_id: 41
+  - match: "Atari - Atari Jaguar (J64)"
+    keys: [atarijaguar, jaguar]
+    display: "Atari Jaguar"
+    emumovies: "Atari Jaguar"
+    igdb: "Atari Jaguar"
+    launchbox: "Atari Jaguar"
+    openvgdb: "Atari Jaguar"
+    screenscraper_id: 27
+  - match: "Atari - Jaguar CD Interactive Multimedia System"
+    keys: [atarijaguarcd, jaguarcd]
+    display: "Jaguar CD"
+    emumovies: "Atari Jaguar CD"
+    igdb: "Atari Jaguar CD"
+    launchbox: "Atari Jaguar CD"
+    openvgdb: "Atari Jaguar CD"
+    screenscraper_id: 171
+  - match: "Atari - Atari Lynx (LYX)"
+    keys: [atarilynx, lynx]
+    display: "Atari Lynx"
+    emumovies: "Atari Lynx"
+    igdb: "Atari Lynx"
+    launchbox: "Atari Lynx"
+    openvgdb: "Atari Lynx"
+    screenscraper_id: 28
+  - match: "Bandai - Pippin"
+    display: "Pippin"
+    igdb: "Apple Pippin"
+  - match: "Bandai - Playdia Quick Interactive System"
+    display: "Playdia"
+    igdb: "Playdia"
+  - match: "Bandai - WonderSwan"
+    keys: [wonderswan, ws]
+    display: "WonderSwan"
+    igdb: "WonderSwan"
+    launchbox: "WonderSwan"
+    openvgdb: "Bandai WonderSwan"
+    screenscraper_id: 45
+  - match: "Bandai - WonderSwan Color"
+    keys: [wonderswancolor, wsc]
+    display: "WonderSwan Color"
+    igdb: "WonderSwan Color"
+    launchbox: "WonderSwan Color"
+    openvgdb: "Bandai WonderSwan Color"
+    screenscraper_id: 46
+  - match: "Commodore - Amiga CD32"
+    keys: [amigacd32, cd32]
+    display: "Amiga CD32"
+    igdb: "Amiga CD32"
+    launchbox: "Commodore Amiga CD32"
+    screenscraper: "Amiga CD32"
+    screenscraper_id: 130
+  - match: "Fujitsu - FM Towns series"
+    keys: [fmtowns, "Fujitsu - FM-Towns", "Fujitsu - FM Towns"]
+    display: "FM Towns"
+    igdb: "FM Towns"
+    launchbox: "Fujitsu FM Towns Marty"
+    screenscraper: "FM Towns"
+    screenscraper_id: 253
+  - match: "Funtech - Super Acan"
+    display: "Super Acan"
+    launchbox: "Funtech Super Acan"
+    screenscraper_id: 100
+  - match: "GCE - Vectrex"
+    keys: [vectrex]
+    display: "Vectrex"
+    emumovies: "GCE Vectrex"
+    igdb: "Vectrex"
+    launchbox: "GCE Vectrex"
+    openvgdb: "GCE Vectrex"
+    screenscraper_id: 102
+  - match: "Microsoft - MSX"
+    keys: [msx]
+    display: "MSX"
+    igdb: "MSX"
+    launchbox: "Microsoft MSX"
+    openvgdb: "Microsoft MSX"
+    screenscraper_id: 113
+  - match: "Microsoft - Xbox"
+    keys: [xbox]
+    display: "Xbox"
+    emumovies: "Microsoft Xbox"
+    igdb: "Xbox"
+    launchbox: "Microsoft Xbox"
+    screenscraper_id: 32
+  - match: "Microsoft - Xbox 360"
+    keys: [xbox360]
+    display: "Xbox 360"
+    emumovies: "Microsoft Xbox 360"
+    igdb: "Xbox 360"
+    launchbox: "Microsoft Xbox 360"
+    screenscraper_id: 33
+  - match: "NEC - PC-88 (KryoFlux)"
+    display: "PC-88"
+    igdb: "PC-8800 Series"
+    launchbox: "NEC PC-8801"
+    screenscraper_id: 221
+  - match: "NEC - PC-88 series"
+    display: "PC-88"
+    igdb: "PC-8800 Series"
+    launchbox: "NEC PC-8801"
+    screenscraper_id: 221
+  - match: "NEC - PC-98"
+    display: "PC-98"
+    igdb: "PC-9800 Series"
+    launchbox: "NEC PC-9801"
+    screenscraper_id: 208
+  - match: "NEC - PC-98 series"
+    display: "PC-98"
+    igdb: "PC-9800 Series"
+    launchbox: "NEC PC-9801"
+    screenscraper_id: 208
+  - match: "NEC - PC Engine CD & TurboGrafx CD"
+    keys: [pcenginecd, pcecd, tg-cd, turbografxcd, "TurboGrafx-CD"]
+    display: "PC Engine CD / TurboGrafx-CD"
+    emumovies: "NEC TurboGrafx-CD"
+    igdb: "Turbografx-16/PC Engine CD"
+    launchbox: "NEC TurboGrafx-CD"
+    openvgdb: "NEC PC Engine CD/TurboGrafx-CD"
+    screenscraper: "PC Engine CD"
+    screenscraper_id: 114
+  - match: "NEC - PC-FX & PC-FXGA"
+    keys: [pcfx]
+    display: "PC-FX"
+    emumovies: "NEC PC-FX"
+    igdb: "PC-FX"
+    launchbox: "NEC PC-FX"
+    openvgdb: "PC-FX"
+    screenscraper_id: 72
+  - match: "NEC - PC Engine - TurboGrafx-16"
+    keys: [pcengine, pce, tg16, turbografx16, "PC Engine", "TurboGrafx-16"]
+    display: "PC Engine / TurboGrafx-16"
+    emumovies: "NEC TurboGrafx-16"
+    igdb: "TurboGrafx-16/PC Engine"
+    launchbox: "NEC TurboGrafx-16"
+    openvgdb: "NEC PC Engine/TurboGrafx-16"
+    screenscraper: "PC Engine"
+    screenscraper_id: 31
+  - match: "NEC - PC Engine SuperGrafx"
+    keys: [supergrafx, pcenginesupergrafx]
+    display: "PC Engine SuperGrafx"
+    emumovies: "NEC SuperGrafx"
+    igdb: "SuperGrafx"
+    launchbox: "NEC SuperGrafx"
+    openvgdb: "NEC SuperGrafx"
+    screenscraper: "PC Engine SuperGrafx"
+    screenscraper_id: 105
+  - match: "Nintendo - Family Computer Disk System (FDS)"
+    keys: [fds, famicomdisksystem]
+    display: "Famicom Disk System"
+    launchbox: "Nintendo Famicom Disk System"
+    openvgdb: "Nintendo Famicom Disk System"
+    screenscraper: "Family Computer Disk System"
+    screenscraper_id: 106
+  - match: "Nintendo - Game & Watch"
+    keys: [gameandwatch]
+    display: "Game & Watch"
+    launchbox: "Nintendo Game & Watch"
+    screenscraper_id: 52
+  - match: "Nintendo - Game Boy"
+    keys: [gb, gameboy]
+    display: "Game Boy"
+    emumovies: "Nintendo Game Boy"
+    igdb: "Game Boy"
+    launchbox: "Nintendo Game Boy"
+    openvgdb: "Nintendo Game Boy"
+    screenscraper_id: 9
+  - match: "Nintendo - Game Boy Advance"
+    keys: [gba, gameboyadvance, "Nintendo GBA"]
+    display: "Game Boy Advance"
+    emumovies: "Nintendo Game Boy Advance"
+    igdb: "Game Boy Advance"
+    launchbox: "Nintendo Game Boy Advance"
+    openvgdb: "Nintendo Game Boy Advance"
+    screenscraper_id: 12
+  - match: "Nintendo - Game Boy Color"
+    keys: [gbc, gameboycolor]
+    display: "Game Boy Color"
+    emumovies: "Nintendo Game Boy Color"
+    igdb: "Game Boy Color"
+    launchbox: "Nintendo Game Boy Color"
+    openvgdb: "Nintendo Game Boy Color"
+    screenscraper_id: 10
+  - match: "Nintendo - GameCube"
+    keys: [gc, gamecube]
+    display: "GameCube"
+    emumovies: "Nintendo GameCube"
+    igdb: "Nintendo GameCube"
+    launchbox: "Nintendo GameCube"
+    openvgdb: "Nintendo GameCube"
+    screenscraper_id: 13
+  - match: "Nintendo - New Nintendo 3DS (Decrypted)"
+    display: "New Nintendo 3DS"
+    igdb: "New Nintendo 3DS"
+    launchbox: "Nintendo 3DS"
+    screenscraper_id: 17
+  - match: "Nintendo - Nintendo 3DS (Decrypted)"
+    keys: [n3ds, 3ds]
+    display: "Nintendo 3DS"
+    emumovies: "Nintendo 3DS"
+    igdb: "Nintendo 3DS"
+    launchbox: "Nintendo 3DS"
+    screenscraper_id: 17
+  - match: "Nintendo - Nintendo 64 (BigEndian)"
+    keys: [n64, nintendo64]
+    display: "Nintendo 64"
+    emumovies: "Nintendo 64"
+    igdb: "Nintendo 64"
+    launchbox: "Nintendo 64"
+    openvgdb: "Nintendo 64"
+    screenscraper_id: 14
+  - match: "Nintendo - Nintendo DS (Decrypted)"
+    keys: [nds, ds]
+    display: "Nintendo DS"
+    emumovies: "Nintendo DS"
+    igdb: "Nintendo DS"
+    launchbox: "Nintendo DS"
+    openvgdb: "Nintendo DS"
+    screenscraper_id: 15
+  - match: "Nintendo - Nintendo 64DD"
+    keys: [n64dd, 64dd]
+    display: "Nintendo 64DD"
+    igdb: "64DD"
+    launchbox: "Nintendo 64DD"
+    screenscraper: "Nintendo 64DD"
+    screenscraper_id: 122
+  - match: "Nintendo - Nintendo DSi (Decrypted)"
+    keys: [dsi]
+    display: "Nintendo DSi"
+    igdb: "Nintendo DSi"
+    launchbox: "Nintendo DSi"
+    screenscraper_id: 15
+  - match: "Nintendo - Nintendo DSi (Digital) (CDN) (Decrypted)"
+    display: "Nintendo DSi"
+    igdb: "Nintendo DSi"
+    launchbox: "Nintendo DSi"
+    screenscraper_id: 15
+  - match: "Nintendo - Nintendo Entertainment System (Headered)"
+    keys: [nes, famicom]
+    display: "Nintendo Entertainment System"
+    emumovies: "Nintendo Entertainment System"
+    igdb: "Nintendo Entertainment System"
+    launchbox: "Nintendo Entertainment System"
+    openvgdb: "Nintendo Entertainment System"
+    screenscraper_id: 3
+  - match: "Nintendo - Super Nintendo Entertainment System"
+    keys: [snes, supernintendo, "Nintendo Super Nintendo"]
+    display: "Super Nintendo Entertainment System"
+    emumovies: "Super Nintendo Entertainment System"
+    igdb: "Super Nintendo Entertainment System"
+    launchbox: "Super Nintendo Entertainment System"
+    openvgdb: "Nintendo Super Nintendo Entertainment System"
+    screenscraper: "Super Nintendo"
+    screenscraper_id: 4
+  - match: "Nintendo - Satellaview"
+    display: "Satellaview"
+    launchbox: "Nintendo Satellaview"
+    screenscraper_id: 107
+  - match: "Nintendo - Virtual Boy"
+    keys: [virtualboy, vb]
+    display: "Virtual Boy"
+    igdb: "Virtual Boy"
+    launchbox: "Nintendo Virtual Boy"
+    openvgdb: "Nintendo Virtual Boy"
+    screenscraper_id: 11
+  - match: "Nintendo - Wii"
+    keys: [wii]
+    display: "Wii"
+    emumovies: "Nintendo Wii"
+    igdb: "Nintendo Wii"
+    launchbox: "Nintendo Wii"
+    screenscraper_id: 16
+  - match: "Nintendo - Wii (Digital) (CDN)"
+    display: "Wii"
+    emumovies: "Nintendo Wii"
+    igdb: "Nintendo Wii"
+    launchbox: "Nintendo Wii"
+    screenscraper_id: 16
+  - match: "Nintendo - Wii U (Digital) (CDN)"
+    keys: [wiiu]
+    display: "Wii U"
+    emumovies: "Nintendo Wii U"
+    igdb: "Nintendo Wii U"
+    launchbox: "Nintendo Wii U"
+    screenscraper_id: 18
+  - match: "Philips - CD-i"
+    keys: [cdi, cd-i]
+    display: "CD-i"
+    launchbox: "Philips CD-i"
+    screenscraper_id: 133
+  - match: "Sega - 32X"
+    keys: [sega32x, 32x]
+    display: "32X"
+    emumovies: "Sega 32X"
+    igdb: "Sega 32X"
+    launchbox: "Sega 32X"
+    openvgdb: "Sega 32X"
+    screenscraper_id: 19
+  - match: "Sega - Dreamcast"
+    keys: [dreamcast]
+    display: "Dreamcast"
+    emumovies: "Sega Dreamcast"
+    igdb: "Dreamcast"
+    launchbox: "Sega Dreamcast"
+    screenscraper_id: 23
+  - match: "Sega - Beena"
+    keys: [beena, "Advanced Pico Beena"]
+    display: "Beena"
+    igdb: "Advanced Pico Beena"
+  - match: "Sega - Game Gear"
+    keys: [gamegear]
+    display: "Game Gear"
+    emumovies: "Sega Game Gear"
+    igdb: "Sega Game Gear"
+    launchbox: "Sega Game Gear"
+    openvgdb: "Sega Game Gear"
+    screenscraper_id: 21
+  - match: "Sega - Master System - Mark III"
+    keys: [mastersystem, sms]
+    display: "Master System / Mark III"
+    emumovies: "Sega Master System"
+    igdb: "Sega Master System/Mark III"
+    launchbox: "Sega Master System"
+    openvgdb: "Sega Master System"
+    screenscraper_id: 2
+  - match: "Sega - Mega CD & Sega CD"
+    keys: [segacd, megacd]
+    display: "Sega CD"
+    emumovies: "Sega CD"
+    igdb: "Sega CD"
+    launchbox: "Sega CD"
+    openvgdb: "Sega CD/Mega-CD"
+    screenscraper: "Mega-CD"
+    screenscraper_id: 20
+  - match: "Sega - Mega Drive - Genesis"
+    keys: [megadrive, genesis, "Sega Genesis - USA"]
+    display: "Mega Drive / Genesis"
+    emumovies: "Sega Genesis"
+    igdb: "Sega Mega Drive/Genesis"
+    launchbox: "Sega Genesis"
+    openvgdb: "Sega Genesis/Mega Drive"
+    screenscraper: "Mega Drive"
+    screenscraper_id: 1
+  - match: "Sega - PICO"
+    keys: [segapico]
+    display: "Pico"
+    igdb: "Sega Pico"
+    launchbox: "Sega Pico"
+    screenscraper_id: 250
+  - match: "Sega - Saturn"
+    keys: [saturn]
+    display: "Saturn"
+    emumovies: "Sega Saturn"
+    igdb: "Sega Saturn"
+    launchbox: "Sega Saturn"
+    openvgdb: "Sega Saturn"
+    screenscraper_id: 22
+  - match: "Sega - SG-1000 - SC-3000"
+    keys: [sg1000]
+    display: "SG-1000 / SC-3000"
+    igdb: "SG-1000"
+    launchbox: "Sega SG-1000"
+    openvgdb: "Sega SG-1000"
+    screenscraper_id: 109
+  - match: "Sharp - X68000"
+    display: "X68000"
+    igdb: "Sharp X68000"
+    launchbox: "Sharp X68000"
+    screenscraper_id: 79
+  - match: "Sharp - X68000 (Flux)"
+    display: "X68000"
+    igdb: "Sharp X68000"
+    launchbox: "Sharp X68000"
+    screenscraper_id: 79
+  - match: "SNK - NeoGeo Pocket"
+    keys: [ngp]
+    display: "Neo Geo Pocket"
+    igdb: "Neo Geo Pocket"
+    launchbox: "SNK Neo Geo Pocket"
+    openvgdb: "SNK Neo Geo Pocket"
+    screenscraper_id: 25
+  - match: "SNK - NeoGeo Pocket Color"
+    keys: [ngpc]
+    display: "Neo Geo Pocket Color"
+    igdb: "Neo Geo Pocket Color"
+    launchbox: "SNK Neo Geo Pocket Color"
+    openvgdb: "SNK Neo Geo Pocket Color"
+    screenscraper_id: 82
+  - match: "SNK - Neo Geo CD"
+    keys: [neogeocd]
+    display: "Neo Geo CD"
+    emumovies: "SNK Neo Geo CD"
+    igdb: "Neo Geo CD"
+    launchbox: "SNK Neo Geo CD"
+    openvgdb: "Neo Geo CD"
+    screenscraper_id: 70
+  - match: "Sony - PlayStation"
+    keys: [psx, ps1, playstation]
+    display: "PlayStation"
+    emumovies: "Sony PlayStation"
+    igdb: "PlayStation"
+    launchbox: "Sony Playstation"
+    openvgdb: "Sony PlayStation"
+    screenscraper_id: 57
+  - match: "Sony - PlayStation 2"
+    keys: [ps2]
+    display: "PlayStation 2"
+    emumovies: "Sony PlayStation 2"
+    igdb: "PlayStation 2"
+    launchbox: "Sony Playstation 2"
+    screenscraper_id: 58
+  - match: "Sony - PlayStation 3"
+    keys: [ps3, "Sony Playstation 3 - Retail"]
+    display: "PlayStation 3"
+    emumovies: "Sony PlayStation 3"
+    igdb: "PlayStation 3"
+    launchbox: "Sony Playstation 3"
+    screenscraper_id: 59
+  - match: "Sony - PlayStation Portable"
+    keys: [psp]
+    display: "PlayStation Portable"
+    emumovies: "Sony PSP"
+    igdb: "PlayStation Portable"
+    launchbox: "Sony PSP"
+    openvgdb: "Sony PlayStation Portable"
+    screenscraper_id: 61
+  - match: "Sony - PlayStation Portable (PSN) (Minis) (Encrypted)"
+    display: "PSP Minis"
+    emumovies: "Sony PSP"
+    igdb: "PlayStation Portable"
+    launchbox: "Sony PSP Minis"
+    screenscraper_id: 172
+  - match: "Sony - PlayStation Vita (PSN) (Content)"
+    keys: [psvita]
+    display: "PlayStation Vita"
+    igdb: "PlayStation Vita"
+    launchbox: "Sony Playstation Vita"
+    screenscraper_id: 62
+  - match: "Watara - Supervision"
+    display: "Supervision"
+    igdb: "Watara/QuickShot Supervision"
+    launchbox: "Watara Supervision"
+    screenscraper_id: 207
+  - match: "Zeebo - Zeebo"
+    keys: [zeebo]
+    display: "Zeebo"
+    igdb: "Zeebo"

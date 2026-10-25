@@ -1,0 +1,10 @@
+**
+!bin/
+!bin/linux-amd64/
+!bin/linux-amd64/rom-meta
+!examples/
+!examples/romm-importer/
+!examples/romm-importer/importer.py
+!examples/romm-importer/Dockerfile
+!docker/
+!docker/Dockerfile.api

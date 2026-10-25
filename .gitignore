@@ -1,0 +1,71 @@
+# Local environment
+.env
+.env.*
+!.env.example
+/config/secrets.yaml
+/config/secrets.*.yaml
+!/config/secrets.example.yaml
+/secrets.yaml
+/secrets.*.yaml
+!/secrets.example.yaml
+
+# Local collection data
+/roms/
+/ROMs/
+/library/
+/data/local/
+/collections-local/
+/exports/
+/bin/
+/cache/
+/tmp/
+/.tmp/
+/generated/
+/platforms/
+/catalogs/
+/.rommeta/
+
+# License-restricted media
+/assets/restricted/
+**/media/sources/emumovies/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+*.parquet
+
+# ROM, disc, and archive payloads
+# Force-add vetted synthetic fixtures if the project later needs them.
+*.nes
+*.fds
+*.sfc
+*.smc
+*.gb
+*.gbc
+*.gba
+*.n64
+*.z64
+*.v64
+*.nds
+*.3ds
+*.cia
+*.iso
+*.cso
+*.gdi
+*.chd
+*.cue
+*.bin
+*.zip
+*.7z
+*.rar
+!tests/fixtures/**
+
+# Python helper bytecode
+**/__pycache__/
+
+# Native consumer deployment runtime
+/examples/romm-importer/__pycache__/
+/examples/romm-importer/private/
+/examples/romm-importer/work/
+deployment.env

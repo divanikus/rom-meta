@@ -1,0 +1,6 @@
+swagger-ui-dist 5.34.0
+Source: https://registry.npmjs.org/swagger-ui-dist/-/swagger-ui-dist-5.34.0.tgz
+NPM integrity: sha512-H6tAIjr3XqE31PbkZl0OFya1ziRLDfTwh3J6OHdumPtPCLfjTnyLeagl/55kFNZcTOz9a9QI9WP0FXldwiGJag==
+License: Apache-2.0 (LICENSE; NOTICE when supplied).
+Only browser runtime assets are vendored; no source maps or package cache.
+Trailing whitespace in bundled license comments is normalized; license text is unchanged.

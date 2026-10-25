@@ -1,0 +1,29 @@
+# Reusable offline policy: no game paths, per-ROM edits or release exceptions.
+# Variants are explicit filename labels (variant-original, etc.).
+# "original" preserves a provider category, not a pixel-level guarantee of no case.
+schema_version: 1
+target: es-de
+title_mode: catalog
+selection:
+  description:
+    scope: game
+    order: [language, source]
+    languages: [ru, en]
+    sources: [screenscraper, launchbox, openvgdb, igdb]
+  media:
+    cover:
+      scope: game
+      order: [variant, region, source, scope, format]
+      variants: [original, unknown, reconstructed, fanart]
+      regions: ['$release', world, unspecified, usa, japan, europe, '*']
+      sources: [emumovies, launchbox, screenscraper, igdb, openvgdb]
+      formats: [png, jpg, webp]
+    screenshot:
+      scope: game
+      regions: ['$release', world, unspecified, usa, japan, europe, '*']
+    logo:
+      scope: game
+      regions: ['$release', world, unspecified, usa, japan, europe, '*']
+    video:
+      scope: game
+      regions: ['$release', world, unspecified, usa, japan, europe, '*']
