@@ -1399,6 +1399,13 @@ func downloadAsset(requestURL, publicURL, targetPath string, progress taskprogre
 	progress.UpdateWorker("preparing", worker, workers, label)
 	response, err := client.Get(requestURL)
 	if err != nil {
+		// net/http includes the signed request URL in transport errors.
+		var requestError *url.Error
+		if errors.As(err, &requestError) {
+			sanitized := *requestError
+			sanitized.URL = sourceurl.StripSecrets(requestError.URL)
+			err = &sanitized
+		}
 		return fmt.Errorf("download %s failed: %w", publicURL, err)
 	}
 	defer response.Body.Close()
