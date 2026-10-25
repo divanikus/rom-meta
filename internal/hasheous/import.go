@@ -515,7 +515,7 @@ func fingerprintLookupRequests(game catalogGame) []lookupRequest {
 			order:       index,
 			score:       priority,
 		})
-		if priority > group.priority {
+		if len(group.candidates) == 1 || priority > group.priority {
 			group.priority = priority
 		}
 	}

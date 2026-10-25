@@ -2,6 +2,7 @@ package hasheous
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -34,6 +35,24 @@ func TestFingerprintLookupRequestsPreferDefaultReleaseAndDeduplicate(t *testing.
 	}
 	if len(requests[0].Inputs) != 1 || requests[0].Inputs[0].MD5 != "33333333333333333333333333333333" {
 		t.Fatalf("unexpected first request: %#v", requests[0])
+	}
+}
+
+func TestFingerprintLookupRequestsKeepUnofficialDefaultInsideLookupLimit(t *testing.T) {
+	game := catalogGame{Title: "Example"}
+	for i := 0; i <= maxReleaseLookups; i++ {
+		release := fmt.Sprintf("Example (Rev %d) (Aftermarket, Unl)", i)
+		game.Fingerprints = append(game.Fingerprints, catalogcache.Fingerprint{
+			Release: release, Name: release + ".nes", Format: "nes", MD5: fmt.Sprintf("%032x", i+1),
+		})
+		game.DefaultRelease = release
+	}
+	requests := fingerprintLookupRequests(game)
+	if len(requests) != maxReleaseLookups {
+		t.Fatalf("expected bounded requests, got %d", len(requests))
+	}
+	if requests[0].Release != game.DefaultRelease {
+		t.Fatalf("default unofficial release was displaced by earlier groups: %#v", requests)
 	}
 }
 
