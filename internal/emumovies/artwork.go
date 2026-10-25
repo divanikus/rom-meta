@@ -65,6 +65,8 @@ type ArtworkResult struct {
 	MatchedArtworkFileCount    int
 	ExistingArtworkFileCount   int
 	WrittenArtworkFileCount    int
+	InvalidArtworkFileCount    int
+	InvalidArtworkFiles        []Failure
 	UnmatchedArtworkFileCount  int
 	UnmatchedManifestPath      string
 	PlanPath                   string
@@ -246,13 +248,15 @@ func FetchArtwork(options ArtworkOptions) (ArtworkResult, error) {
 		result.MatchedArtworkFileCount = len(fileCandidates)
 		assignArtworkTargets(fileCandidates)
 
-		existingFiles, writtenFiles, err := materializeArtworkFiles(fileCandidates, progress)
+		materialized, err := materializeArtworkFiles(fileCandidates, progress)
 		if err != nil {
 			return ArtworkResult{}, err
 		}
-		result.ExistingArtworkFileCount = existingFiles
-		result.WrittenArtworkFileCount = writtenFiles
-		if writtenFiles > 0 || existingFiles > 0 {
+		result.ExistingArtworkFileCount = materialized.existing
+		result.WrittenArtworkFileCount = materialized.written
+		result.InvalidArtworkFileCount = materialized.invalid
+		result.InvalidArtworkFiles = materialized.failures
+		if materialized.written > 0 || materialized.existing > 0 {
 			sourcePolicyNeeded = true
 		}
 	}
@@ -1289,28 +1293,41 @@ func filenameToken(value string) string {
 	return strings.Trim(strings.Join(strings.FieldsFunc(b.String(), func(r rune) bool { return r == '-' }), "-"), "-")
 }
 
-func materializeArtworkFiles(candidates []artworkFileCandidate, progressCallbacks ...taskprogress.Func) (int, int, error) {
+type artworkMaterialization struct {
+	existing, written, invalid int
+	failures                   []Failure
+}
+
+func materializeArtworkFiles(candidates []artworkFileCandidate, progressCallbacks ...taskprogress.Func) (artworkMaterialization, error) {
 	progress := firstProgress(progressCallbacks)
-	existingFiles := 0
-	writtenFiles := 0
+	var result artworkMaterialization
 	for index, candidate := range candidates {
 		progress.Update("materializing", index+1, len(candidates), candidate.Game)
 		if candidate.Target == "" {
 			continue
 		}
 		if _, err := catalogfs.Stat(candidate.Target); err == nil {
-			existingFiles++
+			result.existing++
 			continue
-		} else if err != nil && !os.IsNotExist(err) {
-			return 0, 0, err
+		} else if !os.IsNotExist(err) {
+			return result, err
 		}
 		if err := copyFile(candidate.SourcePathAbs(), candidate.Target); err != nil {
-			return 0, 0, err
+			if !errors.Is(err, errInvalidCachedArtwork) {
+				return result, err
+			}
+			result.invalid++
+			if len(result.failures) < 10 {
+				result.failures = append(result.failures, Failure{SourcePath: filepath.Join(candidate.SourcePackage, filepath.FromSlash(candidate.SourcePath)), Target: candidate.Target, Error: err.Error()})
+			}
+			continue
 		}
-		writtenFiles++
+		result.written++
 	}
-	return existingFiles, writtenFiles, nil
+	return result, nil
 }
+
+var errInvalidCachedArtwork = errors.New("invalid cached artwork source")
 
 func (candidate artworkFileCandidate) SourcePathAbs() string {
 	return filepath.Join(extractedPackageDir(candidate.DataRoot(), artworkPackage{
@@ -1331,6 +1348,14 @@ func copyFile(source, target string) error {
 		return err
 	}
 	defer in.Close()
+	reader := bufio.NewReader(in)
+	prefix, err := reader.Peek(64)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	if len(prefix) == 0 || bytes.Equal(prefix, make([]byte, len(prefix))) {
+		return fmt.Errorf("%w: empty or zero-filled image", errInvalidCachedArtwork)
+	}
 	if err := catalogfs.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err
 	}
@@ -1339,7 +1364,7 @@ func copyFile(source, target string) error {
 	if err != nil {
 		return err
 	}
-	_, copyErr := io.Copy(out, in)
+	_, copyErr := io.Copy(out, reader)
 	closeErr := out.Close()
 	if copyErr != nil {
 		_ = catalogfs.Remove(tmp)

@@ -1216,6 +1216,12 @@ func printEmuMoviesArtworkResult(result emumovies.ArtworkResult) {
 		}
 		fmt.Printf("Extracted: %d packages, %d files\n", result.ExtractedPackageCount, result.ExtractedFileCount)
 		fmt.Printf("Artwork: %d indexed, %d matched, %d unmatched, %d existing, %d written\n", result.IndexedArtworkFileCount, result.MatchedArtworkFileCount, result.UnmatchedArtworkFileCount, result.ExistingArtworkFileCount, result.WrittenArtworkFileCount)
+		if result.InvalidArtworkFileCount > 0 {
+			fmt.Printf("Invalid artwork sources: %d skipped\n", result.InvalidArtworkFileCount)
+			for _, failure := range result.InvalidArtworkFiles {
+				fmt.Printf("  skipped: %s -> %s: %s\n", failure.SourcePath, failure.Target, failure.Error)
+			}
+		}
 		if result.UnmatchedManifestPath != "" {
 			fmt.Printf("Unmatched report: %s\n", result.UnmatchedManifestPath)
 		}
