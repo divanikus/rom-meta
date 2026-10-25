@@ -1421,7 +1421,7 @@ func downloadAsset(requestURL, publicURL, targetPath string, progress taskprogre
 		defer progress.FinishWorkerBytes("downloading", worker, workers, label)
 	}
 	body := taskprogress.NewWorkerReader(response.Body, progress, "downloading", worker, workers, total, label)
-	_, copyErr := io.Copy(file, body)
+	written, copyErr := io.Copy(file, body)
 	closeErr := file.Close()
 	if copyErr != nil {
 		_ = catalogfs.Remove(tmp)
@@ -1431,10 +1431,32 @@ func downloadAsset(requestURL, publicURL, targetPath string, progress taskprogre
 		_ = catalogfs.Remove(tmp)
 		return closeErr
 	}
+	if err := validateDownloadedAsset(tmp, written); err != nil {
+		_ = catalogfs.Remove(tmp)
+		return fmt.Errorf("download %s failed: %w", publicURL, err)
+	}
 	if total > 0 {
 		progress.UpdateWorkerBytes("downloading", worker, workers, total, total, label)
 	}
 	return catalogfs.Rename(tmp, targetPath)
+}
+
+// An HTTP 200 response can still represent an unavailable provider asset.
+func validateDownloadedAsset(path string, size int64) error {
+	if size == 0 {
+		return fmt.Errorf("empty media response")
+	}
+	if size > 64 {
+		return nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if strings.EqualFold(strings.TrimSpace(string(data)), "NOMEDIA") {
+		return fmt.Errorf("provider returned NOMEDIA instead of media")
+	}
+	return nil
 }
 
 type downloadResponseError struct {
