@@ -9,6 +9,41 @@ Catalog data stays in readable YAML with source evidence and explicit overrides.
 **0.1.0 is pre-stable.** Command names and catalog formats may change before 1.0.
 RomMeta includes no ROMs, BIOS, provider database or downloaded artwork.
 
+## Catalog inputs
+
+| Catalog | Supported input |
+| --- | --- |
+| No-Intro | XML DAT files, including DAT members in ZIP archives; release attributes and ROM checksums |
+| Redump | XML DAT files, including DAT members in ZIP archives; disc releases and file checksums |
+| [MAME](docs/arcade-import.md) | Official `listxml` XML/ZIP input with version-matched classifications, set components and parent/clone relationships |
+| [ScummVM](docs/scummvm.md) | Structured official game list imported as game cards; no DAT or game files required |
+
+## Metadata and media sources
+
+These providers enrich catalog cards through `fetch`:
+
+| Source | Fetch types |
+| --- | --- |
+| LaunchBox | `metadata`, `artwork` |
+| OpenVGDB | `metadata`, `artwork` |
+| IGDB | `metadata`, `artwork` |
+| ScreenScraper | `metadata`, `artwork` |
+| Hasheous | `metadata`, using ROM identity |
+| EmuMovies | `artwork`, `video` |
+
+Coverage depends on the platform and provider access. See the
+[fetch guide](docs/fetch.md) for configuration and matching rules.
+
+## Export targets
+
+| Target | Integration | Output |
+| --- | --- | --- |
+| ES-DE | Built-in `export --target es-de`, with a local catalog or `--api` | Gamelists, selected media, preview and provenance reports |
+| RomM | Separate [server importer example](examples/romm-importer/README.md) | Metadata and media for already-scanned games in the pinned RomM runtime |
+
+See [supported input formats and export scenarios](docs/export-scenarios.md).
+The [HTTP API](#http-api) also exposes catalog data and assets to other consumers.
+
 ## Install
 
 Download the Windows or Linux **amd64** archive from
@@ -54,29 +89,38 @@ rom-meta catalog fold --data-root "/path/to/catalog" --platform gamegear --inter
 rom-meta validate "/path/to/catalog"
 ```
 
-DAT import supports No-Intro/Redump XML and classified MAME XML, including selected
-DAT members in ZIP archives. [ScummVM](docs/scummvm.md) has its own card import.
-[Fetch](docs/fetch.md) supports LaunchBox, OpenVGDB, IGDB, ScreenScraper, Hasheous
-and EmuMovies according to platform coverage and provider access. Run the same
-fetch again to resume saved work. Run writers sequentially for one catalog.
+Run the same fetch again to resume saved work. Run writers sequentially for one
+catalog.
 
 The [operator walkthrough](docs/cli-workflow.md) explains previews, enrichment,
 interactive fold, backups and export. Use `rom-meta help <command>` for flags.
 
-## Browse and query
+## Browse
 
 ```shell
 rom-meta serve --data-root "/path/to/catalog"
 ```
 
-Open http://127.0.0.1:8787. The same server hosts the read-only browser, `/api`
-endpoint index, `/v1/*` consumer API and offline Swagger UI at `/docs`, backed by
-`/openapi.json`. No token or selection profile is required for local browsing.
-Optional shared-token access is described in [the API guide](docs/catalog-api.md).
+Open http://127.0.0.1:8787 for the read-only catalog browser. No token or selection
+profile is required for local browsing.
 
 Stats starts with one platform. Entire-catalog scans are explicit, show progress
 and cancel when returning to Browse. Large HDD/network catalogs can still take
 minutes. Video opens on explicit playback.
+
+## HTTP API
+
+The same `serve` process exposes catalog lookup, metadata, identity proofs and
+media assets. `/v1/export` provides the remote catalog projection used by
+`export --api`; ROM files stay on the client.
+
+- `/api`: endpoint index and browser API.
+- `/v1/*`: consumer lookup, export and asset API.
+- `/docs`: self-hosted interactive Swagger UI.
+- `/openapi.json`: OpenAPI specification.
+
+See the [API guide](docs/catalog-api.md) for endpoints, request/response formats
+and optional shared-token access.
 
 ## Export to a frontend
 
