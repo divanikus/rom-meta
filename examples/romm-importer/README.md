@@ -124,6 +124,7 @@ See [batch/refresh operations](../../docs/romm-import-guide.md),
 - Assets/native baselines are rechecked; receipts hash new files. Budget staging
   and derivative space. Publication is sequential, not one DB/filesystem transaction.
 - New covers use source-hash subdirectories; unbound legacy files stay intact.
+  Generated PNG covers omit embedded ICC profiles; source assets stay unchanged.
 - Cover refresh/identity repair require separate review. Retain original bytes and
   receipts. Synthetic tests do not establish gameplay or live manual transfer.
 

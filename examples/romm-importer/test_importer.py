@@ -388,6 +388,23 @@ class ImporterTest(unittest.TestCase):
         with Image.open(imp.normalized_cover(cmyk)) as image:
             self.assertEqual((image.format, image.mode, image.size), ("PNG", "RGB", (2, 3)))
 
+    def test_native_cover_strips_large_icc_profile_before_png_derivatives(self):
+        from PIL import Image, PngImagePlugin
+        source = self.root / "large-profile.jpg"
+        limit = PngImagePlugin.MAX_TEXT_CHUNK
+        Image.new("RGB", (3, 2), (10, 20, 30)).save(
+            source, format="JPEG", icc_profile=b"x" * (limit + 1))
+        before = imp.hash_file(source)
+        with Image.open(source) as original:
+            self.assertGreater(len(original.info["icc_profile"]), limit)
+            pixel = original.getpixel((0, 0))
+        with Image.open(imp.normalized_cover(source)) as normalized:
+            self.assertEqual((normalized.format, normalized.mode, normalized.size), ("PNG", "RGB", (3, 2)))
+            self.assertEqual(normalized.getpixel((0, 0)), pixel)
+            self.assertNotIn("icc_profile", normalized.info)
+        self.assertEqual(PngImagePlugin.MAX_TEXT_CHUNK, limit)
+        self.assertEqual(imp.hash_file(source), before)
+
     def test_blank_cover_and_manual_share_the_ordinary_job_and_repeat(self):
         card = self.api.value["cards"][self.card_id]
         for kind, suffix, data, role in (("box-front", ".png", b"source cover", "cover"), ("manual", ".pdf", b"%PDF synthetic manual", "manual")):

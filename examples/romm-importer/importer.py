@@ -80,6 +80,9 @@ def normalized_cover(source):
         alpha = image.mode in ("RGBA", "LA") or "transparency" in image.info
         oriented = ImageOps.exif_transpose(image)
         normalized = oriented.convert("RGBA" if alpha else "RGB")
+        # A JPEG ICC profile can exceed the native PNG decoder limit. These
+        # derivatives contain decoded pixels; leave the original asset intact.
+        normalized.info.pop("icc_profile", None)
         result = BytesIO()
         normalized.save(result, format="PNG")
         result.seek(0)
