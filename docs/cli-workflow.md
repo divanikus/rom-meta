@@ -1,12 +1,8 @@
 # Operator workflow: import, enrich, fold, export
 
-These are ordinary CLI operations. Running an HTTP server is optional; it is useful
-for inspecting results or serving consumers. No local API token, accounts, JSON
-review plan or manual hash calculation is required for the normal workflow below.
-Use `rom-meta help <command>` (including `help catalog fold`) or `--help` for flags.
-
-Examples use a Game Gear catalog and one ROM system directory. Replace quoted
-paths/platforms with your own. Keep catalog, source ROMs and output folders separate.
+Examples use Game Gear; substitute your paths/platform. Keep catalog, source ROMs
+and output separate. The normal workflow needs no server, local API token or
+manual hash/review plan. Use `rom-meta help <command>` or `--help` for flags.
 
 ## 1. Initialize and import a DAT
 
@@ -17,11 +13,10 @@ rom-meta dat import "<platform.dat-or-zip>" --data-root "<catalog>"
 rom-meta dat import "<platform.dat-or-zip>" --data-root "<catalog>" --apply
 ```
 
-`dat plan` identifies the dataset/platform and ZIP members. Use `--member` when an
-archive contains several DATs, or `--platform` if detection needs an explicit name.
-The first import command previews additions/reconciliation; `--apply` writes the
-catalog. It imports release/checksum records, not ROM payload files. Existing
-metadata/media is preserved. Unresolved identities stop mutation with a report.
+`dat plan` identifies the dataset/platform and ZIP members. Use `--member` for
+multi-DAT archives or `--platform` when detection needs a name. Import previews
+changes; `--apply` writes release/checksum records, preserving existing metadata/
+media. It does not copy ROMs. Unresolved identities stop mutation with a report.
 
 ## 2. Enrich metadata, then inspect coverage
 
@@ -32,17 +27,15 @@ rom-meta fetch --data-root "<catalog>" --platform gamegear --source launchbox --
 rom-meta sources coverage --data-root "<catalog>" --platform gamegear
 ```
 
-LaunchBox metadata needs no provider account. The first fetch may download its
-snapshot; `--limit` limits selected cards, not snapshot download size. An existing
-configured local snapshot is reused. Preview may download/query/cache source data
-but does not write provider stanzas into game cards. Review the matched/not-found
-counts, then apply. Repeating an applied command resumes/skips saved results.
+LaunchBox needs no account. First fetch may download its snapshot; `--limit`
+limits cards, not snapshot bytes. Configured snapshots are reused. Preview may
+query/download/cache source data but does not write provider stanzas. Review
+match/not-found counts before apply; repeats skip saved work.
 
-Remove `--limit` after a small pass. Omit `--source` to use configured provider
-order/applicability; set provider credentials once in local configuration for
-sources that require them. Artwork/video use the same `fetch` interface with
-`--type artwork` / `--type video`; inspect source policy and real coverage. `not_found`
-is an observation, not a reason to force a guessed match or run a bulk overwrite.
+Remove `--limit` to continue. Omit `--source` for configured applicability/order;
+configure credentials for providers that need them. Use `--type artwork` or
+`--type video` for media. Missing matches remain gaps, not guessed identities or
+reasons for bulk overwrite.
 
 ## 3. Fold duplicate regional cards with explicit review
 
@@ -51,19 +44,15 @@ rom-meta catalog fold --data-root "<catalog>" --platform gamegear --details
 rom-meta catalog fold --data-root "<catalog>" --platform gamegear --interactive
 ```
 
-The first command shows candidates, evidence, proposed retained card and held
-conflicts without merging. Interactive review accepts `yes` to merge, `no` to save
-rejection of the displayed evidence, `skip` (or Enter) to leave it undecided, and
-`quit` to stop review. Backups/recovery paths are printed when data is written.
-No candidates is a valid result: DAT import already groups ordinary regional
-releases when it has enough evidence. Do not merge distinct products merely to
-reduce card count. `--apply` is the separate bulk path for automatically eligible
-groups and does not bypass held identity conflicts.
+Preview shows candidates, evidence, retained card and held conflicts. Interactive
+choices: `yes` merges; `no` saves rejection of that evidence; `skip`/Enter defers;
+`quit` stops. Writes print backup/recovery paths. No candidates is valid: DAT
+import may already group the releases. `--apply` is a separate automatic bulk path
+that still respects held conflicts. Distinct products must remain separate.
 
-Complex historical mixtures needing partitions, release reassignment or an explicit
-primary remain an advanced reviewed-plan workflow. Those cases still need technical
-review/JSON; this is a known usability gap, not a requirement of ordinary whole-group
-fold. Source aliases are evidence, not permission to accept a wrong provider match.
+Partitions, release reassignment and explicit primaries use advanced reviewed
+JSON plans. They are not required for ordinary whole-group fold. Source aliases
+alone do not justify an incorrect match.
 
 ## 4. Preview and create a frontend package
 
@@ -95,7 +84,5 @@ remain the CLI commands above. Run catalog preparation and consumer imports
 sequentially. See [catalog API](catalog-api.md) for optional access protection and
 consumer setup, and [offline export](offline-export.md) for consumers.
 
-The automated operator regression executes this complete path using a synthetic
-DAT, a local LaunchBox snapshot and generated bytes, including actual interactive
-fold, resume, metadata propagation, preserved fingerprints and unchanged ROMs.
-It blocks outbound HTTP, so successful enrichment proves the offline path.
+The [operator regression](../cmd/rom-meta/operator_workflow_test.go) tests this
+loop offline with synthetic DAT/provider data, including resume and preservation.

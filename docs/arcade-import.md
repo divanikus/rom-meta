@@ -7,9 +7,7 @@ revisions. Each card retains its logical platform in `arcade.platform`.
 
 ## Preview And Apply
 
-Initialize a separate catalog root, then provide the official XML (or ZIP).
-An existing catalog does not need to be initialized again. Run from its root;
-`--data-root` is optional and overrides the current directory:
+Initialize a separate catalog once. Run from its root, or set `--data-root`:
 
 ```shell
 rom-meta init <catalog-root>
@@ -19,115 +17,83 @@ rom-meta dat import <mame.xml-or-zip> --sets sf2,sf2ua,mslug,mslug2,kinst --repo
 rom-meta validate .
 ```
 
-MAME is detected from the selected XML root, including XML stored as a `.dat`
-member inside a ZIP; filenames do not select the engine. No-Intro/Redump continue
-through the ordinary importer. `dat arcade` remains a compatibility alias with
-the same current-directory default and flags. The shared MAME catalog is always
-`Arcade`; an unrelated `--platform` override is rejected. MAME-only options
-are rejected for ordinary DATs instead of being silently ignored.
+The XML root selects MAME, including `.dat` members inside ZIPs; filenames do not.
+No-Intro/Redump use the ordinary importer. `dat arcade` is a compatibility alias.
+MAME always uses `Arcade`; unrelated `--platform` overrides fail. MAME-only options
+also fail on ordinary DATs.
 
 ## Classification Acquisition
 
-The DAT build selects an exact Progetto-SNAPS category version; it is never
-replaced with the newest or nearest version. Acquisition order:
+The DAT build requires an exact Progetto-SNAPS version, never the nearest/latest.
+Acquisition order:
 
-1. An explicit `--classifications <zip>`, if supplied.
-2. A verified durable snapshot for the same input file SHA256 and MAME version.
-3. The validated cache under
-   `<data-root>/.rommeta/cache/arcade/mame/<version>/`.
-4. Download the versioned archive over HTTPS from Progetto-SNAPS.
+1. Explicit `--classifications <zip>`.
+2. Verified durable snapshot matching input SHA256 and MAME version.
+3. Validated `.rommeta/cache/arcade/mame/<version>/` under the data root.
+4. Versioned HTTPS download from Progetto-SNAPS.
 
-`--offline` disables step 4. A repeat import works offline from its durable
-snapshot even after the disposable cache is removed. Conflicting saved
-classification hashes require an explicit choice; a corrupt snapshot/cache
-produces an error rather than silently changing the input.
+`--offline` disables download; applied snapshots survive cache deletion.
+Conflicting snapshot hashes need explicit selection. Corrupt snapshots/cache fail
+rather than silently selecting other bytes.
 
-The first preview may download and write support data to the disposable cache;
-it does not create game cards or durable bindings. Only `--apply` changes
-the catalog. Downloads have a timeout and size limit, are validated for ZIP
-structure, required INIs and matching version, and are published with a SHA256
-manifest only after validation. SHA256 pins downloaded bytes locally; it is not
-an upstream signature. A missing archive, incompatible format or network error
-leaves the catalog unchanged and explains the explicit-file alternative.
+Preview may download/cache support data but creates no cards or durable bindings.
+Apply retains the raw classification ZIP. Downloads have timeout/size limits and
+ZIP/required-INI/version validation before SHA256-manifest publication. SHA256 is
+a local byte pin, not an upstream signature. Failure leaves the catalog unchanged
+and reports the explicit-file alternative.
 
-Console output and the JSON report include the actual path, version, SHA256
-and acquisition origin (explicit, snapshot, cache or download); downloaded/cached
-data also identifies its source URL. Nothing is embedded in the binary or bundled
-in the distribution. The raw classification ZIP is still retained in applied
-snapshots, without changing their content-based identity.
-
-FBNeo has its own DAT authority and versioning. FBNeo remains guarded against apply and never enters MAME classification
-acquisition; its applied binding path is not implemented. It never requests a MAME category archive using an FBNeo version.
-Distribution DATs and Software Lists remain separate unsupported apply inputs.
+Console/JSON reports show path, version, hash and origin; cached/downloaded data
+also includes its URL. Classification data is not bundled with RomMeta.
+FBNeo has separate versioning, no applied binding path and no MAME classification
+requests. Distribution DATs and Software Lists are unsupported apply inputs.
 
 ## Selection And Folding
 
-Report files must not exist; their parent directory must exist. The report
-contains every source machine's classification and reason, selection flag,
-hardware evidence, proposed card, fold review reason and selected set bindings.
-`--sets` uses exact comma-separated MAME short names. Selecting an excluded,
-unresolved or nonexistent set prevents apply. Grouping and folder names are computed
-from all eligible source sets before selecting releases: importing a clone alone
-does not change its card identity or import its unselected parent. Omitted selection
-means all eligible sets, so review the full distribution before a broad apply. `--member` chooses
-the XML member when a ZIP has multiple candidates.
+Reports require a new filename and existing parent directory. They include every
+machine's classification/reason, selection, hardware, proposed card, fold review
+and bindings. `--sets` accepts exact comma-separated short names; excluded,
+unresolved or absent sets block apply. `--member` selects ZIP XML.
 
-`--fold` is enabled by default; `--no-fold` creates separate cards. Automatic
-fold follows eligible MAME `cloneof` ancestry within one logical arcade platform;
-regional titles and technical qualifiers need not match. Both driver names must
-be known. Different drivers require the same known board or reviewed boards
-explicitly grouped into the same catalog family, or an exact source-reviewed
-clone link (ADR 0062); titles cannot bypass this guard.
-Device-list differences alone do not split same-driver protection/development
-releases. Neither a
-shared driver nor BIOS/ROM dependencies (`romof`) establish game identity.
+Grouping/naming uses all eligible sets before selection, so clone-only imports
+retain stable card identity without importing the parent. Omit `--sets` for all
+eligible sets; review before broad apply.
 
-Ordinary bootlegs matching the parent or an official regional alias in the same
-eligible clone group can join the same card when hardware is compatible. CPS2 Phoenix Edition and explicitly
-identified protection-removal hacks are technical releases. Prototype, beta, demo
-and test labels also belong to releases; initial defaults still prefer retail
-versions. Full descriptions and provenance remain unchanged on releases.
+`--fold` defaults on; `--no-fold` creates separate cards. Automatic fold follows
+eligible `cloneof` ancestry within one logical platform, regardless of regional
+names/technical qualifiers. Both drivers must be known. Different drivers need a
+known shared board, reviewed family, or exact source-reviewed clone link; titles
+cannot bypass this. Device differences alone do not split same-driver protection/
+development releases. Shared drivers and `romof`/BIOS dependencies alone prove no identity.
 
-Cabinet labels such as `(deluxe)`, `(standard)` and `(upright)` do not create
-separate cards. Recognized cabinet/revision/product-code qualifiers are removed
-from initial card titles. Explicit content editions, other hacks, unknown renamed
-bootlegs, incomplete/unofficial content without supported identity, unresolved
-parents and cycles remain held. Piranha/Abscam remain reviewed separate derivatives.
-These are conservative boundaries rather than exhaustive semantic classification.
+Compatible ordinary bootlegs matching a parent/regional alias can join its card.
+CPS2 Phoenix/protection-removal hacks are technical releases; demos, prototypes,
+betas and tests stay releases with retail preferred by default. Descriptions and
+provenance remain intact. Cabinet/revision/product-code labels do not create cards.
 
-Versions for distinct hardware platforms remain separate, as do independent game
-roots: 1943 Kai and Mark II are not folded into 1943. The Atari Alpha One prototypes
-belong to Major Havoc in MAME; the Vision Electronics Alpha One is unrelated.
-Existing reviewed revisions of a logical board family can still share a card.
+Explicit content editions, other hacks, unknown renamed bootlegs, unsupported
+unofficial content, unresolved parents and cycles remain held. Piranha/Abscam
+remain separate derivatives. Distinct hardware and independent roots stay separate
+(e.g. 1943 Kai/Mark II versus 1943). Atari Alpha One belongs to Major Havoc;
+Vision Electronics Alpha One does not. These rules are conservative, not exhaustive.
 
-A same-title bootleg with unmapped hardware may inherit the eligible parent's
-known browsing family. This is not permission to fold across driver files;
-its exact board stays unknown. Explicit routing, known different platforms and
-ineligible parents are never overridden. Mega-Tech ports remain separate because
-their platform and source identities are distinct.
+Same-title bootlegs with unmapped hardware may inherit an eligible parent's
+browsing family, but not its exact board or cross-driver fold permission. Explicit
+routing, known different platforms and ineligible parents still win. Mega-Tech
+ports remain distinct.
 
-When MAME assigns several branches directly to one parent, compatible sibling
-roots can share a separate card. Siblings require complete eligible ancestry and
-a known common board/family, or matching nonempty driver/device profiles. They
-must preserve content boundaries and unfamiliar qualifiers. Renamed bootlegs also
-need the same derivative title and manufacturer, ignoring standalone numeric set
-labels, unless a scoped source review establishes an equivalent maker branch
-(currently sf2b/sf2b2; source metadata is retained). For example, 1991 Spikes has two releases; older Aero Fighters includes
-aerofgtb/aerofgtc/sonicwi separately from the newer-hardware parent and its bootlegs.
-Device profiles are supporting evidence, not exact board identification.
+Compatible sibling roots can form a separate card when ancestry is complete and
+eligible, with a shared board/family or matching nonempty driver/device profiles.
+Content boundaries and unfamiliar qualifiers remain. Renamed bootlegs also need
+matching derivative title/manufacturer (ignoring numeric set labels), unless an
+exact scoped source review permits the maker branch, currently sf2b/sf2b2.
+For example, aerofgtb/aerofgtc/sonicwi remain separate from their newer-hardware
+parent. Device profiles support grouping without proving an exact board.
 
-The initial card title comes from the accepted parent with recognized technical
-suffixes removed, including supported slash-separated cabinet lists such as
-`deluxe/upright` and the `Export` market label. These remain in full release
-descriptions; Export does not assign a guessed region. Action Fighter's nine board/control variants become one card;
-Adders and Ladders v2.0/v2.1 become another. Full descriptions, short names,
-ROM/CHD evidence and board details remain on individual releases.
-
-The default release follows configured region priorities using the description,
-not the short name. A later import preserves an existing valid default, curated
-card title, additional release fields, attached source metadata and media.
-Platform display names and extra provider-mapping fields also survive refresh.
-Family-specific region priorities take precedence over the general Arcade policy.
+Initial titles use the accepted parent minus recognized technical suffixes,
+including cabinet lists (`deluxe/upright`) and `Export`. Full releases retain them;
+Export supplies no guessed region. Defaults use description-based region priority,
+with family priorities before general Arcade. Refresh preserves valid defaults,
+curated titles, extra release fields, sources/media and platform provider mappings.
 
 ## Scope And Routing
 
@@ -390,35 +356,26 @@ original folders, binding and manifest in the backup; no crash journal is added.
 
 ## Metadata and Media
 
-After successful MAME import, run ordinary fetch from the data root. No extra fold
-or reimport is required:
+After import, fetch normally from the data root; no extra fold/reimport is needed:
 
 ```powershell
 rom-meta fetch --platform Arcade --apply
 ```
 
-This runs the configured metadata, artwork and video sources in their configured
-order, just like other platforms. No manual source selection is required. To fetch
-only metadata and artwork, add `--type metadata,artwork`. Repeat the same command
-to resume; do not add `--force-overwrite` for normal continuation.
-ScreenScraper needs the existing user/developer credentials. Its MAME system
-includes child arcade systems, so no per-board user configuration is required.
-The first run automatically upgrades the disposable catalog cache and reparses
-Arcade rows to expose the imported authority IDs; it does not change card layout.
+Configured metadata/artwork/video run in order. `--type metadata,artwork` restricts
+types. Repeat to resume; normal continuation needs no `--force-overwrite`.
+ScreenScraper uses existing user/developer credentials and its child-arcade systems.
+The first run upgrades/reparses disposable cache rows for MAME IDs without changing layout.
 
-EmuMovies uses the configured FTP credentials and extractor. Its artwork downloads
-packages; `--limit` limits packages, not extracted
-images. A dry run with `--plan <path>` can inspect selected packages first.
-ScreenScraper and EmuMovies require exact imported MAME set identity. LaunchBox
-uses its optional `Mame.xml` names and arcade-family sections where available,
-with the general Arcade section as fallback. Separate named Mega-Tech/Mega Play/
-PlayChoice versions cannot borrow the ordinary arcade record by base title.
-Bootleg/hack title matching requires corresponding source evidence. Shared source
-IDs are descriptive metadata, not permission to fold hardware-distinct cards.
-Hasheous queries SHA1s from imported MAME components in the `MAMEArcade` scope;
-it accepts a response only with the exact returned set name, Arcade system and
-matching SHA1. Larger components are preferred to avoid a BIOS-only query. These
-are not ZIP hashes. IGDB consumes Hasheous IDs as hints and independently checks
-the arcade platform, regional titles, named ports and unofficial variants.
-OpenVGDB requires the exact authority `<set>.zip` filename in its Arcade section.
-Use `fetch --help` for source-specific options.
+EmuMovies uses configured FTP/extractor; artwork is package-based, so `--limit`
+limits packages, not extracted images. Preview selected packages with `--plan <path>`.
+ScreenScraper/EmuMovies require exact imported set identity. LaunchBox uses optional
+`Mame.xml` names and family sections, falling back to Arcade. Named console-derived
+ports cannot borrow ordinary arcade records; bootleg/hack matches need source
+evidence. Shared descriptive IDs do not authorize hardware-distinct folds.
+
+Hasheous checks imported component SHA1s in `MAMEArcade`, requiring exact returned
+set/system/SHA1 and preferring larger components over BIOS-only evidence. These
+are not ZIP hashes. IGDB independently validates Hasheous hints against platform,
+regional names, ports and unofficial variants. OpenVGDB requires exact `<set>.zip`
+in its Arcade section. See `fetch --help` for provider options.

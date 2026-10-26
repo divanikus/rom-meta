@@ -2,24 +2,16 @@
 
 ## Purpose
 
-Portable metadata is the shared foundation for the ROM Manager family of tools.
-
-The first goal is not to manage a specific ROM set. The first goal is to build a local, portable, human-readable platform library: games, releases, titles, regional variants, media, source references, and enough recognition data to later connect the library to ROM sets and local files.
+A portable catalog records platforms, games, releases, regional titles, media and
+source evidence independently of any particular ROM set or frontend. Fingerprints
+and bindings connect it to concrete files.
 
 ## Source Of Truth
 
-The source of truth is a file-based metadata repository, not a database.
-
-Generated databases, search indexes, and frontend exports may be used for speed and convenience, but they must be disposable. A generated index should be rebuildable from the human-readable catalog files and local assets.
-
-Preferred source-of-truth properties:
-
-- Human-readable and hand-editable.
-- Organized by platform.
-- Organized by game bundle inside each platform.
-- Independent from any one ROM set, frontend, emulator, or scraper.
-- Friendly to validation, diffs, review, backup, and migration.
-- Explicit about user curation decisions and source provenance when those decisions matter.
+Human-readable catalog files and local assets are authoritative. Databases,
+indexes and frontend exports are disposable and must be rebuildable from them.
+Organize by platform/game bundle, preserve curation/provenance and keep data
+editable, diffable and independent of any emulator, ROM set or provider.
 
 ## Packed platform storage
 
@@ -89,40 +81,36 @@ Notes:
 
 ## Convention Over Configuration
 
-The catalog should prefer layout and naming conventions over verbose YAML.
+Use paths/names for derivable identity; YAML records intent, decisions and exceptions.
 
-YAML should record intent, decisions, and exceptions. It should not list every media path or repeat identity that can be derived from paths and keys.
+- Platform folders use authority system names, e.g. `Nintendo - Nintendo 64`.
+  Game folders use the curated display title; release keys use authority entries,
+  e.g. `Star Fox 64 (USA)`. MAME keys are short set names.
+- Sanitize only unsafe path characters/edge cases: separators, control/invalid
+  characters and Windows trailing dots/spaces. Preserve case, spacing and punctuation.
+- DAT optical grouping retains content roles, unknown qualifiers and trial build
+  discriminators; ordinary region/language/revision stays release metadata.
+  See [regional content identity](regional-content-identity.md).
 
-Filesystem naming:
+Derived values:
 
-- Platform folder names should use the selected authority system name, with only filesystem-invalid characters sanitized. For example, No-Intro `Nintendo - Nintendo 64` stays `Nintendo - Nintendo 64`.
-- Game folder names should use the selected catalog display title, usually based on the preferred authority release title for the folded game, again with only filesystem-invalid characters sanitized.
-- DAT-derived optical bundles partition explicit content roles and retain unknown edition qualifiers. Trial folders include their role and dated build discriminator when present. Ordinary regions, languages and retail revisions remain release metadata. See [regional content identity](regional-content-identity.md) and ADR 0086; earlier permissive role/edition folding is superseded.
-- Release keys should use the selected authority release entry name, with only filesystem-invalid characters sanitized. For example, No-Intro `Star Fox 64 (USA)` stays `Star Fox 64 (USA)`.
-- MAME set names are already compact stable identifiers and can be used directly where they are the authority key.
-- Path sanitization should preserve case, spaces, parentheses, commas, apostrophes, and ordinary hyphens. It should only replace or remove path separators, control characters, characters invalid on common filesystems, and unsafe edge cases such as trailing dots or spaces on Windows.
+| Value | Location |
+| --- | --- |
+| Platform/game ID | Platform/game directory path |
+| Release ID | Key in `game.yaml` |
+| Game-wide media | `media/` |
+| Release-specific media | `media/<release-id>/` |
+| Provider candidate | Source suffix, e.g. `media/<release-id>/box-front.openvgdb.jpg` |
+| Source redistribution policy | Root `source-policies.yaml` |
 
-Derived identity:
+Fold preserves distinct same-name media at `media/_fold/<original-card-folder>/`,
+retaining basenames/layout; repeated folds can nest earlier `_fold` subtrees.
+This is a preservation namespace, not a release. Normal naming/policy validation
+still applies. Do not create empty media directories.
 
-- Platform ID comes from `platforms/<platform>/`.
-- Game ID comes from `platforms/<platform>/<game>/`, for example `Nintendo - Nintendo 64.Star Fox 64`.
-- Release IDs come from keys in `game.yaml`.
-- Game-wide media comes from `media/`.
-- Curated release-specific media comes from `media/<release-id>/` when that release actually has release-specific media.
-- Source-specific candidate media comes from the same game-wide or release-specific media folders, with the source encoded as a filename suffix: `media/<release-id>/box-front.openvgdb.jpg`.
-- Fold preserves distinct same-name files under `media/_fold/<original-card-folder>/`, retaining their basenames and original game-wide or release-specific layout. `_fold` is a reserved preservation namespace, not a release ID. Repeated folds can preserve an earlier `_fold` subtree inside another original-card folder; all files still follow the normal filename and source-policy checks.
-- Empty media directories should not be created. Absence of `media/` or `media/<release-id>/` means no media has been attached at that level yet.
-- Source-level media policies come from root `source-policies.yaml`.
-
-Validation should catch unknown release media folders, unknown release keys, unknown media type filenames, source suffixes missing from `source-policies.yaml`, malformed release keys, missing required fields, and ambiguous conventions.
-
-Dates:
-
-- Source importers should normalize release dates to ISO-style calendar strings before writing `game.yaml`.
-- Full dates use `YYYY-MM-DD`.
-- Month-only dates use `YYYY-MM`.
-- Year-only dates use `YYYY`.
-- Importers should not invent missing precision, such as turning a year-only source date into January 1.
+Validate release keys/folders, required fields, media roles, source-policy entries
+and ambiguous conventions. Dates use `YYYY-MM-DD`, `YYYY-MM` or `YYYY`; never
+invent missing precision such as January 1 for a year-only source.
 
 ## Game And Release Model
 
@@ -216,11 +204,9 @@ fold metadata survives repeat DAT imports.
 
 ## Titles
 
-There is no single objective canonical title for every folded game.
-
-The catalog display title is a practical curation choice for the platform catalog. It should generally prefer the most recognizable English or international title when that is useful for the user, but official regional titles must remain available on releases.
-
-When title choice is non-obvious, record a short note or provenance field rather than encoding too much policy into the schema.
+The card title is curated for the platform, usually a recognizable English or
+international name. Preserve official regional names on releases. Record a short
+note/provenance when the choice is ambiguous rather than expanding the schema.
 
 ## Media
 
@@ -285,7 +271,11 @@ logo-01.launchbox.png
 logo-02.launchbox.png
 ```
 
-If every release candidate from the same source points to the literally same source media URL for a media type, the downloader should materialize it once as game-wide media. If multiple files differ only because one source has several candidates for one release, they should be numbered in the game-wide media folder. If media differs only by ordinary release region or language, keep it game-wide and encode the region or language in the filename. The downloader should use `media/<release-id>/` only when the media is tied to a real release-specific variant such as a special edition, prototype, demo, unlicensed/pirate/aftermarket/homebrew/sample release, or a release whose base title differs from the game bundle.
+Identical source URLs across all releases materialize once as game-wide media.
+Multiple same-role candidates are numbered. Ordinary region/language differences
+stay game-wide with filename qualifiers. Use `media/<release-id>/` for true
+release variants: special editions, prototypes/demos, unlicensed/pirate/
+aftermarket/homebrew/sample releases, or a different release base title.
 
 An explicit source artwork category is preserved as a `variant-<value>`
 qualifier immediately before the source suffix:
@@ -475,18 +465,10 @@ If No-Intro, Redump, or MAME do not cover a platform well, record the chosen nam
 
 ## ROM Sets And Inventories
 
-The first portable metadata catalog should not be tied to a ROM set.
-
-ROM-set bindings and local file inventories are later layers that connect observed files, DAT entries, archive members, checksums, and local paths to catalog games and releases.
-
-Future binding examples:
-
-- No-Intro entry to release.
-- Redump disc to release.
-- Local server file to known fingerprint.
-- Frontend-specific export item to preferred release.
-
-Private local paths and inventories should remain outside committed public metadata unless deliberately stored in a private location.
+Keep the catalog independent of ROM inventories. Bindings connect observed files,
+DAT entries, archive members and hashes to games/releases. Examples include
+No-Intro/Redump release mapping, local-file fingerprints and frontend selections.
+Private paths/inventories belong outside public metadata.
 
 ## Tooling Direction
 

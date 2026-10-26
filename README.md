@@ -48,14 +48,12 @@ The [HTTP API](#http-api) also exposes catalog data and assets to other consumer
 
 ## Install
 
-Download the Windows or Linux **amd64** archive from
-[Releases](https://github.com/divanikus/rom-meta/releases) and extract it. Verify
-the archive against the accompanying `SHA256SUMS`.
-On Linux, run `chmod +x ./rom-meta`. Add its directory to `PATH`, or invoke the
-executable by its full path. Windows uses `rom-meta.exe`.
+Extract a Windows or Linux **amd64** archive from
+[Releases](https://github.com/divanikus/rom-meta/releases) and verify `SHA256SUMS`.
+On Linux, run `chmod +x ./rom-meta`. Add the executable's directory to `PATH`.
+Check installation with `rom-meta --version` and `rom-meta --help`.
 
-To build from a source checkout, install the Go version in [go.mod](go.mod)
-(currently 1.26.3 or newer):
+To build from source, use the Go version in [go.mod](go.mod):
 
 ```shell
 git clone https://github.com/divanikus/rom-meta.git
@@ -63,13 +61,12 @@ cd rom-meta
 go build -o bin/rom-meta ./cmd/rom-meta
 ```
 
-On Windows use `-o bin/rom-meta.exe`. No Go installation is needed for prebuilt
-binaries. Run `rom-meta --version` and `rom-meta --help` to check the installation.
+On Windows use `-o bin/rom-meta.exe`. Prebuilt binaries do not require Go.
 
 ## Import, enrich and review
 
-Replace the quoted paths below with your own. Keep the catalog outside the source
-checkout. Start with one system and a small metadata sample.
+Keep the catalog outside the source checkout and ROM directories. Replace example
+paths with your own; start with one platform and a small sample.
 
 ```shell
 rom-meta init "/path/to/catalog"
@@ -79,9 +76,8 @@ rom-meta dat import "/path/to/platform.dat-or-zip" --data-root "/path/to/catalog
 rom-meta sources list --data-root "/path/to/catalog"
 ```
 
-Enable sources in `config/sources.yaml` inside the catalog. Configure credentials
-in `config/secrets.yaml` only for sources that require them; the generated template
-shows the fields. Never put secrets in this repository.
+Select providers in `config/sources.yaml`; put required credentials in the
+catalog's `config/secrets.yaml`. Then preview enrichment, apply and review folds:
 
 ```shell
 rom-meta fetch --data-root "/path/to/catalog" --platform gamegear --source launchbox --type metadata --limit 10
@@ -91,11 +87,9 @@ rom-meta catalog fold --data-root "/path/to/catalog" --platform gamegear --inter
 rom-meta validate "/path/to/catalog"
 ```
 
-Run the same fetch again to resume saved work. Run writers sequentially for one
-catalog.
-
-The [operator walkthrough](docs/cli-workflow.md) explains previews, enrichment,
-interactive fold, backups and export. Use `rom-meta help <command>` for flags.
+Repeat fetch to resume; run catalog writers sequentially. See the
+[operator workflow](docs/cli-workflow.md) for recovery and review, or
+`rom-meta help <command>` for flags.
 
 ## Browse
 
@@ -103,94 +97,75 @@ interactive fold, backups and export. Use `rom-meta help <command>` for flags.
 rom-meta serve --data-root "/path/to/catalog"
 ```
 
-Open http://127.0.0.1:8787 for the read-only catalog browser. No token or selection
-profile is required for local browsing.
-
-Stats starts with one platform. Entire-catalog scans are explicit, show progress
-and cancel when returning to Browse. Large HDD/network catalogs can still take
-minutes. Video opens on explicit playback.
+Open http://127.0.0.1:8787 for the read-only browser. Local browsing requires no
+token or profile. Stats starts with one platform; full-catalog scans are explicit,
+show progress and support cancellation. HDD/network scans can take minutes.
+Video loads on playback.
 
 ## HTTP API
 
-The same `serve` process exposes catalog lookup, metadata, identity proofs and
-media assets. `/v1/export` provides the remote catalog projection used by
-`export --api`; ROM files stay on the client.
+The same `serve` exposes catalog metadata and media:
 
-- `/api`: endpoint index and browser API.
-- `/v1/*`: consumer lookup, export and asset API.
-- `/docs`: self-hosted interactive Swagger UI.
-- `/openapi.json`: OpenAPI specification.
+| Route | Purpose |
+| --- | --- |
+| `/api` | Endpoint index and browser API |
+| `/v1/*` | Consumer lookup, export and assets |
+| `/docs` | Interactive Swagger UI |
+| `/openapi.json` | OpenAPI specification |
 
-See the [API guide](docs/catalog-api.md) for endpoints, request/response formats
-and optional shared-token access.
+[API reference](docs/catalog-api.md) covers schemas and optional shared-token access.
 
 ## Export to a frontend
 
-**ES-DE:** enrich a ROM selection that you already have. Give RomMeta the prepared
-catalog and the actual system ROM directory used by ES-DE. Local export works
-offline, without `serve` or provider credentials. Start with a single NES folder:
+**ES-DE:** generate metadata for your existing ROM files from a prepared catalog:
 
 ```shell
 rom-meta export --target es-de --platform nes --data-root "/path/to/catalog" --rom-root "/path/to/roms/nes" --out "/path/to/new-package"
-rom-meta export --target es-de --platform nes --data-root "/path/to/catalog" --rom-root "/path/to/roms/nes" --out "/path/to/new-package" --apply
 ```
 
-The first command prints recognition/coverage without creating output. The second
-creates a new package; open its `preview.html` and `report.txt`. Source ROMs and
-catalog files stay unchanged. Output contains `gamelists/nes/gamelist.xml`, selected
-`downloaded_media/nes/` and provenance reports. Batch mode uses `--all` or
-`--platforms` against the parent ROM directory. [Profiles](examples/export-es-de-library.yaml)
-choose [display names](docs/offline-export.md#display-names), languages, sources,
-regions and media; export does not choose/copy a ROM collection for you.
+Review the printed recognition/coverage summary, then repeat with `--apply`.
+The new package contains `preview.html`, reports, `gamelists/nes/gamelist.xml`
+and selected `downloaded_media/nes/`. ROMs and catalog stay unchanged.
+[Profiles](examples/export-es-de-library.yaml) control
+[display names](docs/offline-export.md#display-names), languages, sources and media.
+Use `--all` or `--platforms` against a parent ROM directory for multiple systems.
 
-For a catalog on another machine, run the same server there:
+For a remote catalog, run the server there:
 
 ```shell
 rom-meta serve --data-root "/path/to/catalog" --addr "192.168.1.10:8787"
 ```
 
-On the ES-DE machine, use its actual ROM root and the server address:
+On the ES-DE machine:
 
 ```shell
 rom-meta export --api "http://192.168.1.10:8787" --all --rom-root "/games/roms" --out "/exports/new-package"
-rom-meta export --api "http://192.168.1.10:8787" --all --rom-root "/games/roms" --out "/exports/new-package" --apply
 ```
 
-`--platform` and `--platforms` work with `--api` too. ROMs are read locally;
-only names, hashes and bounded playlist/serial observations go to the server.
-Selected metadata/media returns to the client. No catalog share or server ROM
-mount is needed. Local and network export share the same readers and confidence
-rules, including MAME; [network details](docs/offline-export.md#export-from-a-remote-catalog)
-cover profiles, progress and failures.
+Review, then repeat with `--apply`. Local and network export share readers and
+confidence rules, including MAME. ROM bytes stay on the client; no catalog share
+is needed. See the [ES-DE guide](docs/offline-export.md#quick-start-existing-es-de-roms)
+and [network details](docs/offline-export.md#export-from-a-remote-catalog).
 
-Close ES-DE before installation. For a new frontend gamelist, copy the XML into
-`<ES-DE-home>/gamelists/nes/` and the media into `<configured-media-root>/nes/`.
-Back up existing data; merge an existing gamelist to preserve favorites, play
-statistics and emulator overrides. The CLI export stops at package creation.
-The [step-by-step ES-DE guide](docs/offline-export.md#quick-start-existing-es-de-roms)
-covers actual paths, recognition reports, package contents and batch mode.
+Close ES-DE before installation. Back up existing metadata and merge by launch
+path to preserve favorites, play statistics and emulator overrides. The CLI
+creates packages; installation/merge is manual.
 
-**RomM:** the separate [server importer example](examples/romm-importer/README.md)
-fills already-scanned native games from the RomMeta API. It runs in the pinned
-RomM 5.4.0 environment with native database/Resources access. It is experimental,
-version-specific and requires administrator setup; it is not a stock-API upload.
-
-See [export scenarios and coverage](docs/export-scenarios.md) for input formats,
-identity confidence, output differences, tests and known gaps. ES-DE is the only
-`export --target` implementation in 0.1.0.
+**RomM:** the [server importer example](examples/romm-importer/README.md) fills
+already-scanned games through native RomM 5.4.0 handlers and Resources. It requires
+administrator setup and is version-specific and experimental.
+See [export scenarios](docs/export-scenarios.md) for formats, confidence and gaps.
+ES-DE is the only built-in `export --target`.
 
 ## Boundaries
 
-- Mutating catalog commands offer previews; explicit apply or interactive approval
-  authorizes writing. Back up data before broad identity changes. Fold retains
-  recovery backups; complex split/partition reviews use hash-bound plans.
-- Recognition reports exact hash, weaker name or game-only evidence separately.
-  CHD game observations and MAME set-name projection do not prove a valid dump.
-- Unsupported inputs and ambiguities are reported. Further frontend targets,
-  arbitrary disc formats, ROM conversion, emulator setup and universal gameplay
-  compatibility are outside 0.1.0.
-- Provider metadata/media retains its own terms. A generated frontend package is
-  personal output, not permission to redistribute provider content.
+- Preview catalog changes before `--apply` or interactive approval. Back up broad
+  identity changes; advanced split/partition review uses hash-bound plans.
+- Reports distinguish exact hashes, weaker names and game-only matches. CHD
+  observations and MAME set names do not prove dump validity or gameplay.
+- Unsupported formats and ambiguities are reported. ROM conversion/organization,
+  emulator setup and additional frontend templates are outside 0.1.0.
+- Provider terms still govern downloaded metadata/media and generated packages.
 
 ## Documentation and development
 

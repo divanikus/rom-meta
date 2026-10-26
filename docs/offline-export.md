@@ -1,108 +1,87 @@
 # ES-DE export
 
-Generate a separate local/personal package from existing ROMs and the prepared
-catalog. Local mode works offline without providers or credentials; network mode
-uses the same catalog through `serve`. Source ROMs/catalogs remain unchanged.
-Local mode needs filesystem access to catalog/media; `--api` needs only a server
-connection. Actual ES-DE/emulator consumer compatibility remains experimental.
+Generate gamelists, selected media and reports for existing ROMs. Local mode reads
+a prepared catalog offline; `--api` uses that catalog through `serve`. Neither
+mode modifies ROMs/catalogs. ES-DE/emulator integration remains experimental.
 
 ## Quick start: existing ES-DE ROMs
 
-The normal workflow enriches the ROM selection already on disk. Prepare/import/
-fetch the catalog once, then export works offline with local catalog/media reads.
-No running `serve` or provider credentials are required. The user provides existing
-ROM files; RomMeta generates their metadata package without selecting/copying ROMs.
+Prepare/import/fetch the catalog once. Export then generates metadata for the
+files you supply, without selecting or copying ROMs.
 
 ### 1. Identify the inputs and frontend paths
 
-Use a catalog containing the matching platform and its downloaded metadata/media.
-Find the actual system directory ES-DE launches, for example `/games/roms/nes`.
-Also identify ES-DE's home/gamelists location and its configured downloaded-media
-root; these can be on different disks. A custom system path can differ from the
-ordinary immediate system folder. Export the actual directory for that system.
-
-Start with a small system folder. Check the supported formats and identity rules
-in the [input format matrix](export-scenarios.md#es-de-input-coverage).
+Find the actual system directory ES-DE launches, e.g. `/games/roms/nes`, plus its
+configured gamelist and media locations. These may be on different disks; batch
+mode does not infer custom nested system roots. The catalog must contain that
+platform's metadata/media. Check the [input formats](export-scenarios.md#es-de-input-coverage).
 
 ### 2. Preview one system
 
-Run with quoted real paths. The output directory must be new and outside both
-catalog and ROM trees. The optional `--limit 10` below is a deliberate sample:
+Use a new output directory outside both catalog and ROM trees. `--limit 10`
+selects a sample:
 
 ```shell
 rom-meta export --target es-de --platform nes --data-root "/path/to/catalog" --rom-root "/games/roms/nes" --out "/exports/nes-check" --limit 10
 ```
 
-Review hash/name/game-only matches, ambiguous/unmatched/unsupported inputs,
-description/cover coverage and selected media bytes. This command prints a
-preview and creates no package. It selects metadata for existing ROMs; it does
-not choose a best-games collection or filter regions into 1G1R.
+Preview creates no package. Review match confidence, ambiguous/unmatched/
+unsupported inputs, description/cover coverage and selected media bytes.
 
 ### 3. Create and inspect a package
 
-Repeat that selection with `--apply`:
+Repeat with `--apply`:
 
 ```shell
 rom-meta export --target es-de --platform nes --data-root "/path/to/catalog" --rom-root "/games/roms/nes" --out "/exports/nes-check" --limit 10 --apply
 ```
 
-Open `/exports/nes-check/preview.html` after creation. Inspect `report.txt`,
-`manifest.json`, `gamelists/nes/gamelist.xml` and the selected media. The manifest
-records recognition confidence and source/language/media evidence. The package's
-README.txt explains installation. An HTML preview verifies generated output, not
-how ES-DE will resolve/display it. Input ROMs and catalog remain unchanged.
+Open `preview.html`; inspect `report.txt`, `manifest.json`, `gamelists/nes/gamelist.xml`
+and media. The manifest records recognition and source/language/media evidence;
+`README.txt` explains installation. Check actual display in ES-DE separately.
 
-To process the whole system, omit `--limit` and use another new output directory.
-For explicit source/language/region priorities, copy
-[the reusable profile](../examples/export-es-de-library.yaml), edit it once and
-pass `--profile "/path/to/profile.yaml"` on preview and apply. No provider network
-fallback fills missing local metadata/media during export.
+For the full system, omit `--limit` and use a new output directory. For priorities,
+copy [the library profile](../examples/export-es-de-library.yaml) and pass
+`--profile "/path/to/profile.yaml"` on preview/apply. Export never fetches missing
+provider content.
 
 ### 4. Install into ES-DE
 
-Close ES-DE so it does not save an older gamelist over the installed result.
-For a system without an existing gamelist, back up existing frontend/media files
-and copy these reviewed paths:
+Close ES-DE and back up existing metadata/media before copying reviewed output:
 
 | Package path | Frontend destination |
 | --- | --- |
 | `gamelists/nes/gamelist.xml` | `<ES-DE-home>/gamelists/nes/gamelist.xml` |
 | Contents of `downloaded_media/nes/` | `<configured-media-root>/nes/` |
 
-Keep the ROM filenames/subdirectories referenced by `./` launch paths. The selected
-ROM directory must actually be the one ES-DE uses for NES. Modern ES-DE uses its
-configured gamelists/media locations; dropping XML next to ROMs requires a separate
-legacy configuration. Check paths in the real frontend after reloading it.
+Keep ROM names/subdirectories used by `./` launch paths. Use ES-DE's configured
+locations; XML next to ROMs requires separate legacy configuration.
 
-If a gamelist already exists, merge entries by launch path to preserve favorites,
-playcounts, emulator overrides and unrelated entries. Replacing the whole XML
-loses those values. The CLI does not perform this merge/install. Use your existing frontend metadata
-management process for that step; this release provides package generation.
+For existing gamelists, merge by launch path to preserve favorites, playcounts,
+emulator overrides and unrelated entries. Replacing XML loses these values.
+The CLI does not install or merge output. Reload ES-DE and check paths/display.
 
 ### 5. Export several systems
 
-Use the parent directory with immediate system folders (`nes/`, `snes/`,
-`megadrive/`, etc.), rather than a single system directory:
+Use the parent ROM directory with immediate folders such as `nes/` and `snes/`:
 
 ```shell
 rom-meta export --target es-de --platforms nes,snes,megadrive --data-root "/path/to/catalog" --rom-root "/games/roms" --profile "/path/to/profile.yaml" --out "/exports/three-systems"
 ```
 
-Review, then repeat with `--apply`. `--all` discovers supported immediate folders;
-`--platforms` selects named ones. Ordinary `--platform` accepts one actual system
-ROM directory. An installation with a custom nested Xbox 360 root needs that
-actual path in a separate single-system export; batch mode does not infer it.
+Review, then repeat with `--apply`. `--all` discovers supported folders;
+`--platforms` selects named ones. Use a separate `--platform` export for custom
+nested system paths, including custom Xbox 360 roots.
 
 ## Export from a remote catalog
 
-Run `serve` on the machine holding the prepared catalog. Bind its LAN address;
-the default loopback address is accessible only on that machine:
+On the catalog machine, bind `serve` to its LAN address (default is loopback):
 
 ```shell
 rom-meta serve --data-root "/catalog" --addr "192.168.1.10:8787"
 ```
 
-Run the client on the machine that owns the actual ES-DE ROM files:
+On the machine holding the ES-DE ROMs:
 
 ```shell
 rom-meta export --api "http://192.168.1.10:8787" --platform nes --rom-root "/games/roms/nes" --out "/exports/nes-package"
@@ -110,71 +89,55 @@ rom-meta export --api "http://192.168.1.10:8787" --all --rom-root "/games/roms" 
 rom-meta export --api "http://192.168.1.10:8787" --all --rom-root "/games/roms" --profile "/path/to/profile.yaml" --out "/exports/all-package" --apply
 ```
 
-Use `--platforms nes,gba,psx,mame` for selected immediate system folders. `--api`
-and `--data-root` are mutually exclusive. `--list-systems` lists compiled client
-readers; the actual server catalog determines availability. Custom frontend paths
-still need their actual directory via a separate `--platform` export.
+`--platforms nes,gba,psx,mame` selects immediate folders. `--api` excludes
+`--data-root`. `--list-systems` lists client readers; server catalog contents
+determine availability. Custom roots still need separate `--platform` exports.
 
-The client enumerates and hashes ROMs locally, sends observations in batches of
-100 launches and receives the same projection as local export. It does not upload
-ROM bytes. The server needs no ROM mount. It resolves one selected catalog index
-at a time and hashes selected media; preview may take time but downloads no media
-to the client and creates no output. Progress distinguishes ROM observation, API
-resolution, download and package writing. Large CHD/ISO collections require full
-local container reads, unlike the limited CHD observations used by the RomM example.
+The client hashes ROMs locally and sends batches of 100 observations, never ROM
+bytes. The server needs no ROM mount. It loads one selected index at a time and
+hashes selected media. Preview creates no output or client media downloads.
+Progress separates observation, API resolution, download and package writing.
+CHD/ISO export reads full containers, unlike the RomM example's limited CHD observations.
 
-An optional `--profile` is read on the client and sent as YAML policy bytes; its
-filename is never opened on the server. Otherwise the server's default/profile
-applies. `ROMMETA_API_TOKEN` is optional; when server protection is configured,
-set the same token in the client environment. API origins must have no embedded
-credentials, path or query; redirects are rejected. See [API access](catalog-api.md).
+`--profile` sends client YAML bytes, not a server filename; otherwise server
+defaults apply. If protection is enabled, set `ROMMETA_API_TOKEN` to the server's
+token. Origins cannot contain credentials, paths or queries; redirects fail.
+See [API access](catalog-api.md#optional-access-protection).
 
-All local readers are available remotely, including PS3 descriptors, directory
-playlists and MAME ZIP/7z set-name binding. `--arcade-snapshot` selects saved server
-MAME bindings; an absent/ambiguous snapshot is reported as a batch skip and a
-single-system error. These are the same confidence limits as local export.
+Remote readers match local ones, including PS3 descriptors, directory playlists
+and MAME ZIP/7z. `--arcade-snapshot` selects saved server bindings; unresolved
+snapshot selection skips a batch system or fails a single-system export.
 
-Apply downloads only selected media, checks size/SHA-256, rechecks local ROMs and
-stages one new package. Catalog/profile revision changes across requests, source
-drift, download failures or cancellation abort publication. There is no total
-collection ceiling; per-request limits do not truncate a collection. A failed run
-can be repeated with the same unused output path. Successful output must use a new
-path on the next run. Interrupted temporary download work is not a persistent
-resume cache. Installation/merge is still the separate step above.
+Apply downloads selected assets, verifies size/SHA-256, rechecks ROMs and stages
+one package. Revision/source drift, failures or cancellation abort publication.
+Collections have no total ceiling. Retry failures with the same unused output
+path; successful exports require a new path. Temporary downloads are not a
+persistent resume cache. Installation/merge remains manual.
 
 ## Export an ES-DE ROM root
 
-For a directory containing system folders such as n64/, snes/, psx/ and arcade/:
+For immediate system folders (`n64/`, `snes/`, `psx/`, `arcade/`):
 
 ```shell
 rom-meta export --target es-de --data-root <catalog-root> --rom-root <ES-DE-ROM-root> --all --profile <profile.yaml> --out <new-output-directory>
 rom-meta export --target es-de --data-root <catalog-root> --rom-root <ES-DE-ROM-root> --all --profile <profile.yaml> --out <new-output-directory> --apply
 ```
 
-Copy [the reusable profile](../examples/export-es-de-library.yaml) once and reuse
-it for different ROM roots. It has no game/release exceptions. Acquisition is
-preparation; this command reads only the local catalog and assets. Summary/report
-coverage identifies remaining source/identity gaps.
+Use one [shared profile](../examples/export-es-de-library.yaml) for all systems.
+Choose exactly one of `--all`, `--platforms n64,snes,psx,arcade` or single-system
+`--platform n64` with its actual system directory. `--list-systems` lists readers.
+`--limit` applies **per system**; `--match` filters relative filenames. No 1G1R or
+automatic region/revision filtering occurs.
 
-Use `--platforms n64,snes,psx,arcade` instead of `--all` to select folders.
-For one system, retain `--platform n64 --rom-root <n64-system-directory>`.
-These modes are mutually exclusive. `--list-systems` lists available readers.
+Preview writes nothing. Apply stages every selected system before publishing one
+package; later failure leaves no partial final output. Output must be new and
+outside both input trees.
 
-The first command plans without writing; `--apply` stages all selected systems
-together and publishes one new package after success. A later system failure
-leaves no partial final package. Output must be new and outside both input trees.
-`--limit` limits inputs **per system**; `--match` filters filenames relative to each
-system directory. No 1G1R or automatic region/revision filtering is applied.
-One shared `--profile` supplies selection preferences to all systems.
-
-Automatic discovery examines immediate non-hidden directories. Unknown systems,
-missing/duplicate catalog platforms, missing folders, empty selections and missing
-or ambiguous MAME snapshot selection are reported as skipped. Malformed selected
-catalog/profile data and I/O failures stop the batch. Skipped systems generate no
-files. No package is written if every system is skipped. System-directory links
-escaping the selected root are skipped; individual ROM/media symlinks are not used.
-Actual catalog folders are discovered through _platform.yaml identity rather than
-assumed from an alias/display name.
+Discovery uses immediate non-hidden directories and `_platform.yaml` identity.
+Unknown/missing/duplicate platforms, absent folders, empty selections and unresolved
+MAME snapshots are reported as skips. Malformed selected data/profile or I/O errors
+stop the batch. Skips generate no files; an all-skipped batch creates no package.
+Escaping system-directory links are skipped; individual ROM/media symlinks are not used.
 
 ## Supported launch readers
 
@@ -194,75 +157,69 @@ assumed from an alias/display name.
 | xbox / xbox360 | .iso; Xbox also .xiso |
 | arcade / mame | .zip, .7z set-name projection through saved MAME bindings |
 
-Cartridge ZIPs with exactly one supported platform payload are streamed with a
-512 MiB payload limit. Raw cartridges have the same limit. Standalone disc and
-arcade container files are streamed without that cartridge limit. Byte-order/header
-conversion is not implemented. Disc ZIP/7z/RAR, CUE/GDI and loose M3U descriptors
-are unsupported; component tracks are not standalone launches. Loose CHD/ISO
-discs remain separate. Directory-style M3U for PSX/Saturn/Dreamcast validates
-relative regular members within its game directory, requires unique member-release
-bindings to one catalog card and records/revalidates every member. Metadata/media
-explicitly uses the first member; no catalog edition is invented. PS3 serial
-content is not a disc fingerprint or PSN authority. Image decryption, XISO
-conversion, firmware checks and emulator integrity checks are not performed.
-See the official
-[ES-DE Windows system configuration](https://gitlab.com/es-de/emulationstation-de/-/blob/master/resources/systems/windows/es_systems.xml)
-for frontend system names and its wider emulator-dependent formats.
+Cartridge raw files and single-payload ZIPs have a 512 MiB payload limit.
+Standalone disc/arcade containers stream without that limit. Byte-order/header
+conversion, image decryption, XISO conversion, firmware and emulator checks are
+not implemented. Disc archives, CUE/GDI and loose M3U are unsupported.
+
+Loose CHD/ISO files remain separate launches. PSX/Saturn/Dreamcast directory M3U
+requires relative regular members bound uniquely to one card, and revalidates all
+members. Metadata/media uses the first member without inventing an edition.
+PS3 serial content is not a disc fingerprint or PSN authority. For frontend names
+and wider emulator-dependent formats, see the official
+[ES-DE Windows system configuration](https://gitlab.com/es-de/emulationstation-de/-/blob/master/resources/systems/windows/es_systems.xml).
 
 ## Recognition
 
-Ordinary inputs use size and SHA1/SHA256 before normalized authority/release/file
-names, then explicit catalog titles/aliases. All stored fingerprint hashes must
-agree. Case, spaces and punctuation may vary; qualifier contents remain.
-Multiple candidates and conflicting archive/member names stay ambiguous.
-There is no fuzzy/provider-title identity inference.
+Ordinary readers try size/SHA1/SHA256 first, then normalized authority/release/file
+names and explicit titles/aliases. Every stored fingerprint hash must agree.
+Normalization ignores case/spacing/punctuation, retaining qualifier contents.
+Multiple candidates or conflicting archive/member names stay ambiguous; no fuzzy
+or provider-title inference occurs.
 
-`matched_by: hash` records byte identity for the stated representation; `name`
-is weaker release-name evidence; `game-name` leaves exact release unknown.
-`metadata_release` records the catalog default used for game-only display data,
-with shared release policy supplying a missing default. Game-only media stays
-game-wide. Ordinary unknown/ambiguous inputs retain filename-only entries.
+| `matched_by` | Evidence |
+| --- | --- |
+| `hash` | Byte identity for the stated representation |
+| `name` | Weaker release-name match |
+| `game-name` | Game known; exact release unknown |
 
-CHD records explicitly use `representation: chd-container`. Container-byte hashes
-can match only fingerprints whose recorded filename is CHD; raw-disc/Redump track
-hashes cannot identify that container. Without such a fingerprint, use name
-fallback. Embedded CHD digests are not used as raw-track fingerprints, and no
-decompression or CHD integrity check is performed. See
-[the MAME CHD tool reference](https://docs.mamedev.org/tools/chdman.html).
+`metadata_release` records the game-only default (shared policy supplies a missing
+default); game-only media remains game-wide. Unknown/ambiguous ordinary inputs
+retain filename-only entries.
 
-Arcade is a separate path: read durable
-`bindings/romsets/mame/<snapshot>/catalog.yaml` and match exact archive short names.
-Auto-select only when one saved snapshot exists; otherwise supply
-`--arcade-snapshot <id>`. Validate the referenced card/release authority and its
-catalog MAME snapshot. Record `arcade-set-name` and `catalog_snapshot`, never a
-verified payload/version match. Generic title guesses are disabled; unbound or
-ambiguous arcade archives stay in reports and are omitted from the gamelist.
-ROM members, input MAME version, merged/split completeness and parent/BIOS/CHD/
-sample dependencies are not checked. Existing dependencies/ROMs are left in place.
-There is no FBNeo binding transfer or implemented FBNeo exporter.
+CHD uses `representation: chd-container`. Container hashes can match only recorded
+CHD fingerprints, never raw-disc/Redump track hashes. Otherwise use name fallback.
+Embedded digests are not raw-track proof; no decompression/integrity check occurs.
+See [chdman](https://docs.mamedev.org/tools/chdman.html).
+
+Arcade matches exact archive short names through
+`bindings/romsets/mame/<snapshot>/catalog.yaml`. One snapshot auto-selects;
+otherwise pass `--arcade-snapshot <id>`. Referenced authority and MAME snapshot
+must agree. Records use `arcade-set-name`/`catalog_snapshot`, not payload/version
+proof. Unbound/ambiguous archives appear in reports but not gamelists.
+
+MAME projection checks no ROM components, merged/split completeness or parent/
+BIOS/CHD/sample dependencies and leaves existing ROMs in place. There is no
+FBNeo binding transfer/exporter.
 
 ## Package and installation
 
-The common output contains gamelists/<system>/gamelist.xml and
-downloaded_media/<system>/ media named after original ROM basenames/subdirectories.
-Batch root preview.html, manifest.json and report.txt summarize all systems and
-skips. Detailed per-system preview/manifest/report/installation notes live under
-reports/<system>/; previews use local relative media links. Single-system exports
-retain their original root sidecar layout.
+Output contains `gamelists/<system>/gamelist.xml` and `downloaded_media/<system>/`,
+with media paths based on original ROM names/subdirectories. Batch root
+`preview.html`, `manifest.json` and `report.txt` summarize systems/skips; detailed
+sidecars and installation notes live in `reports/<system>/`. Single-system exports
+keep sidecars at the root. Preview media links are relative.
 
-ROMs are not copied or renamed. Existing ES-DE system folders stay usable with
-the generated relative ./ launch paths. Review the package, preserve copies of
-existing frontend metadata, then manually install gamelists and media in ES-DE's
-configured locations. The exporter never writes an installed frontend or its
-settings. Source launch files are rehashed before publication; copied assets carry
-SHA256 digests. Keep all private paths/reports and licensed source media outside Git.
-Consult the official
+Launch paths use `./`; ROMs are not copied/renamed. Source launches are rehashed
+before publication and copied assets carry SHA-256. Installation is manual:
+[back up and merge](#4-install-into-es-de) into ES-DE's configured locations.
+Keep private reports/paths and licensed media outside Git. See ES-DE's
 [gamelist reference](https://gitlab.com/es-de/emulationstation-de/-/blob/master/INSTALL.md#gamelistxml)
 and [media naming guide](https://gitlab.com/es-de/emulationstation-de/-/blob/master/USERGUIDE.md#manually-copying-game-media-files).
 
 ## Display names
 
-Set these options in the YAML file passed through `--profile`. The defaults are:
+Set these options in `--profile` YAML; defaults are:
 
 ```yaml
 titles:
@@ -273,128 +230,98 @@ titles:
 
 | Setting | Values | Behavior |
 | --- | --- | --- |
-| `mode` | `regional` (default) | Use the matched edition's title, retaining its regional spelling. Remove recognized trailing region, language and revision groups; preserve other parentheses such as `(Special Edition)`. |
-| `mode` | `release` | Use the full authority entry name, falling back to the release key. For MAME use the full human set description. |
-| `mode` | `filename` | Use the supplied launch filename without its extension. |
-| `labels` | `keep` (default), `drop` | Keep or remove every balanced `[...]` block. Contents are opaque: `[T+Rus]`, `[hack]` and unknown labels follow the same rule. |
-| `variants` | `auto` (default) | For several visible inputs of one game, add differing regions. Add revision, then language only for names still indistinguishable. Remaining collisions fall back to filename stems, then relative input paths. |
-| `variants` | `none` | Use the selected mode without automatic disambiguation. Duplicate display names are allowed. |
-| `variants` | `release`, `filename` | For every multi-input game group, use full release names or input filename stems instead of the base mode. |
+| `mode` | `regional` (default) | Edition-local title; strip recognized trailing region/language/revision groups, retain meaningful parentheses. |
+| `mode` | `release` | Full authority name or release key; MAME uses the full human set description. |
+| `mode` | `filename` | Input launch filename without extension. |
+| `labels` | `keep` (default), `drop` | Preserve/remove balanced `[...]` blocks without interpreting contents. |
+| `variants` | `auto` (default) | For several inputs of one game, add differing regions; then revision/language for remaining equal names; then filename/relative path for unresolved collisions. |
+| `variants` | `none` | No automatic disambiguation; duplicate names allowed. |
+| `variants` | `release`, `filename` | Use full release names or filename stems for all members of multi-input game groups. |
 
-A single selected `Probotector (Europe) (En,Fr).nes` becomes `Probotector` with
-these defaults. Select `Contra (USA)` and `Gryzor (Japan)` from the same game as
-well, and the names become `Contra (USA)`, `Probotector (Europe)` and
-`Gryzor (Japan)`. The common card title never replaces the edition's local name.
-A lone `Probotector (Europe) [T+Rus].nes` becomes `Probotector [T+Rus]`.
-Set `mode: filename` and `variants: none` for filename-based names everywhere.
+One `Probotector (Europe) (En,Fr).nes` becomes `Probotector`. Select Contra/Gryzor
+editions from the same card too, and names become `Contra (USA)`,
+`Probotector (Europe)`, `Gryzor (Japan)`. `[T+Rus]` remains unchanged. For literal
+filename names everywhere, use `mode: filename`, `variants: none`.
 
-Regional mode uses an explicit per-release `title` when it differs from the
-legacy DAT base title. Otherwise it derives the name conservatively from the
-full release entry, so meaningful parentheses lost by older DAT base-title
-parsing can be retained. MAME regional names use each set's human description.
-If the exact edition is unknown, retain the input filename instead of borrowing
-the default edition's title. This includes game-only metadata matches.
+Regional mode honors explicit release titles unless they equal the legacy DAT
+base; then it reconstructs from the full entry to retain meaningful parentheses.
+MAME uses human set descriptions. Unknown editions, including game-only matches,
+keep input names instead of borrowing the default edition's title.
 
-Input labels retain their text, order and repetitions. Labels from an archive's
-payload member and the matched release are appended only when absent from the
-input. Nested brackets form one block; unmatched brackets stay ordinary text.
-Labels never establish identity, language, translation or hack status.
+Input labels retain bytes, order and repetitions. Missing member/release labels
+are appended; nested brackets form one block and unmatched brackets stay text.
+Labels establish no translation/hack/language identity.
 
-Disambiguation considers the visible inputs selected for **one system** by this
-export, including `--match`/`--limit`. Catalog editions absent from the selection
-and hidden playlist members do not count. A directory `.m3u` is one visible game;
-its name omits the first disc's number. Individual disc entries retain disc
-numbers. Local export, `--api` and `--all` apply the same policy. API clients must
-collect all batches of a system before finalizing names using `title_context`.
-Use matching client/server builds when changing profile fields.
-
-Only display fields change. ROM paths, proof/binding, media selection and source
-metadata stay intact. Preview and manifest record the resulting names; XML
-escapes them when writing `<name>`. Arbitrary title templates are not supported.
+Disambiguation covers one system's visible selection after `--match`/`--limit`,
+including all API batches. Unselected editions and hidden playlist members do not
+count. Directory `.m3u` is one entry without the first disc number; individual
+discs retain numbers. Local, `--api` and `--all` share this policy; use matching
+client/server builds. Display changes leave paths, binding and media unchanged.
+Preview/manifest show names; XML escapes `<name>`. Arbitrary templates are unsupported.
 
 ## Selection profile
 
-Start with [the reusable library profile](../examples/export-es-de-library.yaml)
-or [the smaller example](../examples/export-n64-es-de.yaml); pass `--profile <yaml>`.
-Schema 1 rejects unknown keys. Relative profile paths use the working directory.
-Defaults use English descriptions and source priority.metadata/artwork/video from
-config/sources.yaml; absent config uses conventional priorities. Secrets are not read.
+Start with [the library profile](../examples/export-es-de-library.yaml) or
+[smaller example](../examples/export-n64-es-de.yaml); pass `--profile <yaml>`.
+Schema 1 rejects unknown keys. Relative paths use the working directory. Defaults:
+English descriptions and `priority.metadata/artwork/video` from `config/sources.yaml`,
+or conventional priorities without config. Secrets are not read.
 
-Description criterion order is language/source or source/language. Language-first
-compares every allowed provider at each language before falling back. Descriptions
-default to scope: game: provider prose in the same already recognized card can
-describe another regional/revision ROM. Priority ties prefer exact release,
-unscoped game data, then sibling-release data. The manifest retains donor/source/
-language and selection=game where applicable. Use scope: release for strict
-edition-specific prose. This does not change identity or binding confidence.
+Descriptions compare language/source or source/language. Language-first checks
+all providers per language. Default `scope: game` permits prose from the same
+recognized card; ties prefer exact release, unscoped data, then sibling release.
+Manifest records donor/source/language and `selection=game`. Use `scope: release`
+for edition-specific prose. Other fields (`release_date`, developer, publisher,
+genres, players) remain release-scoped with per-field source lists. Explicit local
+fields win. Names use the [titles policy](#display-names).
 
-Rules for release_date, developer, publisher, genres and players remain
-release-scoped and accept per-field source lists. Explicit local catalog fields
-win. Display names use the independent [titles policy](#display-names).
+Media rules select existing files by region/source/format and optional language;
+lists replace inherited lists. Default regions: matched release, world,
+unspecified. `*` permits any region. `scope: release` uses bound-release/shared
+files; `scope: game` also allows registered siblings. Arbitrary nested paths and
+`media/_fold` are excluded. Exact/shared/sibling preference precedes other
+criteria unless `order` includes `scope`.
 
-Media rules select existing files by region/source/format and optional language.
-Lists replace inherited lists. Defaults prefer matched-release regions, world,
-then unspecified; * explicitly permits any-region fallback. Media defaults to
-scope: release (bound-release folder and shared files). scope: game also permits
-registered sibling-release folders of that same card. Arbitrary nested paths and
-media/_fold are excluded. Exact/shared/sibling folder preference precedes other
-criteria unless order explicitly includes scope.
+`region` ranks affinity, leaving multiple `$release` regions tied. Optional
+`region-preference` after `region` breaks that tie using countries listed in
+`regions`; other tiers get neutral rank zero. For example,
+`[region, region-preference, source, format]` with
+`['$release', usa, japan, europe, '*']` prefers USA over Brazil within a
+USA/Europe/Brazil release, but Japan for Japan-only. This is explicit opt-in,
+as is [flat-front style](cover-refresh.md).
 
-The `region` criterion ranks affinity only: multiple matching `$release` regions
-remain tied. Optional `region-preference`, placed after `region` in `order`, uses
-the explicit countries already listed in `regions` to break ties within that tier.
-Other tiers get neutral rank zero. This is independent of style and never injected
-into old rules. For example, `[region, region-preference, source, format]` with
-`regions: ['$release', usa, japan, europe, '*']` prefers USA over Brazil for a
-USA/Europe/Brazil release while a Japan-only release still prefers Japan.
+Optional `variants: [original, unknown, reconstructed, fanart]` plus a `variant`
+order criterion ranks explicit filename labels before format, e.g.
+`box-front-01.usa.variant-original.launchbox.jpg`. Unqualified files are unknown.
+No checksum-to-provider or pixel inference occurs; categories do not guarantee
+flat/case-free artwork.
 
-Flat-front style is also explicit opt-in; see [cover selection](cover-refresh.md).
-Default media and the general bundled profiles keep their previous behavior.
-
-Optional variants: [original, unknown, reconstructed, fanart] and a variant order
-criterion select the explicit filename qualifier before file format, for example
-box-front-01.usa.variant-original.launchbox.jpg. Export reads that label directly;
-it does not match artwork checksums to provider records or inspect image pixels.
-Unqualified legacy files remain unknown and eligible when unknown is listed.
-Region/language/source priorities keep their usual meaning. Provider categories
-do not guarantee a flat or case-free visual style.
-
-New downloads preserve explicit source categories in filenames. To upgrade
-already downloaded files without network access:
+New downloads retain source categories in filenames. Upgrade existing names offline:
 
 ```powershell
 rom-meta catalog media-names --data-root '<library>' --source launchbox --platform psx --details
 rom-meta catalog media-names --data-root '<library>' --source launchbox --platform psx --details --apply
 ```
 
-Omit --platform for the whole library, or use --match for a game folder substring.
-An exact existing platform directory wins over registry aliases. Short aliases
-resolve against actual catalog directories; unknown or ambiguous filters fail
-explicitly rather than silently scanning an absent default directory.
-The default is a dry run. This replays the saved source candidate order and
-historical downloader layout, adding only the variant qualifier. Files without
-an explicit source category stay unchanged; existing destinations/conflicts
-are skipped without overwriting. Repeat application is a no-op. It cannot
-authenticate files manually replaced or moved since download, or recover an
-earlier candidate order after source reimport; leave those files unqualified
-until their provenance is known. Retain --details output as the reverse rename
-map and update optional exact-path media overrides if you use them. Run the
-upgrade while imports, downloads and manual media edits are idle.
+`--platform` accepts an exact directory or unique alias; omit it for all, or use
+`--match` for a game-folder substring. Unknown/ambiguous filters fail. Preview is
+default. Apply replays saved candidate order/layout and adds variant qualifiers;
+uncategorized files and conflicting destinations stay unchanged. Repeating is a
+no-op. It cannot authenticate manually changed files or recover pre-reimport
+candidate order. Retain `--details` as a reverse map, update exact-path overrides
+and run while other catalog/media writers are idle.
 
-Curated source-free files are local. The video role
-recognizes canonical gameplay-video filenames and legacy video names.
-
-An omitted media map inherits cover/screenshot/logo/video; media: {} disables all.
-An explicit map enables only listed roles. No transforms/downloads are performed.
-Paths escaping inputs and output collisions are rejected. media/_fold, per-ROM
-identity decisions, ratings, partial-date normalization, custom output
-templates, further systems/readers and T-En/variant identity remain follow-ups.
+Source-free curated files are local; video accepts canonical gameplay-video and
+legacy names. An omitted media map inherits cover/screenshot/logo/video;
+`media: {}` disables all; explicit maps enable listed roles only. No transforms
+or downloads occur. Escaping paths/output collisions fail. `_fold`, per-ROM
+identity decisions, ratings, partial-date normalization and extra readers/templates
+remain unsupported.
 
 ## Reviewed descriptions
 
-Ordinary exports use general game-scope description selection and need no
-per-game mapping. For an intentionally strict scope: release policy, an optional
-advanced exception can reuse a reviewed donor release:
+Default game-scope selection needs no per-game mapping. Under strict
+`scope: release`, an optional reviewed donor can fill a missing description:
 
 ~~~yaml
 description_fallbacks:
@@ -403,26 +330,20 @@ description_fallbacks:
     from_release: Example (USA)
 ~~~
 
-Only a missing description is filled from that same card's named release.
-Language/source priority still applies there. Other fields and ROM identity stay
-unchanged; existing descriptions and game-only bindings do not use the choice.
-Duplicate choices fail. An applicable missing donor release or missing eligible
-text fails instead of silently hiding a stale decision. The manifest records
-selection=reviewed-fallback, from_release, source and language.
-
-Check content as well as eligibility. A correctly imported provider record can
-contain a wrong overview. Provider priority and library curation address that
-separately from regional display coverage.
+The donor must be a named release in the same card; language/source priorities
+still apply. Existing descriptions, game-only bindings, other fields and identity
+stay unchanged. Duplicate choices, stale applicable donors or missing eligible
+text fail. Manifest records `selection=reviewed-fallback`, `from_release`, source
+and language. Review the prose itself: a correct provider binding can still have
+a wrong overview.
 
 ## Reviewed artwork files
 
-Region lists are eligibility lists as well as priorities. To prefer the bound
-release and then allow other existing regional art, explicitly use
-regions: ['$release', world, unspecified, usa, japan, europe, '*'] for each media
-role that needs that fallback. Defaults remain strict.
+Regions control eligibility and priority. To allow other regional art after the
+bound release, use `regions: ['$release', world, unspecified, usa, japan, europe, '*']`
+for that role; defaults remain strict.
 
-A profile may select a reviewed file for one exact release, including a file
-stored under another release of the same card:
+An exact-release pin may select another release's file in the same card:
 
 ~~~yaml
 media_overrides:
@@ -432,10 +353,8 @@ media_overrides:
     path: media/Example (Europe)/box-front.europe.launchbox.png
 ~~~
 
-The path is relative to the selected catalog game. A pin overrides automatic
-scope/priority for that role; it does not bind ROMs or invent release identity.
+Paths are game-relative. Pins override that role's scope/priority, not ROM identity.
 Missing, empty, external, symlinked or unsupported files fail. Other releases and
-game-only bindings do not consume the pin. The manifest records selection=override,
-the original source path/provider labels and the copied SHA256. Review regional
-aliases and actual artwork before using a pin. Automatic same-card borrowing is
-controlled by scope: game; it does not require pins. See ADRs 0076 and 0078.
+game-only bindings ignore pins. Manifest records `selection=override`, original
+path/provider labels and copied SHA-256. Review artwork and regional aliases;
+automatic same-card borrowing instead uses `scope: game`.
