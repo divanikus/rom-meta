@@ -485,7 +485,7 @@ def plan_entry(runtime, selection, item, snapshot, projection, repair_igdb_refer
     igdb = providers.get("slots", {}).get("igdb", {})
     slug = igdb.get("source_slug")
     if not before.get("slug") and not locks.intersection({"slug", "igdb_id"}) and slug and patch.get("igdb_id", before.get("igdb_id")) == igdb["id"]:
-        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,399}", slug):
+        if not re.fullmatch(r"[a-z0-9][a-z0-9$-]{0,399}", slug):
             raise ValueError("invalid source IGDB slug")
         patch["slug"] = slug
     files = []
@@ -688,14 +688,14 @@ def reconcile_identities(entries):
                     "source_game": entries[donor]["record"]["game"], "reason": "unique identity consensus through shared provider IDs"})
                 if field == "igdb_id" and not before.get("slug") and "slug" not in locks:
                     slug = entries[donor]["providers"].get("slots", {}).get("igdb", {}).get("source_slug")
-                    if slug and re.fullmatch(r"[a-z0-9][a-z0-9-]{0,399}", slug):
+                    if slug and re.fullmatch(r"[a-z0-9][a-z0-9$-]{0,399}", slug):
                         entry["patch"]["slug"] = slug
             igdb = donors.get("igdb_id", {})
             slugs = {entries[j]["providers"].get("slots", {}).get("igdb", {}).get("source_slug") for j in indexes}
             slugs.discard(None); slugs.discard("")
             if len(igdb) == len(slugs) == 1 and not before.get("slug") and not locks.intersection({"slug", "igdb_id"}) and entry["patch"].get("igdb_id", before.get("igdb_id")) == next(iter(igdb)):
                 slug = next(iter(slugs))
-                if re.fullmatch(r"[a-z0-9][a-z0-9-]{0,399}", slug):
+                if re.fullmatch(r"[a-z0-9][a-z0-9$-]{0,399}", slug):
                     entry["patch"]["slug"] = slug
     # Foreign TGDB references can connect unrelated games. Quarantine only when
     # three independent primary identities disagree and no strong component joins them.

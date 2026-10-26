@@ -463,6 +463,17 @@ class ImporterTest(unittest.TestCase):
         proposed = {"providers": {"slots": {"igdb": {"id": 123, "source_slug": "source-slug"}}}, "form": {"igdb_id": "123"}}
         entry = imp.plan_entry(self.runtime, self.api.value, self.api.value["inputs"][0], row, proposed)
         self.assertEqual(entry["patch"]["slug"], "source-slug")
+    def test_source_proven_dollar_slug_is_kept_but_path_syntax_is_rejected(self):
+        row = self.runtime.snapshot(1)
+        row["columns"]["igdb_id"] = None
+        proposed = {"providers": {"slots": {"igdb": {"id": 123, "source_slug": "warioware-inc-dot-mega-microgame$"}}}, "form": {"igdb_id": "123"}}
+        entry = imp.plan_entry(self.runtime, self.api.value, self.api.value["inputs"][0], row, proposed)
+        self.assertEqual(entry["patch"]["slug"], "warioware-inc-dot-mega-microgame$")
+        for slug in ("../game", "game?query", "game#fragment", "game/other", "game<script>"):
+            proposed["providers"]["slots"]["igdb"]["source_slug"] = slug
+            with self.assertRaisesRegex(ValueError, "invalid source IGDB slug"):
+                imp.plan_entry(self.runtime, self.api.value, self.api.value["inputs"][0], row, proposed)
+
     def test_duplicate_or_retargeted_manifest_aborts_before_any_write(self):
         plan = self.make_plan()
         plan["entries"][1] = copy.deepcopy(plan["entries"][0])
