@@ -702,6 +702,8 @@ func authorityDisplayName(plan Plan) string {
 		return "FBNeo"
 	case "no-intro":
 		return "No-Intro"
+	case "tosec":
+		return "TOSEC"
 	default:
 		return authorityKey(plan)
 	}

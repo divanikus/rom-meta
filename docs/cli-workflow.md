@@ -14,7 +14,8 @@ rom-meta dat import "<platform.dat-or-zip>" --data-root "<catalog>" --apply
 ```
 
 `dat plan` identifies the dataset/platform and ZIP members. Use `--member` for
-multi-DAT archives or `--platform` when detection needs a name. Import previews
+multi-DAT archives or `--platform` when detection needs a name. Logiqx XML from TOSEC retains its own authority; ClrMamePro text requires
+conversion to XML first. Import previews
 changes; `--apply` writes release/checksum records, preserving existing metadata/
 media. It does not copy ROMs. Unresolved identities stop mutation with a report.
 

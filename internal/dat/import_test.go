@@ -807,3 +807,37 @@ func readText(t *testing.T, path string) string {
 	}
 	return string(contents)
 }
+
+func TestImportTOSECXMLKeepsAuthorityInsteadOfNoIntro(t *testing.T) {
+	input := `<datafile><header><name>Sharp - X68000</name><author>TOSEC</author><version>2026-10-07</version></header><game name="Example (1991)(Publisher)"><rom name="Example.dim" size="4" crc="12345678" sha1="0123456789012345678901234567890123456789"/></game></datafile>`
+	path := writeTempDAT(t, "games.dat", input)
+	root := t.TempDir()
+	result, err := Import(path, ImportOptions{DataRoot: root, Apply: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Plan.Authority != "tosec" {
+		t.Fatalf("TOSEC received %q authority", result.Plan.Authority)
+	}
+	found := false
+	err = filepath.WalkDir(filepath.Join(root, "platforms"), func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.Name() != "fingerprints.yaml" {
+			return nil
+		}
+		data, e := os.ReadFile(path)
+		if e != nil {
+			return e
+		}
+		found = true
+		if !strings.Contains(string(data), "TOSEC") || strings.Contains(string(data), "No-Intro") {
+			t.Fatalf("wrong fingerprint provenance: %s", data)
+		}
+		return nil
+	})
+	if err != nil || !found {
+		t.Fatal("missing fingerprints", err)
+	}
+}

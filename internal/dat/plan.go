@@ -472,19 +472,23 @@ func inferAuthority(dataset, author, format string, paths ...string) string {
 	if format == "mame-listxml" {
 		return "mame"
 	}
-	text := strings.ToLower(strings.Join(append([]string{dataset, author}, paths...), " "))
-	switch {
-	case strings.Contains(text, "no-intro") || strings.Contains(text, "nointro"):
-		return "no-intro"
-	case strings.Contains(text, "redump"):
-		return "redump"
-	case strings.Contains(text, "fbneo") || strings.Contains(text, "finalburn") || strings.Contains(text, "final burn"):
-		return "fbneo"
-	case strings.Contains(text, "mame"):
-		return "mame"
-	default:
-		return ""
+	// An explicit dataset/author identifies the authority before a storage path.
+	// In particular a TOSEC snapshot must never inherit No-Intro verification.
+	for _, text := range []string{strings.ToLower(dataset + " " + author), strings.ToLower(strings.Join(paths, " "))} {
+		switch {
+		case strings.Contains(text, "no-intro") || strings.Contains(text, "nointro"):
+			return "no-intro"
+		case strings.Contains(text, "redump"):
+			return "redump"
+		case strings.Contains(text, "tosec"):
+			return "tosec"
+		case strings.Contains(text, "fbneo") || strings.Contains(text, "finalburn") || strings.Contains(text, "final burn"):
+			return "fbneo"
+		case strings.Contains(text, "mame"):
+			return "mame"
+		}
 	}
+	return ""
 }
 
 func isArcadeDataset(dataset, authority, format string) bool {
