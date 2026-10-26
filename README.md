@@ -152,7 +152,7 @@ path to preserve favorites, play statistics and emulator overrides. The CLI
 creates packages; installation/merge is manual.
 
 **RomM:** the [server importer example](examples/romm-importer/README.md) fills
-already-scanned games through native RomM 5.4.0 handlers and Resources. It requires
+already-scanned games through native RomM 5.4.1 handlers and Resources. It requires
 administrator setup and is version-specific and experimental.
 See [export scenarios](docs/export-scenarios.md) for formats, confidence and gaps.
 ES-DE is the only built-in `export --target`.

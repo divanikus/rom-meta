@@ -1,7 +1,7 @@
 # RomM server importer example
 
 A separate one-shot Python consumer of the RomMeta HTTP API. It enriches games
-already scanned in **RomM 5.4.0** using native handlers/models, DB/Redis and Resources.
+already scanned in **RomM 5.4.1** using native handlers/models, DB/Redis and Resources.
 It does not patch the installed application, scan ROMs, fetch providers or move ROM
 files. This is a version-specific administrator example, not a general RomM plugin
 or stock edit-API client. The Go CLI still supplies JSON input/projection helpers.
@@ -9,12 +9,13 @@ or stock edit-API client. The Go CLI still supplies JSON input/projection helper
 ## Files and requirements
 
 - `importer.py`: plan/apply/check, batches, receipts and explicit refresh.
-- `Dockerfile`: digest-pinned RomM 5.4.0 with matching RomMeta.
+- `Dockerfile`: digest-pinned RomM 5.4.1 with matching RomMeta.
 - Compose/env examples: native mounts, network and user configuration.
 - `test_importer*.py`: fake-native tests without a live DB.
 
 Use matching API/CLI/importer revisions. Other native runtimes/schemas fail
-preflight; review before upgrading. The image includes Python/Pillow/RomM.
+preflight; review before upgrading. Preflight checks the actual server heartbeat
+before native DB access. The image includes Python/Pillow/RomM.
 The job needs DB/Redis, read-only config/ROMs, writable Resources/work and the
 native UID/GID. Check ownership instead of recursively changing the library.
 Back up native DB/Resources before the first write.
@@ -51,9 +52,12 @@ REDIS_HOST=existing-redis-service
 REDIS_PORT=6379
 REDIS_PASSWORD=replace-with-current-password
 ROMM_BASE_PATH=/romm
+ROMM_SERVER_URL=http://romm:8080
 ```
 
-Use actual driver/ports; an absent Redis password may be empty. Put the service's
+Use the native server origin reachable from the job for `ROMM_SERVER_URL`
+(default `http://romm:8080`); its heartbeat needs no catalog token. Use actual
+driver/ports; an absent Redis password may be empty. Put the service's
 shared `ROMMETA_API_TOKEN` (at least 32 characters) in `private/api.env`. This job
 requires a token even though local browsing does not. Keep env files restricted
 and server-side, with raw values and no shell quotes/comments. Compose needs

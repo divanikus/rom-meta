@@ -1,6 +1,6 @@
 # Import offline metadata into RomM
 
-Use the prepared RomM 5.4.0 importer environment. An administrator configures
+Use the prepared RomM 5.4.1 importer environment. An administrator configures
 native DB, library, Resources and token access once; see [setup](romm-server-importer.md).
 A website login is insufficient. Your computer needs no Resources share.
 

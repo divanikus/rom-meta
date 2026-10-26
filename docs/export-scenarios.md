@@ -11,7 +11,7 @@ from generating frontend output. This matrix describes supported inputs, generat
 | Several ES-DE system folders | `export --all` or `--platforms n64,snes,psx,arcade` | One staged multi-system package; skipped systems reported; no partial final output on failure | Implemented |
 | ES-DE files with a remote catalog | `export --api <origin>` with `--platform`, `--platforms` or `--all` | Same readers, evidence and package as local mode; client hashes ROMs, server supplies selected metadata/media | Implemented; no ROM upload/catalog share |
 | Reuse source/language/region/art preferences | `--profile` | Deterministic selected metadata/media with provenance; no provider network calls | Implemented |
-| Enrich already scanned RomM games | [Server importer](../examples/romm-importer/README.md) `plan`, `apply`, `check` | Native fields/provider slots and supported Resources; generated parts/receipts; fill-only default | Experimental, pinned RomM 5.4.0 runtime with native DB access |
+| Enrich already scanned RomM games | [Server importer](../examples/romm-importer/README.md) `plan`, `apply`, `check` | Native fields/provider slots and supported Resources; generated parts/receipts; fill-only default | Experimental, pinned RomM 5.4.1 runtime with native DB access |
 | Integrate a different consumer | `serve` `/v1/*` and `/docs` | Metadata/proof/asset API; consumer must implement its own mapping | API implemented; no additional built-in frontend exporter |
 
 The RomM server importer needs native runtime/DB handlers and Resources access.

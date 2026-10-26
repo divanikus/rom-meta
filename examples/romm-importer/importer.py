@@ -18,7 +18,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
@@ -26,7 +26,7 @@ class InvalidImageError(ValueError):
     """Verified source bytes cannot be decoded as an image."""
 
 
-VERSION = "5.4.0"
+VERSION = "5.4.1"
 MAX_ASSET = 512 << 20
 FIELDS = {"name", "summary", "manual_metadata", "igdb_id", "ss_id", "launchbox_id", "hasheous_id", "tgdb_id", "igdb_metadata", "ss_metadata", "launchbox_metadata", "hasheous_metadata"}
 ROLES = {
@@ -129,6 +129,28 @@ def load_invalid_images(path):
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
         return None
+
+
+def check_native_version(origin=None):
+    origin = os.environ.get("ROMM_SERVER_URL", "http://romm:8080") if origin is None else origin
+    parsed = urlparse(origin)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.username or parsed.password or parsed.path not in ("", "/") or parsed.query or parsed.fragment:
+        raise ValueError("ROMM_SERVER_URL must be an HTTP(S) origin without credentials")
+    try:
+        with build_opener(NoRedirect()).open(Request(origin.rstrip("/") + "/api/heartbeat"), timeout=10) as response:
+            data = response.read((1 << 20) + 1)
+        if len(data) > 1 << 20:
+            raise ValueError("RomM heartbeat exceeds 1 MiB")
+        value = json.loads(data)
+    except (URLError, OSError, json.JSONDecodeError, UnicodeError):
+        raise ValueError("Cannot read RomM server version; check ROMM_SERVER_URL and connectivity") from None
+    system = value.get("SYSTEM") if isinstance(value, dict) else None
+    version = system.get("VERSION") if isinstance(system, dict) else None
+    if not isinstance(version, str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?", version):
+        raise ValueError("RomM heartbeat has no valid SYSTEM.VERSION")
+    if version != VERSION:
+        raise ValueError(f"RomM server reports {version}; importer requires {VERSION}. Rebuild the matching importer before continuing")
+    return version
 
 
 class API:
@@ -1301,7 +1323,8 @@ class NativeRuntime:
         sys.path.insert(0, "/backend")
         from utils import get_version
         if get_version() != VERSION:
-            raise ValueError("native importer requires installed RomM " + VERSION)
+            raise ValueError("importer image requires RomM " + VERSION)
+        check_native_version()
         from config import LIBRARY_BASE_PATH, RESOURCES_BASE_PATH
         from config.config_manager import MetadataMediaType
         from handler.database import db_rom_handler
