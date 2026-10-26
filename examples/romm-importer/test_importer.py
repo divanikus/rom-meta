@@ -413,6 +413,50 @@ class ImporterTest(unittest.TestCase):
         self.assertTrue(all(len(row["published_files"]) > len(entry["files"]) for row, entry in zip(receipt["results"], plan["entries"])))
         repeat = self.make_plan()
         self.assertTrue(all(not entry["patch"] and not entry["files"] for entry in repeat["entries"]))
+    def test_new_cover_preserves_unbound_legacy_files_and_repeats(self):
+        card = self.api.value["cards"][self.card_id]
+        data = b"new source cover"
+        path = self.card_id + "/media/new-cover.png"
+        asset_id = sha(path.encode())
+        asset = {"id": asset_id, "uri": "/v1/assets/" + asset_id, "path": path, "game": self.card_id, "kind": "box-front", "source": "local", "size": len(data), "sha256": sha(data)}
+        card["assets"].append(asset)
+        self.content[asset_id] = data
+        originals = {}
+        for row, item in zip(self.runtime.rows.values(), self.api.value["inputs"]):
+            item["record"].setdefault("media", {})["cover"] = {"source_path": path}
+            for key in ("path_cover_l", "path_cover_s"):
+                old = row["columns"][key]
+                originals[old] = self.runtime.resource_path(old).read_bytes()
+                row["columns"][key] = None
+            row["columns"]["locked_fields"] = []
+        plan = self.make_plan()
+        for entry in plan["entries"]:
+            cover = next(f for f in entry["files"] if f.get("role") == "cover")
+            self.assertTrue(set(cover["paths"]).isdisjoint(originals))
+        imp.apply_plan(self.runtime, self.api, plan, self.root / "orphan-cover.json", self.root)
+        for name, content in originals.items():
+            self.assertEqual(self.runtime.resource_path(name).read_bytes(), content)
+        self.assertTrue(all(not e["patch"] and not e["files"] for e in self.make_plan()["entries"]))
+
+    def test_additive_cover_reuses_identical_outputs_but_preserves_different_bytes(self):
+        data = b"existing prepared PNG"
+        asset = {"sha256": sha(b"source"), "path": "cover.png", "size": 6}
+        paths = list(imp.refreshed_cover_paths({"platform_id": 49, "id": 1}, asset))
+        target = self.runtime.resource_path(paths[0]); target.parent.mkdir(parents=True); target.write_bytes(data)
+        file = {"role": "cover", "additive": True, "path": paths[0], "paths": paths, "asset": asset}
+        imp.NativeRuntime.check_destination(self.runtime, file)
+        output = {"path": paths[0], "asset": {"sha256": sha(data), "size": len(data)}}
+        imp.NativeRuntime.check_destination(self.runtime, output)
+        output["asset"]["sha256"] = sha(b"different")
+        with self.assertRaisesRegex(ValueError, "different owner data"):
+            imp.NativeRuntime.check_destination(self.runtime, output)
+        self.assertEqual(target.read_bytes(), data)
+
+    def test_additive_marker_cannot_adopt_a_legacy_owner_directory(self):
+        file = {"role": "cover", "additive": True, "path": "roms/49/1/cover/big.png", "asset": {"sha256": sha(b"source")}}
+        with self.assertRaisesRegex(ValueError, "additive cover"):
+            imp.NativeRuntime.check_destination(self.runtime, file)
+
     def test_planned_identity_allows_source_slug_on_a_fresh_rom(self):
         row = self.runtime.snapshot(1)
         row["columns"]["igdb_id"] = None

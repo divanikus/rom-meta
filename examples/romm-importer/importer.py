@@ -511,10 +511,10 @@ def plan_entry(runtime, selection, item, snapshot, projection, repair_igdb_refer
         patch.update({"path_cover_l": large, "path_cover_s": small})
         files.append({"asset": cover, "path": large, "paths": [large, small], "column": "cover", "field": "reviewed native cover refresh", "role": "cover", "id": before["id"], "actual_source": cover["source"], "projection": "native custom cover", "refresh": True})
     elif cover and not before.get("path_cover_l") and not before.get("path_cover_s") and not before.get("url_cover") and not locks.intersection({"url_cover", "path_cover_l", "path_cover_s"}):
-        large, small = runtime.cover_paths(before["platform_id"], before["id"], cover)
+        large, small = refreshed_cover_paths(before, cover)
         patch.update({"path_cover_l": large, "path_cover_s": small})
         patch["locked_fields"] = sorted(locks | {"url_cover"})
-        files.append({"asset": cover, "path": large, "paths": [large, small], "column": "cover", "field": "native cover derivatives", "role": "cover", "id": before["id"], "actual_source": cover["source"], "projection": "native custom cover"})
+        files.append({"asset": cover, "path": large, "paths": [large, small], "column": "cover", "field": "native cover derivatives", "role": "cover", "id": before["id"], "actual_source": cover["source"], "projection": "native custom cover", "additive": True})
     manual = by_path.get(selected.get("manual", {}).get("source_path"))
     if manual and manual["size"] > 64 << 20:
         raise ValueError("native manual exceeds 64 MiB limit")
@@ -1469,7 +1469,7 @@ class NativeRuntime:
         if [large, small] != expected:
             raise ValueError("native cover derivative paths differ from reviewed layout")
         destinations = dict(zip(expected, file["paths"]))
-        if file.get("refresh") and file["paths"] != list(refreshed_cover_paths({"platform_id": rom.platform_id, "id": rom.id}, file["asset"])):
+        if (file.get("refresh") or file.get("additive")) and file["paths"] != list(refreshed_cover_paths({"platform_id": rom.platform_id, "id": rom.id}, file["asset"])):
             raise ValueError("unreviewed additive cover layout")
         outputs = []
         for path in sorted(private.rglob("*")):
@@ -1480,6 +1480,7 @@ class NativeRuntime:
                 output["path"] = destinations.get(native_path, str(PurePosixPath(file["path"]).parent / Path(native_path).name))
                 output["asset"].update(hash_file(path))
                 self.validate_media(output["asset"], path)
+                self.check_destination(output)
                 outputs.append((output, path))
         if not set(file["paths"]) <= {output["path"] for output, _ in outputs}:
             raise ValueError("native cover derivatives missing")
@@ -1488,6 +1489,11 @@ class NativeRuntime:
     def check_destination(self, file):
         target = self.resource_path(file["path"])
         if file.get("role") == "cover":
+            if file.get("additive") or file.get("refresh"):
+                if target.parent.name != "rommeta-" + file["asset"]["sha256"]:
+                    raise ValueError("unreviewed additive cover directory")
+                # Generated PNG hashes are checked in private staging before publication.
+                return
             if target.parent.exists() and any(target.parent.iterdir()):
                 raise ValueError("unbound cover directory is not empty; review prior receipt")
             return
