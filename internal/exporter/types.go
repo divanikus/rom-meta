@@ -44,7 +44,7 @@ type Selection struct {
 type Profile struct {
 	SchemaVersion        int                   `yaml:"schema_version" json:"schema_version"`
 	Target               string                `yaml:"target" json:"target"`
-	TitleMode            string                `yaml:"title_mode" json:"title_mode"`
+	Titles               TitlePolicy           `yaml:"titles" json:"titles"`
 	Selection            Selection             `yaml:"selection" json:"selection"`
 	MediaOverrides       []MediaOverride       `yaml:"media_overrides,omitempty" json:"media_overrides,omitempty"`
 	DescriptionFallbacks []DescriptionFallback `yaml:"description_fallbacks,omitempty" json:"description_fallbacks,omitempty"`
@@ -83,6 +83,7 @@ type PlaylistInput struct {
 	MatchedBy string `json:"matched_by"`
 }
 type Record struct {
+	TitleContext    *TitleContext    `json:"title_context,omitempty"`
 	Disc            *DiscObservation `json:"disc,omitempty"`
 	Payload         *PayloadProof    `json:"payload,omitempty"`
 	LaunchFile      string           `json:"launch_file,omitempty"`
@@ -186,7 +187,7 @@ func loadProfileReader(root string, input io.Reader) (Profile, error) {
 			return Profile{}, err
 		}
 	}
-	p := Profile{SchemaVersion: 1, Target: "es-de", TitleMode: "catalog"}
+	p := Profile{SchemaVersion: 1, Target: "es-de"}
 	if input != nil {
 		decoder := yaml.NewDecoder(input)
 		decoder.KnownFields(true)
@@ -201,8 +202,10 @@ func loadProfileReader(root string, input io.Reader) (Profile, error) {
 	if p.SchemaVersion != 1 || p.Target != "es-de" {
 		return p, fmt.Errorf("profile requires schema_version: 1 and target: es-de")
 	}
-	if p.TitleMode != "catalog" && p.TitleMode != "release" {
-		return p, fmt.Errorf("title_mode must be catalog or release")
+	var err error
+	p.Titles, err = normalizeTitlePolicy(p.Titles)
+	if err != nil {
+		return p, err
 	}
 	p.Selection.Description = defaultRule(p.Selection.Description, Rule{Scope: "game", Order: []string{"language", "source"}, Languages: []string{"en"}, Sources: priorities["metadata"]})
 	if p.Selection.Fields == nil {

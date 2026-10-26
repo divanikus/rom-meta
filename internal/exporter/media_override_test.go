@@ -11,7 +11,7 @@ func TestReviewedMediaOverrideRetainsSourceAndExactScope(t *testing.T) {
 	options, card, payload := fixture(t)
 	put(t, filepath.Join(options.ROMRoot, "Example (USA).z64"), payload)
 	put(t, filepath.Join(card, "media", "Example (Europe)", "box-front.japan.igdb.jpg"), []byte("reviewed image"))
-	profile(t, &options, "schema_version: 1\ntarget: es-de\ntitle_mode: catalog\nmedia_overrides:\n  - game: platforms/Nintendo - Nintendo 64/Example\n    release: Example (USA)\n    role: cover\n    path: media/Example (Europe)/box-front.japan.igdb.jpg\n")
+	profile(t, &options, "schema_version: 1\ntarget: es-de\ntitles: {mode: regional, labels: keep, variants: auto}\nmedia_overrides:\n  - game: platforms/Nintendo - Nintendo 64/Example\n    release: Example (USA)\n    role: cover\n    path: media/Example (Europe)/box-front.japan.igdb.jpg\n")
 	plan, err := Build(options)
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +56,7 @@ func TestMediaOverrideRejectsUnsafeDuplicateAndMissingFiles(t *testing.T) {
 	if validateMediaOverrides(p) == nil {
 		t.Fatal("duplicate pin")
 	}
-	profile(t, &options, "schema_version: 1\ntarget: es-de\ntitle_mode: catalog\nmedia_overrides:\n  - game: platforms/Nintendo - Nintendo 64/Example\n    release: Example (USA)\n    role: cover\n    path: media/missing.png\n")
+	profile(t, &options, "schema_version: 1\ntarget: es-de\ntitles: {mode: regional, labels: keep, variants: auto}\nmedia_overrides:\n  - game: platforms/Nintendo - Nintendo 64/Example\n    release: Example (USA)\n    role: cover\n    path: media/missing.png\n")
 	if _, err := Build(options); err == nil {
 		t.Fatal("missing pinned file silently fell back")
 	}

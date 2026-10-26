@@ -1,7 +1,10 @@
 # Example preferences, not RomMeta defaults. English alone is the default.
 schema_version: 1
 target: es-de
-title_mode: catalog
+titles:
+  mode: regional
+  labels: keep
+  variants: auto
 selection:
   description:
     order: [language, source]

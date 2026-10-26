@@ -35,7 +35,7 @@ func fixture(t *testing.T) (*Server, string, string) {
 	put(filepath.Join(game, "media", "box-front.usa.igdb.png"), "synthetic image")
 	put(filepath.Join(data, "config", "secrets.yaml"), "must-never-be-served")
 	profile := filepath.Join(root, "profile.yaml")
-	put(profile, "schema_version: 1\ntarget: es-de\ntitle_mode: catalog\nselection:\n  media:\n    cover: {scope: game, regions: ['*'], sources: [igdb]}\n")
+	put(profile, "schema_version: 1\ntarget: es-de\ntitles: {mode: regional, labels: keep, variants: auto}\nselection:\n  media:\n    cover: {scope: game, regions: ['*'], sources: [igdb]}\n")
 	server, err := New(Options{Token: strings.Repeat("s", 32), Export: exporter.Options{DataRoot: data, ROMRoot: roms, Platform: "gamegear", ProfilePath: profile, Limit: 20}})
 	if err != nil {
 		t.Fatal(err)

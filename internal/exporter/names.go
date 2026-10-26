@@ -151,6 +151,9 @@ func attachRecord(root string, g *game, release string, record *Record, profile 
 	}
 	record.MetadataRelease = basis
 	record.Fields = resolveFields(g, basis, profile)
+	if release != "" {
+		record.TitleContext = releaseTitleContext(g.root, release)
+	}
 	if err := applyDescriptionFallback(g, record, profile); err != nil {
 		return err
 	}

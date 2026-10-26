@@ -350,7 +350,7 @@ func TestRemoteZIPProfileAndPackedParity(t *testing.T) {
 				catalogfstest.Pack(t, filepath.Join(root, "platforms", "gamegear"))
 			}
 			profile := filepath.Join(t.TempDir(), "policy.yaml")
-			put(t, profile, []byte("schema_version: 1\ntarget: es-de\ntitle_mode: release\n"))
+			put(t, profile, []byte("schema_version: 1\ntarget: es-de\ntitles: {mode: release, labels: keep, variants: none}\n"))
 			s := server(t, root, nil)
 			assertLocalParity(t, root, roms, "gamegear", s.URL, profile)
 		})
@@ -415,5 +415,91 @@ func TestRemoteInvalidProfileFailsEvenWhenEverySystemIsSkipped(t *testing.T) {
 		if err == nil {
 			t.Fatal("invalid profile ignored with empty input selection")
 		}
+	}
+}
+
+// The two editions straddle the client's 100-input API boundary. Both single
+// system and --all must format the complete visible selection, not each request.
+func TestRemoteTitlePolicyAcrossBatchesAndSystems(t *testing.T) {
+	root, roms := t.TempDir(), t.TempDir()
+	platform(t, root, "gamegear")
+	game := filepath.Join(root, "platforms", "gamegear", "Contra")
+	put(t, filepath.Join(game, "game.yaml"), []byte(`title: Contra
+releases:
+  Contra (USA): {title: Contra, regions: [USA]}
+  Probotector (Europe): {title: Probotector, regions: [Europe]}
+`))
+	var fingerprints strings.Builder
+	fingerprints.WriteString("items:\n")
+	for _, edition := range []struct{ release, file, payload string }{
+		{"Contra (USA)", "000-us.gg", "synthetic USA payload"},
+		{"Probotector (Europe)", "zzz-eu [T+Rus].gg", "synthetic Europe payload"},
+	} {
+		data := []byte(edition.payload)
+		fmt.Fprintf(&fingerprints, "  - release: %q\n    file: {name: %q, size: %d, sha1: '%x'}\n", edition.release, edition.file, len(data), sha1.Sum(data))
+		put(t, filepath.Join(roms, "gamegear", edition.file), data)
+	}
+	put(t, filepath.Join(game, "fingerprints.yaml"), []byte(fingerprints.String()))
+	for i := 0; i < 99; i++ {
+		put(t, filepath.Join(roms, "gamegear", fmt.Sprintf("filler-%03d.gg", i)), []byte(fmt.Sprintf("unmatched payload %d", i)))
+	}
+	// Another system has the same regional title but no second edition selected.
+	card(t, root, "nes", "Contra", "Contra", "Contra (USA)", "Contra.nes", []byte("NES payload"))
+	put(t, filepath.Join(roms, "nes", "Contra.nes"), []byte("NES payload"))
+	var posts atomic.Int32
+	s := server(t, root, func(api http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/v1/export" {
+				posts.Add(1)
+			}
+			api.ServeHTTP(w, r)
+		})
+	})
+	assertLocalParity(t, root, filepath.Join(roms, "gamegear"), "gamegear", s.URL)
+	if posts.Load() != 2 {
+		t.Fatal("test did not cross a batch boundary", posts.Load())
+	}
+	for _, policy := range []string{"auto", "filename"} {
+		t.Run(policy, func(t *testing.T) {
+			profile := filepath.Join(t.TempDir(), "profile.yaml")
+			// Use the real profile shape; no media downloads are needed here.
+			put(t, profile, []byte("schema_version: 1\ntarget: es-de\ntitles: {variants: "+policy+"}\nselection: {media: {}}\n"))
+			local, err := exporter.BuildBatch(exporter.BatchOptions{All: true, Options: exporter.Options{DataRoot: root, ROMRoot: roms, Out: filepath.Join(t.TempDir(), "local"), ProfilePath: profile}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			remote, err := Build(context.Background(), Options{API: s.URL, BatchOptions: exporter.BatchOptions{All: true, Options: exporter.Options{ROMRoot: roms, Out: filepath.Join(t.TempDir(), "remote"), ProfilePath: profile}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(local.Plans) != 2 || len(remote.Batch.Plans) != 2 {
+				t.Fatal("missing systems")
+			}
+			for i, plan := range local.Plans {
+				a, _ := json.Marshal(plan.Records)
+				b, _ := json.Marshal(remote.Batch.Plans[i].Records)
+				if string(a) != string(b) {
+					t.Fatal("batch records differ", plan.System)
+				}
+				for _, record := range plan.Records {
+					if record.Status != "matched" {
+						continue
+					}
+					want := "Contra"
+					if plan.System == "gamegear" {
+						if policy == "filename" {
+							want = strings.TrimSuffix(record.ROM, ".gg")
+						} else if strings.HasPrefix(record.ROM, "000") {
+							want = "Contra (USA)"
+						} else {
+							want = "Probotector (Europe) [T+Rus]"
+						}
+					}
+					if record.Fields["title"].Value != want {
+						t.Fatalf("%s: %q want %q", record.ROM, record.Fields["title"].Value, want)
+					}
+				}
+			}
+		})
 	}
 }

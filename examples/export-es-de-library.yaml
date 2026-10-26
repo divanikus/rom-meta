@@ -3,7 +3,10 @@
 # "original" preserves a provider category, not a pixel-level guarantee of no case.
 schema_version: 1
 target: es-de
-title_mode: catalog
+titles:
+  mode: regional
+  labels: keep
+  variants: auto
 selection:
   description:
     scope: game

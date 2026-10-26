@@ -260,6 +260,58 @@ Consult the official
 [gamelist reference](https://gitlab.com/es-de/emulationstation-de/-/blob/master/INSTALL.md#gamelistxml)
 and [media naming guide](https://gitlab.com/es-de/emulationstation-de/-/blob/master/USERGUIDE.md#manually-copying-game-media-files).
 
+## Display names
+
+Set these options in the YAML file passed through `--profile`. The defaults are:
+
+```yaml
+titles:
+  mode: regional
+  labels: keep
+  variants: auto
+```
+
+| Setting | Values | Behavior |
+| --- | --- | --- |
+| `mode` | `regional` (default) | Use the matched edition's title, retaining its regional spelling. Remove recognized trailing region, language and revision groups; preserve other parentheses such as `(Special Edition)`. |
+| `mode` | `release` | Use the full authority entry name, falling back to the release key. For MAME use the full human set description. |
+| `mode` | `filename` | Use the supplied launch filename without its extension. |
+| `labels` | `keep` (default), `drop` | Keep or remove every balanced `[...]` block. Contents are opaque: `[T+Rus]`, `[hack]` and unknown labels follow the same rule. |
+| `variants` | `auto` (default) | For several visible inputs of one game, add differing regions. Add revision, then language only for names still indistinguishable. Remaining collisions fall back to filename stems, then relative input paths. |
+| `variants` | `none` | Use the selected mode without automatic disambiguation. Duplicate display names are allowed. |
+| `variants` | `release`, `filename` | For every multi-input game group, use full release names or input filename stems instead of the base mode. |
+
+A single selected `Probotector (Europe) (En,Fr).nes` becomes `Probotector` with
+these defaults. Select `Contra (USA)` and `Gryzor (Japan)` from the same game as
+well, and the names become `Contra (USA)`, `Probotector (Europe)` and
+`Gryzor (Japan)`. The common card title never replaces the edition's local name.
+A lone `Probotector (Europe) [T+Rus].nes` becomes `Probotector [T+Rus]`.
+Set `mode: filename` and `variants: none` for filename-based names everywhere.
+
+Regional mode uses an explicit per-release `title` when it differs from the
+legacy DAT base title. Otherwise it derives the name conservatively from the
+full release entry, so meaningful parentheses lost by older DAT base-title
+parsing can be retained. MAME regional names use each set's human description.
+If the exact edition is unknown, retain the input filename instead of borrowing
+the default edition's title. This includes game-only metadata matches.
+
+Input labels retain their text, order and repetitions. Labels from an archive's
+payload member and the matched release are appended only when absent from the
+input. Nested brackets form one block; unmatched brackets stay ordinary text.
+Labels never establish identity, language, translation or hack status.
+
+Disambiguation considers the visible inputs selected for **one system** by this
+export, including `--match`/`--limit`. Catalog editions absent from the selection
+and hidden playlist members do not count. A directory `.m3u` is one visible game;
+its name omits the first disc's number. Individual disc entries retain disc
+numbers. Local export, `--api` and `--all` apply the same policy. API clients must
+collect all batches of a system before finalizing names using `title_context`.
+Use matching client/server builds when changing profile fields.
+
+Only display fields change. ROM paths, proof/binding, media selection and source
+metadata stay intact. Preview and manifest record the resulting names; XML
+escapes them when writing `<name>`. Arbitrary title templates are not supported.
+
 ## Selection profile
 
 Start with [the reusable library profile](../examples/export-es-de-library.yaml)
@@ -278,7 +330,7 @@ edition-specific prose. This does not change identity or binding confidence.
 
 Rules for release_date, developer, publisher, genres and players remain
 release-scoped and accept per-field source lists. Explicit local catalog fields
-win. title_mode is catalog or release.
+win. Display names use the independent [titles policy](#display-names).
 
 Media rules select existing files by region/source/format and optional language.
 Lists replace inherited lists. Defaults prefer matched-release regions, world,

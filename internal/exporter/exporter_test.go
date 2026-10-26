@@ -133,6 +133,13 @@ func treeHashes(t *testing.T, root string) map[string]string {
 
 func TestOfflineZIPExportPrioritiesPreservationAndDeterminism(t *testing.T) {
 	options, gamePath, payload := fixture(t)
+	// Escaping is tested on an explicit release title, independently of the card name.
+	gameFile := filepath.Join(gamePath, "game.yaml")
+	body, err := os.ReadFile(gameFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	put(t, gameFile, []byte(strings.Replace(string(body), "    title: Example\n", "    title: Example & Friends\n", 1)))
 	putZip(t, filepath.Join(options.ROMRoot, "nested", "Renamed & File.zip"), map[string][]byte{"unrelated-name.z64": payload, "readme.txt": []byte("sidecar")})
 	profile(t, &options, `schema_version: 1
 target: es-de

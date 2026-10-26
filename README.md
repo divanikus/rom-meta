@@ -138,8 +138,8 @@ creates a new package; open its `preview.html` and `report.txt`. Source ROMs and
 catalog files stay unchanged. Output contains `gamelists/nes/gamelist.xml`, selected
 `downloaded_media/nes/` and provenance reports. Batch mode uses `--all` or
 `--platforms` against the parent ROM directory. [Profiles](examples/export-es-de-library.yaml)
-choose languages, sources, regions and media; export does not choose/copy a ROM
-collection for you.
+choose [display names](docs/offline-export.md#display-names), languages, sources,
+regions and media; export does not choose/copy a ROM collection for you.
 
 For a catalog on another machine, run the same server there:
 

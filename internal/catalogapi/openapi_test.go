@@ -75,3 +75,25 @@ func TestOpenAPIAndSwaggerArePublicButDataRemainsAuthenticated(t *testing.T) {
 		})
 	}
 }
+
+func TestOpenAPIDescribesTitlePolicyAndBatchContext(t *testing.T) {
+	data, err := json.Marshal(OpenAPI(true, false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(data, &document); err != nil {
+		t.Fatal(err)
+	}
+	schemas := document["components"].(map[string]any)["schemas"].(map[string]any)
+	titles := schemas["TitlePolicy"].(map[string]any)["properties"].(map[string]any)
+	for key, want := range map[string]string{"mode": "regional", "labels": "keep", "variants": "auto"} {
+		property := titles[key].(map[string]any)
+		if property["default"] != want || len(property["enum"].([]any)) < 2 {
+			t.Fatal(key, property)
+		}
+	}
+	if !strings.Contains(schemas["TitleContext"].(map[string]any)["description"].(string), "complete system") {
+		t.Fatal("missing batch finalization contract")
+	}
+}

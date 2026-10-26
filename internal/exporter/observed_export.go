@@ -175,6 +175,9 @@ func (r *ExportResolver) resolve(input ExportInput, profile Profile) (Record, er
 }
 
 func finishExportPlan(plan *Plan) error {
+	if err := applyExportTitles(plan); err != nil {
+		return err
+	}
 	destinations := map[string]string{}
 	for _, record := range plan.Records {
 		switch record.Status {

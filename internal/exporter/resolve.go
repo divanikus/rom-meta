@@ -25,7 +25,7 @@ type candidate struct {
 func resolveFields(g *game, release string, profile Profile) map[string]Value {
 	result := map[string]Value{}
 	title := g.name
-	if title == "" || profile.TitleMode == "release" {
+	if title == "" {
 		title = release
 	}
 	result["title"] = Value{Value: title, Source: "catalog"}

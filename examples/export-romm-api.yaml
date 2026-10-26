@@ -2,7 +2,10 @@
 # Other native media roles are selected by the separate server importer.
 schema_version: 1
 target: es-de
-title_mode: catalog
+titles:
+  mode: regional
+  labels: keep
+  variants: auto
 selection:
   description:
     scope: game

@@ -180,7 +180,9 @@ sources:
 Rules:
 
 - The top-level `title` is the platform display title, not an objective universal title.
-- Official regional titles belong on releases.
+- Official regional titles belong on releases. ES-DE export's `regional` mode
+  uses that edition's name, not the common card title; see
+  [display-name policy](offline-export.md#display-names).
 - Aliases should be added only when a useful recognition title is not already present as the display title or a release title.
 - Source-specific candidates live under `sources.<source>` in the same `game.yaml`; they preserve provenance but do not automatically become canonical fields.
 - Aggressive auto-folding is out of scope for the first MVP.
