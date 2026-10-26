@@ -73,6 +73,13 @@ Review, then repeat with `--apply`. `--all` discovers supported folders;
 `--platforms` selects named ones. Use a separate `--platform` export for custom
 nested system paths, including custom Xbox 360 roots.
 
+## Prepared translations
+
+A catalog can supply explicit `variants`/`based_on` relationships and modified
+fingerprints. Export recognizes those files and inherits the base metadata/media
+while preserving translated display identity and launch paths. See
+[variant preparation and proof limits](catalog-variants.md).
+
 ## Export from a remote catalog
 
 On the catalog machine, bind `serve` to its LAN address (default is loopback):

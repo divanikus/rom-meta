@@ -21,7 +21,7 @@ func bindObservedPayload(root string, index *catalogIndex, record *Record, profi
 		if candidate.chd != (ext == ".chd") || !fingerprintMatches(candidate, h) {
 			continue
 		}
-		key := candidate.game.path + "\x00" + candidate.release
+		key := candidate.targetKey()
 		if !seen[key] {
 			matches = append(matches, candidate)
 			seen[key] = true
@@ -38,13 +38,13 @@ func bindObservedPayload(root string, index *catalogIndex, record *Record, profi
 		}
 	case 1:
 		record.Status, record.MatchedBy, record.Reason = "matched", "hash", "exact payload size and strong fingerprint"
-		if err := attachRecord(root, matches[0].game, matches[0].release, record, profile, system); err != nil {
+		if err := attachFingerprintRecord(root, matches[0], record, profile, system); err != nil {
 			return err
 		}
 	default:
 		record.Status, record.Reason = "ambiguous", "same payload identifies multiple catalog releases"
 		for _, candidate := range matches {
-			record.Candidates = append(record.Candidates, candidate.game.name+" / "+candidate.release)
+			record.Candidates = append(record.Candidates, candidate.game.name+" / "+candidate.targetName())
 		}
 		sort.Strings(record.Candidates)
 	}
@@ -124,7 +124,14 @@ func observePlaylist(ctx context.Context, romRoot, path, system string) (ExportI
 			return input, err
 		}
 		partRel, _ := filepath.Rel(romRoot, real)
-		input.Parts = append(input.Parts, ExportInput{ROM: filepath.ToSlash(partRel), Kind: "payload", Proof: proof})
+		part := ExportInput{ROM: filepath.ToSlash(partRel), Kind: "payload", Proof: proof}
+		if ext == ".chd" {
+			observed, err := observeDisc(romRoot, system, part.ROM)
+			if err == nil {
+				part.Disc = observed.Disc
+			}
+		}
+		input.Parts = append(input.Parts, part)
 	}
 	if len(input.Parts) == 0 {
 		return hold("playlist is empty")
@@ -147,21 +154,22 @@ func (r *ExportResolver) resolvePlaylist(input ExportInput, profile Profile) (Re
 			return record, err
 		}
 		name := strings.TrimPrefix(observed.ROM, input.ROM+"/")
-		if part.Status != "matched" || part.Release == "" {
+		if part.Status != "matched" || (part.Release == "" && part.Variant == "") {
 			return hold("playlist member has no unique exact release binding: " + name)
 		}
 		if first == nil {
 			copy := part
 			first = &copy
-		} else if first.Game != part.Game {
+		} else if first.Game != part.Game || (first.Variant == "") != (part.Variant == "") || !sameVariantEdition(*first, part) {
 			return hold("playlist mixes catalog games")
 		}
 		if part.MatchedBy != "hash" {
 			allHashes = false
 		}
-		record.Playlist = append(record.Playlist, PlaylistInput{ROM: part.ROM, Size: part.Size, SHA1: part.SHA1, Release: part.Release, MatchedBy: part.MatchedBy})
+		record.Playlist = append(record.Playlist, PlaylistInput{ROM: part.ROM, Size: part.Size, SHA1: part.SHA1, Release: part.Release, Variant: part.Variant, MatchedBy: part.MatchedBy})
 	}
-	record.Status, record.Game, record.MetadataRelease = "matched", first.Game, first.Release
+	record.Status, record.Game, record.MetadataRelease = "matched", first.Game, first.MetadataRelease
+	record.Variant, record.VariantInfo = first.Variant, first.VariantInfo
 	record.Fields, record.Media = first.Fields, first.Media
 	record.TitleContext = first.TitleContext
 	record.MatchedBy, record.Reason = "playlist-name", "playlist members bind to one catalog game; release-name evidence"

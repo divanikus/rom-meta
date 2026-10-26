@@ -33,7 +33,8 @@ type game struct {
 type fingerprint struct {
 	chd                    bool
 	game                   *game
-	release                string
+	release, variant       string
+	kind                   string
 	size                   int64
 	sha1, sha256, md5, crc string
 }
@@ -156,6 +157,9 @@ func buildIndex(root, platform string, progress func(string, string, int, int)) 
 			continue
 		}
 		if err != nil {
+			return nil, fmt.Errorf("%s: %w", entry.Name(), err)
+		}
+		if _, err := catalogyaml.Variants(doc); err != nil {
 			return nil, fmt.Errorf("%s: %w", entry.Name(), err)
 		}
 		g := &game{path: path, name: field(doc, "title"), root: doc}
@@ -294,19 +298,37 @@ func countInputs(options Options, root string) (int, error) {
 }
 
 func indexFingerprints(index *catalogIndex, g *game, fingerprints *yaml.Node) error {
-	return catalogyaml.Sequence(catalogyaml.Value(fingerprints, "items"), func(node *yaml.Node) error {
-		release := field(node, "release")
-		if release == "" || field(node, "variant") != "" {
-			return nil
-		}
-		if catalogyaml.Value(catalogyaml.Value(g.root, "releases"), release) == nil {
-			return fmt.Errorf("fingerprint references missing release %s", release)
+	if _, err := catalogyaml.Variants(g.root); err != nil {
+		return err
+	}
+	items := catalogyaml.Value(fingerprints, "items")
+	if items == nil {
+		items = catalogyaml.Value(fingerprints, "roms")
+	}
+	return catalogyaml.Sequence(items, func(node *yaml.Node) error {
+		release, variant, err := catalogyaml.FingerprintTarget(g.root, node)
+		if err != nil {
+			return err
 		}
 		file := catalogyaml.Value(node, "file")
-		addReleaseName(index, field(file, "name"), g, release)
-		addReleaseName(index, field(catalogyaml.Value(node, "source"), "entry_name"), g, release)
-		fp := fingerprint{game: g, release: release, chd: strings.EqualFold(filepath.Ext(field(file, "name")), ".chd"), size: catalogyaml.Int64(catalogyaml.Value(file, "size")), sha1: strings.ToLower(field(file, "sha1")), sha256: strings.ToLower(field(file, "sha256")), md5: strings.ToLower(field(file, "md5")), crc: strings.ToLower(field(file, "crc32"))}
-		if fp.size > 0 && (fp.sha1 != "" || fp.sha256 != "") {
+		fp := fingerprint{game: g, release: release, variant: variant, kind: field(file, "kind"),
+			chd:  strings.EqualFold(filepath.Ext(field(file, "name")), ".chd"),
+			size: catalogyaml.Int64(catalogyaml.Value(file, "size")),
+			sha1: strings.ToLower(field(file, "sha1")), sha256: strings.ToLower(field(file, "sha256")),
+			md5: strings.ToLower(field(file, "md5")), crc: strings.ToLower(field(file, "crc32"))}
+		if variant == "" {
+			addReleaseName(index, field(file, "name"), g, release)
+			addReleaseName(index, field(catalogyaml.Value(node, "source"), "entry_name"), g, release)
+		} else {
+			addVariantName(index, field(file, "name"), g, variant)
+			addVariantName(index, field(catalogyaml.Value(node, "source"), "entry_name"), g, variant)
+		}
+		if fp.kind == "chd-combined-sha1" {
+			if index.ByCHD == nil {
+				index.ByCHD = map[string][]fingerprint{}
+			}
+			index.ByCHD[fp.sha1] = append(index.ByCHD[fp.sha1], fp)
+		} else if fp.size > 0 && (fp.sha1 != "" || fp.sha256 != "") {
 			index.BySize[fp.size] = append(index.BySize[fp.size], fp)
 		}
 		return nil

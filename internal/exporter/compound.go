@@ -112,7 +112,7 @@ func bindCompound(root string, index *catalogIndex, record *Record, profile Prof
 		if !fingerprintMatches(fp, hashes{p.Size, p.SHA1, p.SHA256, p.MD5, p.CRC32}) {
 			continue
 		}
-		key := fp.game.path + "\x00" + fp.release
+		key := fp.targetKey()
 		if seen[key] {
 			continue
 		}
@@ -120,7 +120,7 @@ func bindCompound(root string, index *catalogIndex, record *Record, profile Prof
 		var expected []PayloadProof
 		for _, group := range index.BySize {
 			for _, member := range group {
-				if member.game.path == fp.game.path && member.release == fp.release {
+				if member.targetKey() == fp.targetKey() {
 					expected = append(expected, PayloadProof{Size: member.size, SHA1: member.sha1, SHA256: member.sha256, MD5: member.md5, CRC32: member.crc})
 				}
 			}
@@ -131,7 +131,7 @@ func bindCompound(root string, index *catalogIndex, record *Record, profile Prof
 	}
 	if len(candidates) == 1 {
 		record.Status, record.MatchedBy, record.Reason = "matched", "hash", "complete cartridge payload set matches authoritative release"
-		return attachRecord(root, candidates[0].game, candidates[0].release, record, profile, system)
+		return attachFingerprintRecord(root, candidates[0], record, profile, system)
 	}
 	record.Reason = "no complete unambiguous cartridge payload set in catalog"
 	if len(candidates) > 1 {

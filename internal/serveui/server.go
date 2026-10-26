@@ -301,6 +301,7 @@ type gameListItem struct {
 	Folder              string                    `json:"folder"`
 	Title               string                    `json:"title,omitempty"`
 	DefaultRelease      string                    `json:"default_release,omitempty"`
+	VariantCount        int                       `json:"variant_count,omitempty"`
 	ReleaseCount        int                       `json:"release_count,omitempty"`
 	SourceStats         []catalogcache.SourceStat `json:"source_stats,omitempty"`
 	HasMetadata         bool                      `json:"has_metadata,omitempty"`
@@ -416,6 +417,7 @@ func readGameListItem(root, platform, folder string) (gameListItem, error) {
 		Title:               game.Title,
 		DefaultRelease:      game.DefaultRelease,
 		ReleaseCount:        len(game.Releases),
+		VariantCount:        len(game.Variants),
 		SourceStats:         game.SourceStats,
 		SourceMediaURLCount: len(game.MediaURLs),
 	}

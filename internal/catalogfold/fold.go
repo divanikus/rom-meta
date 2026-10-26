@@ -168,6 +168,7 @@ type catalogGame struct {
 	Title                string
 	DefaultRelease       string
 	Releases             []block
+	Variants             []block
 	SourceBlocks         map[string]sourceBlock
 	SourceCount          int
 	Evidence             []Evidence
@@ -1229,7 +1230,15 @@ func applyGroup(root string, group *Group, regions regionRules) error {
 	}
 	group.FileChanges = changes
 
-	if err := catalogfs.WriteFile(filepath.Join(keepPath, "game.yaml"), []byte(renderMergedGameYAML(games, regions)), 0o644); err != nil {
+	merged := renderMergedGameYAML(games, regions)
+	mergedDoc, err := catalogyaml.Parse([]byte(merged))
+	if err != nil {
+		return err
+	}
+	if _, err := catalogyaml.Variants(mergedDoc.Root()); err != nil {
+		return err
+	}
+	if err := catalogfs.WriteFile(filepath.Join(keepPath, "game.yaml"), []byte(merged), 0o644); err != nil {
 		return err
 	}
 	if err := catalogfs.WriteFile(filepath.Join(keepPath, "fingerprints.yaml"), []byte(renderMergedFingerprints(games)), 0o644); err != nil {
@@ -1436,6 +1445,23 @@ func renderMergedGameYAML(games []catalogGame, regions regionRules) string {
 	fmt.Fprintf(&b, "\nreleases:\n")
 	for _, release := range releases {
 		b.WriteString(release.Text)
+	}
+	var variants []block
+	seenVariants := map[string]bool{}
+	for _, game := range games {
+		for _, variant := range game.Variants {
+			if !seenVariants[variant.Key] {
+				variants = append(variants, variant)
+				seenVariants[variant.Key] = true
+			}
+		}
+	}
+	sort.Slice(variants, func(i, j int) bool { return variants[i].Key < variants[j].Key })
+	if len(variants) > 0 {
+		b.WriteString("\nvariants:\n")
+		for _, variant := range variants {
+			b.WriteString(variant.Text)
+		}
 	}
 	blocks := mergeSourceBlocks(games)
 	if len(blocks) > 0 {

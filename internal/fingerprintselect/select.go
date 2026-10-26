@@ -14,7 +14,7 @@ var trackNumberPattern = regexp.MustCompile(`(?i)\btrack\s*0*(\d+)\b`)
 // UsableForHashLookup reports whether a DAT file fingerprint is safe enough
 // to use as a game identity lookup key in online sources.
 func UsableForHashLookup(fingerprint catalogcache.Fingerprint, releaseFileCount int) bool {
-	if fingerprint.PayloadKind != "" {
+	if fingerprint.Variant != "" || fingerprint.PayloadKind != "" {
 		return false
 	} // Arcade chip/disk identities are not whole-game archive hashes.
 	if releaseFileCount > 1 && looksLikeDiscFile(fingerprint) {

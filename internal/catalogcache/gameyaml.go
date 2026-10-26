@@ -16,6 +16,9 @@ func parseGameYAML(contents []byte) (Game, error) {
 	if err != nil {
 		return Game{}, err
 	}
+	if _, err := catalogyaml.Variants(document.Root()); err != nil {
+		return Game{}, err
+	}
 	return gameFromDocument(document), nil
 }
 
@@ -26,6 +29,7 @@ func gameFromDocument(document *catalogyaml.Document) Game {
 		Title:          catalogyaml.Scalar(catalogyaml.Value(root, "title")),
 		DefaultRelease: catalogyaml.Scalar(catalogyaml.Value(root, "default_release")),
 	}
+	game.Variants, _ = catalogyaml.Variants(root)
 	for _, key := range []string{"alternate_titles", "aliases"} {
 		for _, alias := range catalogyaml.Strings(catalogyaml.Value(root, key)) {
 			game.Aliases = appendUnique(game.Aliases, alias)

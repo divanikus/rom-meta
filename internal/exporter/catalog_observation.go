@@ -119,12 +119,7 @@ func (resolver *LookupResolver) bindCatalog(input ObservedInput, allowGame bool)
 		record.Reason = "catalog names require explicit game_binding; dump identity is unverified"
 		return record, nil
 	}
-	for _, part := range strings.Split(strings.ToLower(input.ROM), "/") {
-		if part == "translations" || strings.Contains(part, "[t-") || strings.Contains(part, "[t+") {
-			record.Reason = "translated payload identity requires an explicit catalog binding"
-			return record, nil
-		}
-	}
+	translated := translationInput(&record)
 	name := filepath.Base(input.ROM)
 	if !input.Catalog.Directory {
 		name = strings.TrimSuffix(name, filepath.Ext(name))
@@ -133,13 +128,15 @@ func (resolver *LookupResolver) bindCatalog(input ObservedInput, allowGame bool)
 	candidates := resolver.index.ByName[nameKey(name)]
 	unique := map[string]fingerprint{}
 	for _, candidate := range candidates {
-		unique[candidate.game.path+"\x00"+candidate.release] = candidate
+		if !translated || candidate.variant != "" {
+			unique[candidate.targetKey()] = candidate
+		}
 	}
 	if len(unique) == 1 {
 		for _, candidate := range unique {
 			record.Status, record.MatchedBy, record.Reason = "matched", "catalog-name", "unique complete catalog release name; payload remains unverified"
 			record.Warnings = []string{"Filename/directory and stat evidence only; no dump, DAT, MAME set-version or integrity verification"}
-			err := attachRecord(resolver.Catalog.Root, candidate.game, candidate.release, &record, resolver.Catalog.Profile, resolver.Platform.System)
+			err := attachFingerprintRecord(resolver.Catalog.Root, candidate, &record, resolver.Catalog.Profile, resolver.Platform.System)
 			if err == nil && resolver.Platform.Platform == "Arcade" {
 				release := catalogyaml.Value(catalogyaml.Value(candidate.game.root, "releases"), candidate.release)
 				authority, mame := catalogyaml.Value(release, "authority"), catalogyaml.Value(release, "mame")
@@ -154,6 +151,10 @@ func (resolver *LookupResolver) bindCatalog(input ObservedInput, allowGame bool)
 	}
 	if len(unique) > 1 {
 		record.Status, record.Reason = "ambiguous", "complete name identifies multiple catalog releases"
+		return record, nil
+	}
+	if translated {
+		record.Reason = "translated payload identity requires an explicit catalog binding"
 		return record, nil
 	}
 	// A multidisc directory may omit the Disc qualifier. Every member must identify

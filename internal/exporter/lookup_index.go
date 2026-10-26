@@ -22,12 +22,15 @@ import (
 
 type LookupIndexStats struct{ Games, Cached, Rebuilt int }
 type lookupFingerprint struct {
-	Release                string
+	Release, Variant       string
+	Kind                   string
 	CHD                    bool
 	Size                   int64
 	SHA1, SHA256, MD5, CRC string
 }
 type lookupEntry struct {
+	SchemaVersion                 int
+	VariantNames                  map[string][]string
 	Title                         string
 	GameNames                     []string
 	ReleaseNames                  map[string][]string
@@ -97,7 +100,7 @@ func openLookupDisk(dir, root, platform string) *lookupDisk {
 		}
 		digest := sha256.Sum256(payload)
 		var entry lookupEntry
-		if hex.EncodeToString(digest[:]) != checksum || json.Unmarshal(payload, &entry) != nil {
+		if hex.EncodeToString(digest[:]) != checksum || json.Unmarshal(payload, &entry) != nil || entry.SchemaVersion != 2 {
 			continue
 		}
 		c.rows[folder] = lookupRow{stamp, entry}
@@ -235,12 +238,15 @@ func lookupDocument(root, name string) (*yaml.Node, string, error) {
 	return doc.Root(), hex.EncodeToString(sum[:]), nil
 }
 func readLookupEntry(root, path string) (lookupEntry, error) {
-	entry := lookupEntry{ReleaseNames: map[string][]string{}}
+	entry := lookupEntry{SchemaVersion: 2, ReleaseNames: map[string][]string{}, VariantNames: map[string][]string{}}
 	doc, digest, err := lookupDocument(root, filepath.Join(path, "game.yaml"))
 	if os.IsNotExist(err) {
 		return entry, nil
 	}
 	if err != nil {
+		return entry, err
+	}
+	if _, err := catalogyaml.Variants(doc); err != nil {
 		return entry, err
 	}
 	entry.GameDigest = digest
@@ -268,12 +274,21 @@ func readLookupEntry(root, path string) (lookupEntry, error) {
 	}
 	for key, fps := range index.ByName {
 		for _, fp := range fps {
-			entry.ReleaseNames[key] = append(entry.ReleaseNames[key], fp.release)
+			if fp.variant != "" {
+				entry.VariantNames[key] = append(entry.VariantNames[key], fp.variant)
+			} else {
+				entry.ReleaseNames[key] = append(entry.ReleaseNames[key], fp.release)
+			}
 		}
 	}
 	for _, fps := range index.BySize {
 		for _, fp := range fps {
-			entry.Fingerprints = append(entry.Fingerprints, lookupFingerprint{fp.release, fp.chd, fp.size, fp.sha1, fp.sha256, fp.md5, fp.crc})
+			entry.Fingerprints = append(entry.Fingerprints, lookupFingerprint{Release: fp.release, Variant: fp.variant, Kind: fp.kind, CHD: fp.chd, Size: fp.size, SHA1: fp.sha1, SHA256: fp.sha256, MD5: fp.md5, CRC: fp.crc})
+		}
+	}
+	for _, fps := range index.ByCHD {
+		for _, fp := range fps {
+			entry.Fingerprints = append(entry.Fingerprints, lookupFingerprint{Release: fp.release, Variant: fp.variant, Kind: fp.kind, CHD: true, Size: fp.size, SHA1: fp.sha1})
 		}
 	}
 	return entry, nil
@@ -294,8 +309,20 @@ func (e lookupEntry) add(index *catalogIndex, path string) {
 			index.ByName[key] = append(index.ByName[key], fingerprint{game: g, release: release})
 		}
 	}
+	for name, variants := range e.VariantNames {
+		for _, variant := range variants {
+			index.ByName[name] = append(index.ByName[name], fingerprint{game: g, variant: variant})
+		}
+	}
 	for _, fp := range e.Fingerprints {
-		index.BySize[fp.Size] = append(index.BySize[fp.Size], fingerprint{game: g, release: fp.Release, chd: fp.CHD, size: fp.Size, sha1: fp.SHA1, sha256: fp.SHA256, md5: fp.MD5, crc: fp.CRC})
+		if fp.Kind == "chd-combined-sha1" {
+			if index.ByCHD == nil {
+				index.ByCHD = map[string][]fingerprint{}
+			}
+			index.ByCHD[fp.SHA1] = append(index.ByCHD[fp.SHA1], fingerprint{game: g, variant: fp.Variant, kind: fp.Kind, chd: true, size: fp.Size, sha1: fp.SHA1})
+			continue
+		}
+		index.BySize[fp.Size] = append(index.BySize[fp.Size], fingerprint{game: g, release: fp.Release, variant: fp.Variant, chd: fp.CHD, size: fp.Size, sha1: fp.SHA1, sha256: fp.SHA256, md5: fp.MD5, crc: fp.CRC})
 	}
 }
 func (catalog *LookupCatalog) openIndex(resolver *LookupResolver, folder string) error {

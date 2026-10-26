@@ -209,7 +209,11 @@ func resolveMedia(root string, g *game, release, rom string, profile Profile, re
 		}
 		parent := filepath.Dir(rel)
 		// Only ordinary registered release folders, never _fold or arbitrary trees.
-		if parent == "." || catalogyaml.Value(catalogyaml.Value(g.root, "releases"), parent) != nil {
+		if len(regionHints) > 1 {
+			if position(regionHints[1], parent) >= 0 {
+				paths = append(paths, path)
+			}
+		} else if parent == "." || catalogyaml.Value(catalogyaml.Value(g.root, "releases"), parent) != nil {
 			paths = append(paths, path)
 		}
 		return nil

@@ -52,6 +52,7 @@ type Profile struct {
 
 type Value struct {
 	Selection   string `json:"selection,omitempty"`
+	FromVariant string `json:"from_variant,omitempty"`
 	FromRelease string `json:"from_release,omitempty"`
 	Value       string `json:"value"`
 	Source      string `json:"source"`
@@ -64,6 +65,7 @@ type Media struct {
 	Variant         string `json:"variant,omitempty"`
 	SourceType      string `json:"source_type,omitempty"`
 	VariantEvidence string `json:"variant_evidence,omitempty"`
+	FromVariant     string `json:"from_variant,omitempty"`
 	FromRelease     string `json:"from_release,omitempty"`
 	Selection       string `json:"selection,omitempty"`
 	SourcePath      string `json:"source_path"`
@@ -79,10 +81,25 @@ type PlaylistInput struct {
 	ROM       string `json:"rom"`
 	Size      int64  `json:"size"`
 	SHA1      string `json:"sha1"`
-	Release   string `json:"release"`
+	Variant   string `json:"variant,omitempty"`
+	Release   string `json:"release,omitempty"`
 	MatchedBy string `json:"matched_by"`
 }
+
+// VariantInfo retains modification identity separately from inherited metadata.
+type VariantInfo struct {
+	Kind      string                `json:"kind"`
+	BasedOn   string                `json:"based_on"`
+	Chain     []string              `json:"chain"`
+	Ancestors []catalogyaml.Variant `json:"ancestors,omitempty"`
+	Languages []string              `json:"languages,omitempty"`
+	Group     string                `json:"group,omitempty"`
+	Version   string                `json:"version,omitempty"`
+}
+
 type Record struct {
+	Variant         string              `json:"variant,omitempty"`
+	VariantInfo     *VariantInfo        `json:"variant_info,omitempty"`
 	TitleContext    *TitleContext       `json:"title_context,omitempty"`
 	Disc            *DiscObservation    `json:"disc,omitempty"`
 	Catalog         *CatalogObservation `json:"catalog,omitempty"`

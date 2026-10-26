@@ -28,14 +28,15 @@ type ObservedInput struct {
 	Catalog *CatalogObservation `json:"catalog,omitempty"`
 }
 type LookupPlatform struct {
-	ExportSystems []string `json:"export_systems,omitempty"`
-	Platform      string   `json:"platform"`
-	System        string   `json:"system,omitempty"`
-	Supported     bool     `json:"supported"`
-	Reason        string   `json:"reason,omitempty"`
-	GameBinding   bool     `json:"game_binding,omitempty"`
-	NameBinding   bool     `json:"name_binding,omitempty"`
-	Aliases       []string `json:"aliases,omitempty"`
+	VariantBinding bool     `json:"variant_binding,omitempty"`
+	ExportSystems  []string `json:"export_systems,omitempty"`
+	Platform       string   `json:"platform"`
+	System         string   `json:"system,omitempty"`
+	Supported      bool     `json:"supported"`
+	Reason         string   `json:"reason,omitempty"`
+	GameBinding    bool     `json:"game_binding,omitempty"`
+	NameBinding    bool     `json:"name_binding,omitempty"`
+	Aliases        []string `json:"aliases,omitempty"`
 }
 type LookupCatalog struct {
 	Root      string
@@ -171,6 +172,7 @@ func NewLookupCatalog(dataRoot, profilePath string) (*LookupCatalog, error) {
 				platform.System, platform.Supported, platform.GameBinding, platform.Reason = "catalog", true, true, ""
 			}
 		}
+		platform.VariantBinding = platform.Supported && platform.Platform != "Arcade"
 		catalog.Platforms = append(catalog.Platforms, platform)
 	}
 	return catalog, nil

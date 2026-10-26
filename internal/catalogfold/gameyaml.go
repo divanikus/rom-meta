@@ -19,6 +19,9 @@ func parseGameYAML(contents []byte) (catalogGame, error) {
 	if err != nil {
 		return catalogGame{}, err
 	}
+	if _, err := catalogyaml.Variants(root); err != nil {
+		return catalogGame{}, err
+	}
 	game := catalogGame{
 		Title:           catalogyaml.Scalar(catalogyaml.Value(root, "title")),
 		ContentKey:      catalogyaml.Scalar(catalogyaml.Value(catalogyaml.Value(root, "fold"), "content_key")),
@@ -95,6 +98,16 @@ func parseGameYAML(contents []byte) (catalogGame, error) {
 			}
 		}
 		game.SourceBlocks[source] = item
+		return nil
+	}); err != nil {
+		return catalogGame{}, err
+	}
+	if err := catalogyaml.Mapping(catalogyaml.Value(root, "variants"), func(key string, value *yaml.Node) error {
+		text, err := renderMappingEntry(key, value, 2, true)
+		if err != nil {
+			return err
+		}
+		game.Variants = append(game.Variants, block{Key: key, Text: text})
 		return nil
 	}); err != nil {
 		return catalogGame{}, err

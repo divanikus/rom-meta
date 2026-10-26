@@ -394,6 +394,9 @@ func validateRecord(input exporter.ExportInput, record *exporter.Record, system 
 		}
 		switch input.Kind {
 		case "payload":
+			if !reflect.DeepEqual(input.Disc, record.Disc) {
+				return fmt.Errorf("API changed CHD header observation")
+			}
 			if record.Payload == nil || !record.Payload.Equal(input.Proof) {
 				return fmt.Errorf("API changed payload evidence")
 			}

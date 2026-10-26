@@ -22,22 +22,23 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 3
+const schemaVersion = 4
 
 // Game is the cached subset of game.yaml used by fetchers.
 type Game struct {
-	ArcadePlatform string        `json:"arcade_platform,omitempty"`
-	Platform       string        `json:"platform"`
-	Folder         string        `json:"folder"`
-	Path           string        `json:"-"`
-	Title          string        `json:"title,omitempty"`
-	DefaultRelease string        `json:"default_release,omitempty"`
-	Releases       []Release     `json:"releases,omitempty"`
-	Aliases        []string      `json:"aliases,omitempty"`
-	Sources        []string      `json:"sources,omitempty"`
-	SourceStats    []SourceStat  `json:"source_stats,omitempty"`
-	MediaURLs      []MediaURL    `json:"media,omitempty"`
-	Fingerprints   []Fingerprint `json:"fingerprints,omitempty"`
+	ArcadePlatform string                `json:"arcade_platform,omitempty"`
+	Platform       string                `json:"platform"`
+	Folder         string                `json:"folder"`
+	Path           string                `json:"-"`
+	Title          string                `json:"title,omitempty"`
+	DefaultRelease string                `json:"default_release,omitempty"`
+	Variants       []catalogyaml.Variant `json:"variants,omitempty"`
+	Releases       []Release             `json:"releases,omitempty"`
+	Aliases        []string              `json:"aliases,omitempty"`
+	Sources        []string              `json:"sources,omitempty"`
+	SourceStats    []SourceStat          `json:"source_stats,omitempty"`
+	MediaURLs      []MediaURL            `json:"media,omitempty"`
+	Fingerprints   []Fingerprint         `json:"fingerprints,omitempty"`
 }
 
 // Release is the cached release subset used for source matching.
@@ -56,9 +57,10 @@ type SourceStat struct {
 	MatchCount int    `json:"match_count,omitempty"`
 }
 
-// Fingerprint is a DAT-provided file fingerprint for one catalog release.
+// Fingerprint belongs to one explicit official release or derived variant.
 type Fingerprint struct {
 	PayloadKind string `json:"payload_kind,omitempty"`
+	Variant     string `json:"variant,omitempty"`
 	Release     string `json:"release,omitempty"`
 	Name        string `json:"name,omitempty"`
 	Size        int64  `json:"size,omitempty"`
@@ -218,6 +220,9 @@ func ReadGameDocument(dataRoot, platform, folder string) (Game, *catalogyaml.Doc
 	if err != nil {
 		return Game{}, nil, fmt.Errorf("parse %s: %w", gamePath, err)
 	}
+	if _, err := catalogyaml.Variants(document.Root()); err != nil {
+		return Game{}, nil, err
+	}
 	game := gameFromDocument(document)
 	game.Platform = platform
 	game.Folder = folder
@@ -301,8 +306,14 @@ CREATE TABLE IF NOT EXISTS catalog_cache_meta (
 		if err := c.migrateArcadeIdentity(); err != nil {
 			return err
 		}
+	case version == 3:
 	case version != schemaVersion:
 		return incompatibleCacheError(c.path, fmt.Sprintf("schema version %d, expected %d", version, schemaVersion))
+	}
+	if version > 0 && version < schemaVersion {
+		if err := c.migrateVariants(); err != nil {
+			return err
+		}
 	}
 	_, err = c.db.Exec(`
 CREATE TABLE IF NOT EXISTS catalog_games (
@@ -316,6 +327,7 @@ CREATE TABLE IF NOT EXISTS catalog_games (
 	title TEXT,
 	default_release TEXT,
 	arcade_platform TEXT NOT NULL DEFAULT '',
+	variants_json TEXT NOT NULL DEFAULT '[]',
 	releases_json TEXT NOT NULL,
 	aliases_json TEXT NOT NULL,
 	sources_json TEXT NOT NULL,
@@ -615,11 +627,11 @@ func (c *cache) readGame(path, platform, folder string, options ReadOptions) (Ga
 
 func (c *cache) cachedGame(key, path, platform, folder string, stamp bundleStamp) (Game, bool, error) {
 	row := c.tx.QueryRow(`
-SELECT title, default_release, arcade_platform, releases_json, aliases_json, sources_json, source_stats_json, media_urls_json, fingerprints_json
+SELECT title, default_release, arcade_platform, variants_json, releases_json, aliases_json, sources_json, source_stats_json, media_urls_json, fingerprints_json
 FROM catalog_games
 WHERE path = ? AND size = ? AND mtime_ns = ? AND fingerprint_size = ? AND fingerprint_mtime_ns = ?`, key, stamp.size, stamp.mtimeNS, stamp.fingerprintSize, stamp.fingerprintMTimeNS)
-	var title, defaultRelease, arcadePlatform, releasesJSON, aliasesJSON, sourcesJSON, sourceStatsJSON, mediaURLsJSON, fingerprintsJSON string
-	if err := row.Scan(&title, &defaultRelease, &arcadePlatform, &releasesJSON, &aliasesJSON, &sourcesJSON, &sourceStatsJSON, &mediaURLsJSON, &fingerprintsJSON); err != nil {
+	var title, defaultRelease, arcadePlatform, variantsJSON, releasesJSON, aliasesJSON, sourcesJSON, sourceStatsJSON, mediaURLsJSON, fingerprintsJSON string
+	if err := row.Scan(&title, &defaultRelease, &arcadePlatform, &variantsJSON, &releasesJSON, &aliasesJSON, &sourcesJSON, &sourceStatsJSON, &mediaURLsJSON, &fingerprintsJSON); err != nil {
 		if err == sql.ErrNoRows {
 			return Game{}, false, nil
 		}
@@ -632,6 +644,9 @@ WHERE path = ? AND size = ? AND mtime_ns = ? AND fingerprint_size = ? AND finger
 		Title:          title,
 		DefaultRelease: defaultRelease,
 		ArcadePlatform: arcadePlatform,
+	}
+	if err := decodeJSON(variantsJSON, &game.Variants); err != nil {
+		return Game{}, false, err
 	}
 	if err := decodeJSON(releasesJSON, &game.Releases); err != nil {
 		return Game{}, false, err
@@ -680,6 +695,10 @@ func (c *cache) cachedExistingSource(key, path, platform, folder string, stamp b
 }
 
 func (c *cache) storeGame(key string, stamp bundleStamp, game Game) error {
+	variantsJSON, err := encodeJSON(game.Variants)
+	if err != nil {
+		return err
+	}
 	releasesJSON, err := encodeJSON(game.Releases)
 	if err != nil {
 		return err
@@ -707,8 +726,8 @@ func (c *cache) storeGame(key string, stamp bundleStamp, game Game) error {
 	_, err = c.tx.Exec(`
 INSERT INTO catalog_games (
 	path, size, mtime_ns, fingerprint_size, fingerprint_mtime_ns, platform, folder, title, default_release, arcade_platform,
-	releases_json, aliases_json, sources_json, source_stats_json, media_urls_json, fingerprints_json
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	variants_json, releases_json, aliases_json, sources_json, source_stats_json, media_urls_json, fingerprints_json
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(path) DO UPDATE SET
 	size = excluded.size,
 	mtime_ns = excluded.mtime_ns,
@@ -719,6 +738,7 @@ ON CONFLICT(path) DO UPDATE SET
 	title = excluded.title,
 	default_release = excluded.default_release,
 	arcade_platform = excluded.arcade_platform,
+	variants_json = excluded.variants_json,
 	releases_json = excluded.releases_json,
 	aliases_json = excluded.aliases_json,
 	sources_json = excluded.sources_json,
@@ -726,7 +746,7 @@ ON CONFLICT(path) DO UPDATE SET
 	media_urls_json = excluded.media_urls_json,
 	fingerprints_json = excluded.fingerprints_json`,
 		key, stamp.size, stamp.mtimeNS, stamp.fingerprintSize, stamp.fingerprintMTimeNS, game.Platform, game.Folder, game.Title, game.DefaultRelease, game.ArcadePlatform,
-		releasesJSON, aliasesJSON, sourcesJSON, sourceStatsJSON, mediaURLsJSON, fingerprintsJSON)
+		variantsJSON, releasesJSON, aliasesJSON, sourcesJSON, sourceStatsJSON, mediaURLsJSON, fingerprintsJSON)
 	return err
 }
 
@@ -780,6 +800,7 @@ func parseFingerprintsYAML(contents []byte) ([]Fingerprint, error) {
 		dump := catalogyaml.Value(item, "dump")
 		fingerprint := Fingerprint{
 			PayloadKind: catalogyaml.Scalar(catalogyaml.Value(file, "kind")),
+			Variant:     catalogyaml.Scalar(catalogyaml.Value(item, "variant")),
 			Release:     catalogyaml.Scalar(catalogyaml.Value(item, "release")),
 			Name:        catalogyaml.Scalar(catalogyaml.Value(file, "name")),
 			Size:        catalogyaml.Int64(catalogyaml.Value(file, "size")),
@@ -789,7 +810,10 @@ func parseFingerprintsYAML(contents []byte) ([]Fingerprint, error) {
 			SHA256:      strings.ToLower(catalogyaml.Scalar(catalogyaml.Value(file, "sha256"))),
 			Format:      strings.ToLower(catalogyaml.Scalar(catalogyaml.Value(dump, "format"))),
 		}
-		if fingerprint.Release != "" || fingerprint.Name != "" || fingerprint.Size > 0 || fingerprint.CRC32 != "" || fingerprint.MD5 != "" || fingerprint.SHA1 != "" || fingerprint.SHA256 != "" {
+		if fingerprint.Release != "" && fingerprint.Variant != "" {
+			return fmt.Errorf("fingerprint must not contain both release and variant")
+		}
+		if fingerprint.Release != "" || fingerprint.Variant != "" || fingerprint.Name != "" || fingerprint.Size > 0 || fingerprint.CRC32 != "" || fingerprint.MD5 != "" || fingerprint.SHA1 != "" || fingerprint.SHA256 != "" {
 			fingerprints = append(fingerprints, fingerprint)
 		}
 		return nil

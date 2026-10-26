@@ -15,13 +15,14 @@ import (
 // ExportInput contains only observations of caller-owned files. No caller path
 // is opened by the catalog server. Parts are bounded playlist members.
 type ExportInput struct {
-	Representation string        `json:"representation,omitempty"`
-	ROM            string        `json:"rom"`
-	Kind           string        `json:"kind"`
-	Proof          PayloadProof  `json:"proof"`
-	Parts          []ExportInput `json:"parts,omitempty"`
-	Serial         string        `json:"serial,omitempty"`
-	Reason         string        `json:"reason,omitempty"`
+	Disc           *DiscObservation `json:"disc,omitempty"`
+	Representation string           `json:"representation,omitempty"`
+	ROM            string           `json:"rom"`
+	Kind           string           `json:"kind"`
+	Proof          PayloadProof     `json:"proof"`
+	Parts          []ExportInput    `json:"parts,omitempty"`
+	Serial         string           `json:"serial,omitempty"`
+	Reason         string           `json:"reason,omitempty"`
 }
 
 type ExportResolver struct {
@@ -67,6 +68,9 @@ func exportRecord(input ExportInput) Record {
 }
 
 func validExportInput(input ExportInput, system string, part bool) bool {
+	if input.Disc != nil && input.Kind != "payload" {
+		return false
+	}
 	if !ValidInputPath(input.ROM) || len(input.ROM) > 8192 || len(input.Reason) > 4096 || len(input.Parts) > 32 {
 		return false
 	}
@@ -77,6 +81,9 @@ func validExportInput(input ExportInput, system string, part bool) bool {
 		return !part && input.Reason != "" && len(input.Parts) == 0 && input.Serial == "" && input.Proof.Equal(PayloadProof{})
 	}
 	p := input.Proof
+	if input.Disc != nil && (input.Kind != "payload" || !DiscLookupSystem(system) || input.Disc.Directory || !ValidDiscObservation(input.ROM, p.Size, input.Disc)) {
+		return false
+	}
 	validHex := func(s string, n int) bool { return len(s) == n && observationHex.MatchString(s) }
 	if p.Size <= 0 || !validHex(p.SHA1, 40) || !validHex(p.SHA256, 64) || !validHex(p.MD5, 32) || !validHex(p.CRC32, 8) || len(p.Components) > 0 {
 		return false
@@ -163,6 +170,14 @@ func (r *ExportResolver) resolve(input ExportInput, profile Profile) (Record, er
 	record.Representation = "raw-file"
 	if p.Member != "" {
 		record.Representation = "zip-payload"
+	}
+	if ext == ".chd" && input.Disc != nil {
+		record.Representation = "chd-container"
+		record.Disc = input.Disc
+		matched, err := bindVariantCHD(r.Root, r.index, &record, profile, r.System)
+		if err != nil || matched {
+			return record, err
+		}
 	}
 	if ext == ".chd" {
 		record.Representation = "chd-container"
@@ -282,6 +297,12 @@ func ObserveExport(options Options) ([]ExportInput, error) {
 				input.Kind, input.Reason = "unsupported", e.Error()
 				input.Proof = PayloadProof{}
 				e = nil
+			}
+		}
+		if e == nil && input.Kind == "payload" && ext == ".chd" {
+			observed, observeErr := observeDisc(root, options.System, rel)
+			if observeErr == nil {
+				input.Disc = observed.Disc
 			}
 		}
 		if e != nil {

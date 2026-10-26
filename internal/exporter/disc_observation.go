@@ -176,6 +176,10 @@ func (resolver *LookupResolver) bindDisc(input ObservedInput, allowGame bool) (R
 		record.Reason = "CHD metadata requires explicit game_binding; no DAT verification is available"
 		return record, nil
 	}
+	matched, err := bindVariantCHD(resolver.Catalog.Root, resolver.index, &record, resolver.Catalog.Profile, resolver.Platform.System)
+	if err != nil || matched {
+		return record, err
+	}
 	for _, name := range strings.Split(strings.ToLower(input.ROM), "/") {
 		if name == "translations" || strings.Contains(name, "[t-") {
 			record.Reason = "translated CHD identity is deferred"

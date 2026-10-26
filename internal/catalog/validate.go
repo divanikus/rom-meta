@@ -169,8 +169,18 @@ func validateGame(root, gamePath string, policies sourcePolicies, issues *[]Issu
 		}
 	}
 
-	validateMedia(root, filepath.Join(gamePath, "media"), game.Releases, policies, issues)
-	validateFingerprints(root, filepath.Join(gamePath, "fingerprints.yaml"), game.Releases, issues)
+	mediaOwners := map[string]bool{}
+	for name := range game.Releases {
+		mediaOwners[name] = true
+	}
+	for name := range game.Variants {
+		mediaOwners[name] = true
+		if !isSafePathName(name) {
+			addIssue(root, issues, gameYAML, fmt.Sprintf("variant %q has characters unsafe for common filesystems", name))
+		}
+	}
+	validateMedia(root, filepath.Join(gamePath, "media"), mediaOwners, policies, issues)
+	validateFingerprints(root, filepath.Join(gamePath, "fingerprints.yaml"), game.Root, issues)
 }
 
 func validateMedia(root, mediaPath string, releases map[string]bool, policies sourcePolicies, issues *[]Issue) {
@@ -286,32 +296,13 @@ func validateMediaFiles(root, dir string, sourceNames map[string]bool, issues *[
 	}
 }
 
-func validateFingerprints(root, path string, releases map[string]bool, issues *[]Issue) {
-	if _, err := catalogfs.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			return
-		}
-		addIssue(root, issues, path, err.Error())
-		return
-	}
-
-	refs, err := parseFingerprintReleases(path)
-	if err != nil {
-		addIssue(root, issues, path, err.Error())
-		return
-	}
-	for _, release := range refs {
-		if !releases[release] {
-			addIssue(root, issues, path, fmt.Sprintf("fingerprint references unknown release %q", release))
-		}
-	}
-}
-
 type gameYAML struct {
 	Title             string
 	DefaultRelease    string
 	Releases          map[string]bool
 	SourceReleaseRefs []sourceReleaseRef
+	Root              *yaml.Node
+	Variants          map[string]bool
 }
 
 type sourceReleaseRef struct {
@@ -329,10 +320,18 @@ func parseGame(path string) (gameYAML, error) {
 		return gameYAML{}, err
 	}
 	root := document.Root()
+	variants, err := catalogyaml.Variants(root)
+	if err != nil {
+		return gameYAML{}, err
+	}
 	game := gameYAML{
+		Root: root, Variants: map[string]bool{},
 		Title:          catalogyaml.Scalar(catalogyaml.Value(root, "title")),
 		DefaultRelease: catalogyaml.Scalar(catalogyaml.Value(root, "default_release")),
 		Releases:       map[string]bool{},
+	}
+	for _, variant := range variants {
+		game.Variants[variant.Name] = true
 	}
 	if err := catalogyaml.Mapping(catalogyaml.Value(root, "releases"), func(key string, _ *yaml.Node) error {
 		game.Releases[key] = true
@@ -365,31 +364,6 @@ func parseGame(path string) (gameYAML, error) {
 		return gameYAML{}, err
 	}
 	return game, nil
-}
-
-func parseFingerprintReleases(path string) ([]string, error) {
-	contents, err := catalogfs.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	document, err := catalogyaml.Parse(contents)
-	if err != nil {
-		return nil, err
-	}
-	var releases []string
-	items := catalogyaml.Value(document.Root(), "items")
-	if items == nil {
-		items = catalogyaml.Value(document.Root(), "roms")
-	}
-	if err := catalogyaml.Sequence(items, func(item *yaml.Node) error {
-		if release := catalogyaml.Scalar(catalogyaml.Value(item, "release")); release != "" {
-			releases = append(releases, release)
-		}
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-	return releases, nil
 }
 
 type sourcePolicies struct {

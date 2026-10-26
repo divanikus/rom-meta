@@ -8,6 +8,7 @@ Start with the [operator walkthrough](cli-workflow.md) and
 | Connect providers | [Source setup and credentials](source-setup.md) |
 | Import and enrich | [CLI workflow](cli-workflow.md), [fetch](fetch.md) |
 | Arcade or ScummVM input | [MAME import](arcade-import.md), [ScummVM](scummvm.md) |
+| Prepare translations/hacks | [Variants and inherited metadata](catalog-variants.md) |
 | Understand catalog files | [Metadata model](portable-metadata.md), [storage](catalog-storage.md) |
 | Review game boundaries | [Identity rules](regional-content-identity.md), [fold plans](reviewed-fold-plans.md), [splits](reviewed-content-splits.md) |
 | Export ES-DE files | [Local/network export](offline-export.md), [input formats](export-scenarios.md#es-de-input-coverage) |

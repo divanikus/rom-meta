@@ -55,7 +55,7 @@ revision or square-bracket label is discarded. It contains `kind: name-stat-v1`,
 `payload` hashes stay empty. Native consumers recheck these facts before writes.
 This supports metadata for RVZ/WUX/ISO, other cartridge archives and installed
 folders without inventing format or dump verification. Same-edition numbered
-disc folders can use explicit member names. Translations need their own binding.
+disc folders can use explicit member names. Translations need their own prepared variant binding.
 
 MAME names must also have current `mame` release authority and snapshot evidence.
 Set version, members, BIOS/parent/CHD completeness and gameplay remain unverified.
@@ -90,6 +90,21 @@ otherwise `export_unavailable`. `/v1/lookup` retains its stricter proof contract
 Selected deflated media uses seekable OS temporary files: up to 1 GiB/eight idle
 members plus active readers. Budget temporary disk space, especially with tmpfs.
 Stored video members seek in place. No frontend installation or catalog edit occurs.
+
+## Prepared variants
+
+The shared resolver supports explicit `variants`/`based_on` and exclusive variant
+fingerprints. Records use `variant` and `variant_info`; `release` stays empty for
+a derivative and `metadata_release` identifies its terminal official base.
+Inherited fields/media retain `from_release`; explicit derivative overrides use
+`from_variant`. `variant_binding` in platform capabilities advertises this path.
+Full named catalog association still requires `game_binding: true` and is weaker
+than payload proof. See [the preparation guide](catalog-variants.md).
+
+Export input observations may include `disc` alongside an actual CHD container
+payload proof. It carries the observed header; the response preserves both and
+labels any combined-hash variant association separately. Clients verify that the
+server did not alter either observation. No caller ROM path is opened by the API.
 
 ## Optional platform index
 
@@ -142,7 +157,9 @@ Supported inputs are self-contained CHD v5 files or folders of 2..32 CHDs number
 Disc 1..N. A folder needs one edition stem, no extra files, missing/duplicate
 numbers or additional catalog discs. Every title must resolve to one card;
 compacted folder labels supply no identity. Mixed, incomplete, ambiguous and
-unsupported inputs are skipped; renamed translations remain deferred. Bindings
+unsupported inputs are skipped. Prepared standalone translated CHDs can use an
+explicit variant combined-SHA1 fingerprint; these return `variant-chd-header`
+with inherited base metadata, separate from payload/Redump verification. Other bindings
 are always `game-name`, without a proven release/dump. Profile/provenance still
 controls metadata/media selection.
 

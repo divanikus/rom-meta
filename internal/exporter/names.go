@@ -14,6 +14,7 @@ import (
 
 type catalogIndex struct {
 	BySize      map[int64][]fingerprint
+	ByCHD       map[string][]fingerprint
 	ByName      map[string][]fingerprint
 	GamesByName map[string][]*game
 }
@@ -38,7 +39,16 @@ func addReleaseName(index *catalogIndex, name string, g *game, release string) {
 		index.ByName[key] = append(index.ByName[key], fingerprint{game: g, release: release})
 	}
 }
+func addVariantName(index *catalogIndex, name string, g *game, variant string) {
+	if key := nameKey(name); key != "" {
+		index.ByName[key] = append(index.ByName[key], fingerprint{game: g, variant: variant})
+	}
+}
 func indexNames(index *catalogIndex, g *game) {
+	_ = catalogyaml.Mapping(catalogyaml.Value(g.root, "variants"), func(name string, _ *yaml.Node) error {
+		addVariantName(index, name, g, name)
+		return nil
+	})
 	names := []string{g.name}
 	for _, key := range []string{"aliases", "alternate_titles"} {
 		names = append(names, catalogyaml.Strings(catalogyaml.Value(g.root, key))...)
@@ -75,18 +85,24 @@ func nameFallback(root string, index *catalogIndex, record *Record, profile Prof
 	seen := map[string]bool{}
 	for _, name := range names {
 		for _, candidate := range index.ByName[nameKey(name)] {
-			key := candidate.game.path + "\x00" + candidate.release
+			if candidate.variant != "" {
+				continue
+			}
+			key := candidate.targetKey()
 			if !seen[key] {
 				seen[key] = true
 				matches = append(matches, candidate)
 			}
 		}
 	}
+	if translationInput(record) {
+		matches, games = nil, nil
+	}
 	if len(matches) == 1 {
 		for _, g := range games {
 			if g.path != matches[0].game.path {
 				record.Status, record.Reason = "ambiguous", "release name conflicts with catalog game name"
-				record.Candidates = append(record.Candidates, matches[0].game.name+" / "+matches[0].release)
+				record.Candidates = append(record.Candidates, matches[0].game.name+" / "+matches[0].targetName())
 				for _, named := range games {
 					if named.path != matches[0].game.path {
 						record.Candidates = append(record.Candidates, named.name+" / release unknown")
@@ -98,12 +114,12 @@ func nameFallback(root string, index *catalogIndex, record *Record, profile Prof
 		}
 		record.Status, record.MatchedBy, record.Reason = "matched", "name", "unique normalized authority/file name; hash did not match"
 		record.Warnings = append(record.Warnings, "Name binding is not a verified dump identity")
-		return attachRecord(root, matches[0].game, matches[0].release, record, profile, system)
+		return attachFingerprintRecord(root, matches[0], record, profile, system)
 	}
 	if len(matches) > 1 {
 		record.Status, record.Reason = "ambiguous", "name identifies multiple releases or archive/member names conflict"
 		for _, candidate := range matches {
-			record.Candidates = append(record.Candidates, candidate.game.name+" / "+candidate.release)
+			record.Candidates = append(record.Candidates, candidate.game.name+" / "+candidate.targetName())
 		}
 		sort.Strings(record.Candidates)
 		return nil

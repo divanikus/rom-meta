@@ -323,6 +323,9 @@ func renderExportTitle(r Record, p TitlePolicy, mode string, qualifiers []string
 	if basis == "" {
 		basis = r.MetadataRelease
 	}
+	if r.Variant != "" {
+		return Value{Value: strings.TrimSpace(base), Source: "variant", FromVariant: r.Variant, Selection: mode}
+	}
 	return Value{Value: strings.TrimSpace(base), Source: source, FromRelease: basis, Selection: mode}
 }
 

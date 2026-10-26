@@ -246,12 +246,15 @@ func validateReviewedContent(path string, releases map[string]any) error {
 						return fmt.Errorf("%s must contain strings", key)
 					}
 				}
-			case "releases":
+			case "releases", "variants":
 				values, ok := value.(map[string]any)
 				if !ok {
 					return fmt.Errorf("releases must be a mapping")
 				}
 				for name, data := range values {
+					if key == "variants" {
+						name = "\x00variant:" + name
+					}
 					if previous, exists := releases[name]; exists && !reflect.DeepEqual(previous, data) {
 						return fmt.Errorf("conflicting release %q", name)
 					}
