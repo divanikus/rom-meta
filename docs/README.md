@@ -5,6 +5,7 @@ Start with the [operator walkthrough](cli-workflow.md) and
 
 | Task | Guide |
 | --- | --- |
+| Connect providers | [Source setup and credentials](source-setup.md) |
 | Import and enrich | [CLI workflow](cli-workflow.md), [fetch](fetch.md) |
 | Arcade or ScummVM input | [MAME import](arcade-import.md), [ScummVM](scummvm.md) |
 | Understand catalog files | [Metadata model](portable-metadata.md), [storage](catalog-storage.md) |

@@ -33,6 +33,7 @@
     "docs/romm-server-importer.md",
     "docs/romm.md",
     "docs/scummvm.md",
+    "docs/source-setup.md",
     "examples/export-es-de-library.yaml",
     "examples/export-n64-es-de.yaml",
     "examples/export-romm-api.yaml",

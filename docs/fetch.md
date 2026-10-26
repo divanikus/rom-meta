@@ -1,5 +1,7 @@
 # Automatic fetch source selection
 
+Set up accounts, keys and secret/env mappings with [source setup](source-setup.md).
+
 Omit `--source` to use `fetch.metadata`, `fetch.artwork` and `fetch.video` from
 `config/sources.yaml`, in that order. `--type` selects lists. Unlisted sources are
 not added; legacy `enabled` does not control selection.

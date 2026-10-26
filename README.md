@@ -33,8 +33,8 @@ These providers enrich catalog cards through `fetch`:
 | Hasheous | `metadata`, using ROM identity |
 | EmuMovies | `artwork`, `video` |
 
-Coverage depends on the platform and provider access. See the
-[fetch guide](docs/fetch.md) for configuration and matching rules.
+See [source setup](docs/source-setup.md) for accounts/credentials and
+[fetch selection](docs/fetch.md) for platform applicability and matching.
 
 ## Export targets
 
@@ -76,8 +76,8 @@ rom-meta dat import "/path/to/platform.dat-or-zip" --data-root "/path/to/catalog
 rom-meta sources list --data-root "/path/to/catalog"
 ```
 
-Select providers in `config/sources.yaml`; put required credentials in the
-catalog's `config/secrets.yaml`. Then preview enrichment, apply and review folds:
+Follow [source setup](docs/source-setup.md) for accounts/credentials and
+`config/sources.yaml`. Then preview enrichment, apply and review folds:
 
 ```shell
 rom-meta fetch --data-root "/path/to/catalog" --platform gamegear --source launchbox --type metadata --limit 10

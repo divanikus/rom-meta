@@ -22,11 +22,7 @@ $DataRoot = "D:\RomMetaData"
 
 Initialization preserves config unless `--force-config` is explicit.
 
-| Source | Requirements |
-| --- | --- |
-| LaunchBox | No account; first fetch may download Metadata.zip |
-| ScreenScraper | username, password, dev_id, dev_password |
-| EmuMovies | FTP account/service access; quality/coverage depends on access |
+Configure LaunchBox, ScreenScraper and EmuMovies using [source setup](source-setup.md).
 
 The registry selects dedicated ScummVM sections, including ScreenScraper 123.
 It does not substitute PC/DOS/Amiga records. IGDB/OpenVGDB are not automatic fallbacks.
