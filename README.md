@@ -6,6 +6,8 @@ bundles, then generate frontend metadata from the prepared catalog locally or ov
 your network.
 Catalog data stays in readable YAML with source evidence and explicit overrides.
 
+![RomMeta web browser showing a game card with cover artwork, metadata and alternate titles](docs/images/catalog-game-card.png)
+
 **0.1.0 is pre-stable.** Command names and catalog formats may change before 1.0.
 RomMeta includes no ROMs, BIOS, provider database or downloaded artwork.
 
