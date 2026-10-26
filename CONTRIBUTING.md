@@ -1,5 +1,8 @@
 # Contributing
 
+AI coding agents should start with [AGENTS.md](AGENTS.md) for repository rules,
+verification and data boundaries.
+
 Use the Go toolchain specified in `go.mod`. Keep implementation in `cmd/` and
 `internal/`; frontend adapters read the shared catalog model. Add focused behavior
 tests and update the relevant user guide. Format Go with `gofmt`.

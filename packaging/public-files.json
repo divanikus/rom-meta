@@ -8,6 +8,7 @@
   "files": [
     ".dockerignore",
     ".gitignore",
+    "AGENTS.md",
     "CONTRIBUTING.md",
     "LICENSE",
     "README.md",

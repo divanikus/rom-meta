@@ -13,21 +13,23 @@ class PublicPreparationTest(unittest.TestCase):
         (root / "cmd").mkdir()
         (root / "cmd/main.go").write_text("package main\n")
         (root / "README.md").write_text("Public introduction\n")
+        (root / "AGENTS.md").write_text("Portable agent instructions\n")
         (root / "notes.md").write_text("Private planning\n")
         (root / ".git").mkdir()
         (root / ".git/config").write_text("private history\n")
-        return dict(schema_version=1, source_roots=["cmd/"], files=["README.md"])
+        return dict(schema_version=1, source_roots=["cmd/"], files=["AGENTS.md", "README.md"])
 
     def test_explicit_tracked_selection_excludes_history_and_notes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             config = self.fixture(root)
-            rows = m.selection(root, config, ["cmd/main.go", "README.md", "notes.md"])
-            self.assertEqual([v["path"] for v in rows], ["README.md", "cmd/main.go"])
+            rows = m.selection(root, config, ["AGENTS.md", "cmd/main.go", "README.md", "notes.md"])
+            self.assertEqual([v["path"] for v in rows], ["AGENTS.md", "README.md", "cmd/main.go"])
             out = root / "new-public"
             m.materialize(root, out, rows)
             self.assertFalse((out / ".git").exists())
             self.assertFalse((out / "notes.md").exists())
+            self.assertEqual((out / "AGENTS.md").read_bytes(), (root / "AGENTS.md").read_bytes())
             self.assertEqual((out / "cmd/main.go").read_bytes(), (root / "cmd/main.go").read_bytes())
             with self.assertRaises(FileExistsError):
                 m.materialize(root, out, rows)
@@ -48,13 +50,13 @@ class PublicPreparationTest(unittest.TestCase):
             config = self.fixture(root)
             (root / "cmd/secrets.yaml").write_text("not a public fixture")
             with self.assertRaisesRegex(ValueError, "Runtime/data"):
-                m.selection(root, config, ["cmd/main.go", "README.md", "cmd/secrets.yaml"])
+                m.selection(root, config, ["AGENTS.md", "cmd/main.go", "README.md", "cmd/secrets.yaml"])
 
     def test_drift_aborts_without_final_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             config = self.fixture(root)
-            rows = m.selection(root, config, ["cmd/main.go", "README.md"])
+            rows = m.selection(root, config, ["AGENTS.md", "cmd/main.go", "README.md"])
             (root / "cmd/main.go").write_text("changed after plan")
             out = root / "public"
             with self.assertRaisesRegex(ValueError, "Input changed"):
