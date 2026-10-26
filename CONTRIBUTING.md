@@ -29,7 +29,7 @@ To build release ZIPs from a clean committed tree in PowerShell:
 ./scripts/build-release.ps1 -Version 0.1.0
 ```
 
-The script writes Windows/Linux amd64 archives and SHA256SUMS under ignored
+The script writes Windows amd64 and Linux amd64/arm64 archives plus SHA256SUMS under ignored
 `bin/releases/`, including selected user docs/examples and dependency licenses.
 It does not create a Git tag, upload artifacts or deploy services. Test extracted
 archives and verify embedded version/checksums before publishing. Public file

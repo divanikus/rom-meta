@@ -45,7 +45,7 @@ Keep this file private and out of Git. Default `sources.yaml` already maps these
 fields with `credentials.type: secrets`; do not put their values in that file.
 
 3. Edit `fetch` lists in `config/sources.yaml`. This example enables every connector;
-   remove sources you have not configured:
+   remove sources you have not configured. Block and inline source lists are supported:
 
 ```yaml
 fetch:

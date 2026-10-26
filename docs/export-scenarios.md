@@ -55,12 +55,12 @@ whole-collection file ceiling; generated parts bound lookup/apply work. See the
 
 | Area | Coverage |
 | --- | --- |
-| ES-DE recognition and selection | [Exporter tests](../internal/exporter/): hash/name ambiguity, raw/ZIP, CHD/ISO, playlists, modern inputs, exact MAME snapshot, profiles, provenance, unchanged ROMs, unsafe paths, stale sources and output collisions |
-| Network ES-DE parity | [Client tests](../internal/exportclient/): every local reader, raw/ZIP, packed storage, profile bytes, playlists, serials, MAME, >1,000 inputs, asset deduplication, drift/cancellation/auth-origin rejection |
+| ES-DE recognition and selection | [Exporter tests](https://github.com/divanikus/rom-meta/tree/main/internal/exporter/): hash/name ambiguity, raw/ZIP, CHD/ISO, playlists, modern inputs, exact MAME snapshot, profiles, provenance, unchanged ROMs, unsafe paths, stale sources and output collisions |
+| Network ES-DE parity | [Client tests](https://github.com/divanikus/rom-meta/tree/main/internal/exportclient/): every local reader, raw/ZIP, packed storage, profile bytes, playlists, serials, MAME, >1,000 inputs, asset deduplication, drift/cancellation/auth-origin rejection |
 | Batch publication | `batch_test.go`: cartridge/disc/arcade mixture, skips and rejection without partial output |
 | Loose/packed catalog equivalence | `packed_test.go`: same export values and media for supported source packs |
-| Human CLI loop | [Operator workflow test](../cmd/rom-meta/operator_workflow_test.go): actual import/fetch-resume/interactive-fold/export with synthetic DAT/provider data |
-| RomM mapping and importer | [Shared projection tests](../internal/romm/) and [example tests](../examples/romm-importer/): fake-native preservation, batch >1000 inputs, proof/preflight, stale/partial/no-op, cover normalization/refresh, CHD observations and media receipts |
+| Human CLI loop | [Operator workflow test](https://github.com/divanikus/rom-meta/blob/main/cmd/rom-meta/operator_workflow_test.go): actual import/fetch-resume/interactive-fold/export with synthetic DAT/provider data |
+| RomM mapping and importer | [Shared projection tests](https://github.com/divanikus/rom-meta/tree/main/internal/romm/) and [example tests](https://github.com/divanikus/rom-meta/tree/main/examples/romm-importer/): fake-native preservation, batch >1000 inputs, proof/preflight, stale/partial/no-op, cover normalization/refresh, CHD observations and media receipts |
 
 The tests use synthetic fixtures to check recognition, projection, transport and
 preservation rules. They do not validate emulator compatibility or gameplay.

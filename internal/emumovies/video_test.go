@@ -292,3 +292,24 @@ func (fake *fakeFTP) Download(path, target string) error {
 	}
 	return os.WriteFile(target, []byte("video"), 0o644)
 }
+
+func TestCopyWithIdleDeadlineReadsEOFWhenPeerAlreadyClosed(t *testing.T) {
+	reader, writer := net.Pipe()
+	defer reader.Close()
+	writer.Close()
+	var out bytes.Buffer
+	n, err := copyWithIdleDeadline(&out, reader, time.Second, nil, "", 0, "", 0, 0)
+	if err != nil || n != 0 {
+		t.Fatalf("closed peer should yield EOF, got %d bytes / %v", n, err)
+	}
+}
+
+func TestCopyWithIdleDeadlinePreservesLocalCloseError(t *testing.T) {
+	reader, writer := net.Pipe()
+	defer writer.Close()
+	reader.Close()
+	var out bytes.Buffer
+	if _, err := copyWithIdleDeadline(&out, reader, time.Second, nil, "", 0, "", 0, 0); err == nil {
+		t.Fatal("local read failure became success")
+	}
+}

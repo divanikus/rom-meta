@@ -84,5 +84,5 @@ remain the CLI commands above. Run catalog preparation and consumer imports
 sequentially. See [catalog API](catalog-api.md) for optional access protection and
 consumer setup, and [offline export](offline-export.md) for consumers.
 
-The [operator regression](../cmd/rom-meta/operator_workflow_test.go) tests this
+The [operator regression](https://github.com/divanikus/rom-meta/blob/main/cmd/rom-meta/operator_workflow_test.go) tests this
 loop offline with synthetic DAT/provider data, including resume and preservation.

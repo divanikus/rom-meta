@@ -1586,9 +1586,11 @@ func copyWithIdleDeadline(dst io.Writer, src net.Conn, idleTimeout time.Duration
 	var written int64
 	for {
 		if idleTimeout > 0 {
-			if err := src.SetReadDeadline(time.Now().Add(idleTimeout)); err != nil {
+			if err := src.SetReadDeadline(time.Now().Add(idleTimeout)); err != nil && !errors.Is(err, io.ErrClosedPipe) && !errors.Is(err, net.ErrClosed) {
 				return written, err
 			}
+			// A peer may close between reads. Read once more to distinguish its EOF
+			// from a local close/error instead of failing on deadline renewal.
 		}
 		readCount, readErr := src.Read(buffer)
 		if readCount > 0 {

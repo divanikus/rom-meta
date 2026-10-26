@@ -321,3 +321,44 @@ func contains(values []string, expected string) bool {
 	}
 	return false
 }
+
+func TestLoadSourcesAcceptsInlineFetchLists(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "config"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	body := "sources:\n  launchbox:\n  igdb:\nfetch:\n  metadata: [launchbox, igdb]\n  artwork: []\n  video:\n    - emumovies\n"
+	if err := os.WriteFile(filepath.Join(root, "config", "sources.yaml"), []byte(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+	config, err := LoadSources(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(config.Fetch["metadata"], ","); got != "launchbox,igdb" {
+		t.Fatal("inline selection ignored", got)
+	}
+	if _, ok := config.Fetch["artwork"]; !ok || len(config.Fetch["artwork"]) != 0 {
+		t.Fatal("explicit empty list lost", config.Fetch)
+	}
+	if got := strings.Join(config.Fetch["video"], ","); got != "emumovies" {
+		t.Fatal("mixed block list lost", got)
+	}
+}
+
+func TestLoadSourcesRejectsMalformedInlineFetchLists(t *testing.T) {
+	for _, value := range []string{"launchbox", "{name: launchbox}", "[launchbox"} {
+		t.Run(value, func(t *testing.T) {
+			root := t.TempDir()
+			if err := os.MkdirAll(filepath.Join(root, "config"), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(root, "config", "sources.yaml"), []byte("fetch:\n  metadata: "+value+"\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := LoadSources(root); err == nil || !strings.Contains(err.Error(), "fetch.metadata") {
+				t.Fatalf("malformed list accepted or unhelpful error: %v", err)
+			}
+		})
+	}
+}

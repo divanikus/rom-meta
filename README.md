@@ -48,7 +48,7 @@ The [HTTP API](#http-api) also exposes catalog data and assets to other consumer
 
 ## Install
 
-Extract a Windows or Linux **amd64** archive from
+Extract a Windows **amd64** or Linux **amd64/arm64** archive from
 [Releases](https://github.com/divanikus/rom-meta/releases) and verify `SHA256SUMS`.
 On Linux, run `chmod +x ./rom-meta`. Add the executable's directory to `PATH`.
 Check installation with `rom-meta --version` and `rom-meta --help`.

@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"gopkg.in/yaml.v3"
+
 	"rommeta/internal/catalogfs"
 )
 
@@ -204,18 +206,24 @@ func LoadSources(root string) (SourcesConfig, error) {
 		if inFetch {
 			if indent == 2 {
 				key, raw, ok := splitSourceKV(value)
-				if ok && key == "concurrency" {
+				if !ok {
+					continue
+				}
+				if key == "concurrency" {
 					config.FetchConcurrency = parseInt(raw)
 					continue
 				}
-			}
-			if indent == 2 && strings.HasSuffix(value, ":") {
-				fetchType = strings.TrimSuffix(value, ":")
+				fetchType = key
 				if config.Fetch == nil {
 					config.Fetch = map[string][]string{}
 				}
-				if _, ok := config.Fetch[fetchType]; !ok {
-					config.Fetch[fetchType] = nil
+				config.Fetch[fetchType] = nil
+				if strings.TrimSpace(raw) != "" {
+					var sources []string
+					if err := yaml.Unmarshal([]byte(raw), &sources); err != nil {
+						return SourcesConfig{}, fmt.Errorf("fetch.%s must be a source list: %w", key, err)
+					}
+					config.Fetch[fetchType] = sources
 				}
 				continue
 			}
