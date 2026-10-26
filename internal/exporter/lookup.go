@@ -21,10 +21,11 @@ type FileDigest struct {
 	SHA256 string `json:"sha256"`
 }
 type ObservedInput struct {
-	ROM     string           `json:"rom"`
-	Outer   FileDigest       `json:"outer"`
-	Payload PayloadProof     `json:"payload"`
-	Disc    *DiscObservation `json:"disc,omitempty"`
+	ROM     string              `json:"rom"`
+	Outer   FileDigest          `json:"outer"`
+	Payload PayloadProof        `json:"payload"`
+	Disc    *DiscObservation    `json:"disc,omitempty"`
+	Catalog *CatalogObservation `json:"catalog,omitempty"`
 }
 type LookupPlatform struct {
 	ExportSystems []string `json:"export_systems,omitempty"`
@@ -33,6 +34,8 @@ type LookupPlatform struct {
 	Supported     bool     `json:"supported"`
 	Reason        string   `json:"reason,omitempty"`
 	GameBinding   bool     `json:"game_binding,omitempty"`
+	NameBinding   bool     `json:"name_binding,omitempty"`
+	Aliases       []string `json:"aliases,omitempty"`
 }
 type LookupCatalog struct {
 	Root      string
@@ -69,6 +72,9 @@ func ValidInputPath(name string) bool {
 var observationHex = regexp.MustCompile(`^[a-f0-9]+$`)
 
 func ValidObservation(input ObservedInput) bool {
+	if input.Catalog != nil {
+		return input.Disc == nil && input.Outer.SHA256 == "" && input.Payload.Equal(PayloadProof{}) && ValidCatalogObservation(input.ROM, input.Outer.Size, input.Catalog)
+	}
 	if input.Disc != nil {
 		return input.Outer.SHA256 == "" && input.Payload.Equal(PayloadProof{}) && ValidDiscObservation(input.ROM, input.Outer.Size, input.Disc)
 	}
@@ -149,6 +155,22 @@ func NewLookupCatalog(dataRoot, profilePath string) (*LookupCatalog, error) {
 				platform.GameBinding = DiscLookupSystem(platform.System)
 			}
 		}
+		if doc != nil && field(doc, "name") != "" {
+			platform.NameBinding = true
+			platform.Aliases = []string{field(doc, "name"), field(doc, "display_name")}
+			for alias, target := range map[string]string{
+				"Atari - Atari 7800": "Atari - Atari 7800 (BIN)", "Atari - Atari Jaguar": "Atari - Atari Jaguar (J64)", "Atari - Atari Lynx": "Atari - Atari Lynx (LYX)",
+				"Nintendo - Family Computer Disk System": "Nintendo - Family Computer Disk System (FDS)", "Fujitsu - FM-Towns": "Fujitsu - FM Towns series", "MAME": "Arcade", "Panasonic - 3DO Interactive Multiplayer": "3DO Interactive Multiplayer",
+			} {
+				if platform.Platform == target {
+					platform.Aliases = append(platform.Aliases, alias)
+				}
+			}
+			sort.Strings(platform.Aliases)
+			if !platform.Supported {
+				platform.System, platform.Supported, platform.GameBinding, platform.Reason = "catalog", true, true, ""
+			}
+		}
 		catalog.Platforms = append(catalog.Platforms, platform)
 	}
 	return catalog, nil
@@ -184,6 +206,14 @@ func (resolver *LookupResolver) ResolveBindings(inputs []ObservedInput, allowGam
 			return nil, fmt.Errorf("invalid or duplicate input observation")
 		}
 		seen[input.ROM] = true
+		if input.Catalog != nil {
+			record, err := resolver.bindCatalog(input, allowGame)
+			if err != nil {
+				return nil, err
+			}
+			plan.Records = append(plan.Records, record)
+			continue
+		}
 		if input.Disc != nil {
 			record, err := resolver.bindDisc(input, allowGame)
 			if err != nil {

@@ -50,7 +50,7 @@ class DiscImporterTest(unittest.TestCase):
         self.addCleanup(output.stop)
         class Catalog(fixtures.FakeAPI):
             def capabilities(self):
-                return {"schema_version": 1, "mode": "catalog", "platforms": [{"platform": "3DO Interactive Multiplayer", "system": "3do", "supported": True, "game_binding": True}]}
+                return {"schema_version": 1, "mode": "catalog", "platforms": [{"platform": "3DO Interactive Multiplayer", "system": "3do", "aliases": ["Panasonic - 3DO Interactive Multiplayer"], "supported": True, "game_binding": True}]}
             def lookup(self, query):
                 value = copy.deepcopy(self.value)
                 value.update(platform=query["platform"], system="3do", game_binding=query.get("game_binding", False), inputs=[])

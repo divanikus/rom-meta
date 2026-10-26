@@ -111,9 +111,11 @@ See [batch/refresh operations](../../docs/romm-import-guide.md),
 
 ## Mapping and limits
 
-- Exact cartridge proof covers nine API families. CHD v5 singles and ordinary
-  2..32-disc same-edition folders provide unverified game metadata; header/stat
-  checks are not Redump or whole-file integrity.
+- Exact cartridge proof covers nine API families. Other regular files/folders
+  use complete catalog release names and stat observations, including MAME,
+  RVZ/WUX and other cartridge archives. CHD headers and same-edition disc names
+  also provide unverified metadata. No dump/set-version proof is inferred.
+  `--all` reports missing source systems and unresolved inputs.
 - Imports fill blank supported fields/provider slots and Resources, preserving
   owner data, locks, existing media and library/user bindings. Unsupported roles
   and alternate descriptions remain provenance.

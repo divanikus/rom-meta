@@ -381,8 +381,9 @@ func ProjectSnapshot(record exporter.Record, gameYAML, fingerprintYAML []byte, p
 	if !knownRelease && !(record.MatchedBy == "game-name" && record.Release == "" && knownBasis) {
 		return nil, nil, fmt.Errorf("snapshot release missing")
 	}
-	optical := record.Disc != nil && record.MatchedBy == "game-name" && record.Release == "" && record.SHA1 == "" && exporter.ValidDiscObservation(record.ROM, record.Size, record.Disc) && proof.Size == 0 && proof.SHA1 == "" && proof.SHA256 == "" && proof.MD5 == "" && proof.CRC32 == ""
-	if record.Status != "matched" || record.Disc != nil && !optical || !optical && (record.MatchedBy != "hash" && record.MatchedBy != "game-name" || record.Size != proof.Size || record.SHA1 != proof.SHA1 || len(proof.SHA256) != 64 || len(proof.MD5) != 32 || len(proof.CRC32) != 8) {
+	optical := record.Catalog == nil && record.Disc != nil && record.MatchedBy == "game-name" && record.Release == "" && record.SHA1 == "" && exporter.ValidDiscObservation(record.ROM, record.Size, record.Disc) && proof.Size == 0 && proof.SHA1 == "" && proof.SHA256 == "" && proof.MD5 == "" && proof.CRC32 == ""
+	named := record.Disc == nil && record.Payload == nil && record.Catalog != nil && (record.MatchedBy == "catalog-name" || record.MatchedBy == "game-name") && record.SHA1 == "" && exporter.ValidCatalogObservation(record.ROM, record.Size, record.Catalog) && proof.Size == 0 && proof.SHA1 == "" && proof.SHA256 == "" && proof.MD5 == "" && proof.CRC32 == ""
+	if record.Status != "matched" || record.Disc != nil && !optical || record.Catalog != nil && !named || !optical && !named && (record.MatchedBy != "hash" && record.MatchedBy != "game-name" || record.Size != proof.Size || record.SHA1 != proof.SHA1 || len(proof.SHA256) != 64 || len(proof.MD5) != 32 || len(proof.CRC32) != 8) {
 		return nil, nil, fmt.Errorf("snapshot proof incomplete")
 	}
 	proof.Flags = map[string]bool{}

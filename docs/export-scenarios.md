@@ -41,7 +41,12 @@ Exact raw/single-payload-ZIP cartridge recognition covers the nine API reader
 families above. Catalog mode also permits typed CHD v5 single games and ordinary
 same-edition multidisc folders (2..32 numbered discs), with limited header/size/
 mtime observations. These provide **unverified game metadata**, not a DAT match.
-Other optical formats and ambiguous/mixed disc folders are reported unsupported.
+Other regular files/folders use complete unique catalog release names with stat
+observations, including RVZ/WUX, installed games, MAME sets and other cartridge
+archives. Regions/revisions/labels are retained; this is not payload verification.
+MAME additionally requires current source authority/snapshot evidence. Missing
+catalog systems and unknown/ambiguous names remain explicit skips. These metadata
+capabilities do not extend the ES-DE launch-reader table.
 
 The example fills supported blank metadata/provider slots, covers, shared artwork,
 screenshots, video and actual manuals where available. Native ownership, locks,

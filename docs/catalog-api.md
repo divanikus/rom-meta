@@ -19,8 +19,10 @@ The browser (`/`), API index (`/api`) and documentation (`/docs`, `/openapi.json
 share this process.
 
 `GET /v1/platforms` returns actual catalog folders, `schema_version: 1`,
-`mode: catalog`, `system`, `supported` and optional `reason`/`game_binding`.
-`game_binding: true` permits unverified CHD game metadata in `/v1/lookup`.
+`mode: catalog`, `system`, `supported`, `aliases` and optional `reason`/
+`game_binding`/`name_binding`. `name_binding` advertises metadata lookup by a
+complete release name for files/folders, independently of ES-DE launch readers.
+`game_binding: true` in a request explicitly permits unverified metadata.
 `export_schema_version: 1` and `export_systems` separately advertise ES-DE readers,
 including modern systems and MAME. `/v1/health` returns the last published view
 without waiting for active work; it does not establish freshness or completion.
@@ -43,6 +45,22 @@ hashes are cached in memory; source documents remain pinned. Selected artwork is
 hashed lazily, so lookups may take minutes; there is no five-minute response
 limit. Memory use follows selected data, not all catalog media. Source/API errors
 fail planning rather than becoming unsupported-platform skips.
+
+## Catalog names for other formats
+
+With `game_binding: true`, a `catalog` observation accepts any regular file or
+folder whose complete name uniquely identifies a catalog release. No region,
+revision or square-bracket label is discarded. It contains `kind: name-stat-v1`,
+`directory` and sorted `files` (`name`, `size`, `mtime_ns`); `outer.sha256` and
+`payload` hashes stay empty. Native consumers recheck these facts before writes.
+This supports metadata for RVZ/WUX/ISO, other cartridge archives and installed
+folders without inventing format or dump verification. Same-edition numbered
+disc folders can use explicit member names. Translations need their own binding.
+
+MAME names must also have current `mame` release authority and snapshot evidence.
+Set version, members, BIOS/parent/CHD completeness and gameplay remain unverified.
+Missing or ambiguous source names are reported, never guessed. This capability
+does not add ES-DE launch readers; `export_systems` is a separate contract.
 
 ## ES-DE projection from client observations
 

@@ -46,10 +46,11 @@ type Card struct {
 	Assets       []Asset  `json:"assets"`
 }
 type Input struct {
-	Disc    *exporter.DiscObservation `json:"disc,omitempty"`
-	Record  exporter.Record           `json:"record"`
-	Outer   Digest                    `json:"outer"`
-	Payload exporter.PayloadProof     `json:"payload"`
+	Disc    *exporter.DiscObservation    `json:"disc,omitempty"`
+	Catalog *exporter.CatalogObservation `json:"catalog,omitempty"`
+	Record  exporter.Record              `json:"record"`
+	Outer   Digest                       `json:"outer"`
+	Payload exporter.PayloadProof        `json:"payload"`
 }
 type SkippedInput struct {
 	ROM    string `json:"rom"`
@@ -255,7 +256,7 @@ func selectionFromPlan(options Options, source *exporter.Plan, observations map[
 	server.selection.MediaMode, server.selection.GameBinding = options.Media, options.AllowGameBinding
 	records := []exporter.Record{}
 	for _, record := range source.Records {
-		if record.Status != "matched" || record.MatchedBy != "hash" && !(options.AllowGameBinding && record.MatchedBy == "game-name") || record.Hidden || len(record.Playlist) > 0 {
+		if record.Status != "matched" || record.MatchedBy != "hash" && !(options.AllowGameBinding && (record.MatchedBy == "game-name" || record.MatchedBy == "catalog-name")) || record.Hidden || len(record.Playlist) > 0 {
 			reason := record.Reason
 			if reason == "" {
 				reason = "requires an exact single-file payload match"
@@ -267,7 +268,7 @@ func selectionFromPlan(options Options, source *exporter.Plan, observations map[
 			continue
 		}
 		proof := record.Payload
-		optical := record.Disc != nil
+		optical := record.Disc != nil || record.Catalog != nil
 		if optical {
 			proof = &exporter.PayloadProof{}
 		}
@@ -277,7 +278,7 @@ func selectionFromPlan(options Options, source *exporter.Plan, observations map[
 		var outer Digest
 		if observations != nil {
 			observed, ok := observations[record.ROM]
-			if !ok || !exporter.ValidObservation(observed) || !observed.Payload.Equal(*proof) || optical && !reflect.DeepEqual(observed.Disc, record.Disc) {
+			if !ok || !exporter.ValidObservation(observed) || !observed.Payload.Equal(*proof) || optical && (!reflect.DeepEqual(observed.Disc, record.Disc) || !reflect.DeepEqual(observed.Catalog, record.Catalog)) {
 				return nil, fmt.Errorf("input observation differs")
 			}
 			outer = observed.Outer
@@ -306,7 +307,7 @@ func selectionFromPlan(options Options, source *exporter.Plan, observations map[
 			media.OutputPath = ""
 			record.Media[role] = media
 		}
-		server.selection.Inputs = append(server.selection.Inputs, Input{Record: record, Outer: outer, Payload: *proof, Disc: record.Disc})
+		server.selection.Inputs = append(server.selection.Inputs, Input{Record: record, Outer: outer, Payload: *proof, Disc: record.Disc, Catalog: record.Catalog})
 		records = append(records, record)
 		if _, ok := server.selection.Cards[record.Game]; ok {
 			continue

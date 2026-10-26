@@ -54,10 +54,13 @@ Provider IDs respect release scope. Ambiguous providers are omitted while other
 metadata remains. Transport/document/proof errors stop planning. Renamed
 translations never inherit retail identity by title similarity.
 
-Exact cartridge readers cover nine API families. Typed CHD v5 singles and ordinary
-same-edition multidisc folders provide **unverified game metadata** while preserving
-native folder/disc files. Header/size/mtime observations do not prove Redump/CHD
-integrity. Mixed, missing, ambiguous and unsupported formats are reported.
+Exact cartridge readers cover nine API families. CHD headers and complete catalog
+release names extend metadata lookup to other files and installed folders,
+including MAME sets, RVZ, WUX and other cartridge archives. These matches remain
+**unverified**; no payload, set-version or emulator compatibility is inferred.
+All available catalog systems participate in `--all`; absent source systems and
+ambiguous/unknown names are reported. Native files and manual state are preserved.
+See [catalog name observations](catalog-api.md#catalog-names-for-other-formats).
 
 To narrow an optical selection:
 

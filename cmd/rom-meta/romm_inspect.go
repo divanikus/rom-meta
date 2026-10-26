@@ -13,9 +13,10 @@ func runRomMInspect(args []string) error {
 		return fmt.Errorf("inspect-inputs reads one JSON document from stdin")
 	}
 	var input struct {
-		Root   string   `json:"root"`
-		System string   `json:"system"`
-		ROMs   []string `json:"roms"`
+		Root        string   `json:"root"`
+		System      string   `json:"system"`
+		ROMs        []string `json:"roms"`
+		NameBinding bool     `json:"name_binding,omitempty"`
 	}
 	decoder := json.NewDecoder(os.Stdin)
 	decoder.DisallowUnknownFields()
@@ -23,7 +24,7 @@ func runRomMInspect(args []string) error {
 		return err
 	}
 	var trailing any
-	if decoder.Decode(&trailing) != io.EOF || input.Root == "" || !exporter.LookupSystem(input.System) {
+	if decoder.Decode(&trailing) != io.EOF || input.Root == "" || !exporter.LookupSystem(input.System) && !(input.NameBinding && input.System == "catalog") {
 		return fmt.Errorf("invalid native observation request")
 	}
 	output := struct {
@@ -38,6 +39,9 @@ func runRomMInspect(args []string) error {
 		seen[rom] = true
 		fmt.Fprintf(os.Stderr, "Inspect native ROM %d/%d | %s\n", i+1, len(input.ROMs), rom)
 		observed, err := exporter.ObserveInput(input.Root, input.System, rom)
+		if err != nil && input.NameBinding {
+			observed, err = exporter.ObserveCatalogInput(input.Root, rom)
+		}
 		if err != nil {
 			output.Skipped = append(output.Skipped, map[string]string{"rom": rom, "status": "unsupported", "reason": err.Error()})
 			continue

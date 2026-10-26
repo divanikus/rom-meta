@@ -246,12 +246,12 @@ def validate_lookup(query, selection):
         raise ValueError("lookup changed submitted input membership")
     for item in included:
         observed = submitted[item["record"]["rom"]]
-        if item["outer"] != observed["outer"] or item["payload"] != observed["payload"] or item.get("disc") != observed.get("disc"):
+        if item["outer"] != observed["outer"] or item["payload"] != observed["payload"] or item.get("disc") != observed.get("disc") or item.get("catalog") != observed.get("catalog"):
             raise ValueError("lookup changed submitted payload/outer proof")
 
 
 def inspect_inputs(runtime, system, names):
-    request = {"root": str(runtime.library), "system": system, "roms": names}
+    request = {"root": str(runtime.library), "system": system, "roms": names, "name_binding": True}
     result = subprocess.run([os.environ.get("ROMMETA_BIN", "/usr/local/bin/rom-meta"), "romm", "inspect-inputs"], input=canonical(request), stdout=subprocess.PIPE, check=False)
     if result.returncode:
         raise ValueError("native payload inspection failed")
@@ -263,6 +263,8 @@ def inspect_inputs(runtime, system, names):
 
 
 def input_identity(item, system):
+    if item.get("catalog"):
+        return {"size": item["outer"]["size"], "catalog": copy.deepcopy(item["catalog"]), "system": system}
     if item.get("disc"):
         if not system:
             raise ValueError("CHD observation lacks its reader system")
@@ -721,7 +723,7 @@ def reconcile_identities(entries):
     return {"identity_conflicts": conflicts, "reference_only": quarantined,
             "held_ids": [e["id"] for e in entries if e.get("quality_hold")],
             "identity_fills": sum(len(e.get("identity_fills", [])) for e in entries),
-            "unverified_game_bindings": [e["id"] for e in entries if e["record"].get("matched_by") == "game-name"]}
+            "unverified_game_bindings": [e["id"] for e in entries if e["record"].get("matched_by") in ("game-name", "catalog-name")]}
 
 
 def update_reviews(runtime, selection, rows, baseline):
@@ -1073,9 +1075,12 @@ def cached_observations(paths):
 def lookup_capability(native, capabilities):
     def key(value):
         return " ".join(str(value or "").split()).casefold()
-    exact = [p for p in capabilities if key(p["platform"]) == key(native["fs_slug"])]
-    aliases = {key(native.get(field)) for field in ("fs_slug", "slug", "name", "custom_name")} - {""}
-    matches = exact or [p for p in capabilities if key(p["platform"]) in aliases or key(p.get("system")) in aliases]
+    folder = key(native.get("fs_slug"))
+    exact = [p for p in capabilities if key(p["platform"]) == folder]
+    # Native provider slugs may be shared (for example NES and Family BASIC).
+    # A distinct physical platform needs its own explicit catalog alias.
+    aliases = {folder} if folder else {key(native.get(field)) for field in ("slug", "name", "custom_name")} - {""}
+    matches = exact or [p for p in capabilities if key(p["platform"]) in aliases or any(key(a) in aliases for a in p.get("aliases", []))]
     if len(matches) > 1:
         raise ValueError("multiple catalog platforms match native system aliases")
     return matches[0] if matches else None
@@ -1160,7 +1165,7 @@ def build_batch(runtime, api, path, platform=None, limit=0, batch_size=100, *, c
                     query = {"platform": cap["platform"], "inputs": observations["inputs"]}
                     if update_mode or baseline_only:
                         query["media"] = "covers"
-                    if update_mode or cap.get("game_binding"):
+                    if update_mode or cap.get("game_binding") or cap.get("name_binding"):
                         query["game_binding"] = True
                     progress(f'Lookup metadata | {cap["system"]} | native games {start + 1}-{start + len(batch)}/{len(chosen)} | {len(query["inputs"])} observed inputs')
                     selection = api.lookup(query)
@@ -1207,7 +1212,7 @@ def build_batch(runtime, api, path, platform=None, limit=0, batch_size=100, *, c
                     result["parts"].append({"path": child_path.relative_to(path.parent).as_posix(), "sha256": hash_file(child_path)["sha256"], "platform_id": native["id"], "ids": [e["id"] for e in child["entries"]]})
                     report["included"] += len(child["entries"])
                     report["exact"] += sum(e["record"].get("matched_by", "hash") == "hash" for e in child["entries"])
-                    report["game_only"] += sum(e["record"].get("matched_by") == "game-name" for e in child["entries"])
+                    report["game_only"] += sum(e["record"].get("matched_by") in ("game-name", "catalog-name") for e in child["entries"])
                     result["entries"] += len(child["entries"])
                     result["changed"] += sum(bool(e["patch"]) for e in child["entries"])
                     for key in ("resource_bytes", "unique_download_bytes"):
@@ -1415,7 +1420,15 @@ class NativeRuntime:
         target = (self.library / relative(columns["fs_path"]) / relative(columns["fs_name"])).resolve()
         if not target.is_relative_to(self.library):
             raise ValueError("native ROM escaped library")
-        if expected.get("disc"):
+        if expected.get("catalog"):
+            name = str(PurePosixPath(relative(columns["fs_path"])) / relative(columns["fs_name"]))
+            observed = inspect_inputs(self, "catalog", [name])
+            if observed["skipped"] or len(observed["inputs"]) != 1:
+                raise ValueError("native catalog observation is no longer available")
+            item = observed["inputs"][0]
+            if item.get("catalog") != expected["catalog"] or item["outer"]["size"] != expected["size"]:
+                raise ValueError("native file stats or folder membership changed")
+        elif expected.get("disc"):
             name = str(PurePosixPath(relative(columns["fs_path"])) / relative(columns["fs_name"]))
             observed = inspect_inputs(self, expected["system"], [name])
             if observed["skipped"] or len(observed["inputs"]) != 1:

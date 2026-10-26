@@ -83,28 +83,29 @@ type PlaylistInput struct {
 	MatchedBy string `json:"matched_by"`
 }
 type Record struct {
-	TitleContext    *TitleContext    `json:"title_context,omitempty"`
-	Disc            *DiscObservation `json:"disc,omitempty"`
-	Payload         *PayloadProof    `json:"payload,omitempty"`
-	LaunchFile      string           `json:"launch_file,omitempty"`
-	Playlist        []PlaylistInput  `json:"playlist,omitempty"`
-	Hidden          bool             `json:"hidden,omitempty"`
-	Representation  string           `json:"representation,omitempty"`
-	ArcadeSnapshot  string           `json:"catalog_snapshot,omitempty"`
-	MatchedBy       string           `json:"matched_by,omitempty"`
-	MetadataRelease string           `json:"metadata_release,omitempty"`
-	ROM             string           `json:"rom"`
-	Member          string           `json:"member,omitempty"`
-	Size            int64            `json:"size,omitempty"`
-	SHA1            string           `json:"sha1,omitempty"`
-	Status          string           `json:"status"`
-	Reason          string           `json:"reason,omitempty"`
-	Game            string           `json:"game,omitempty"`
-	Release         string           `json:"release,omitempty"`
-	Fields          map[string]Value `json:"fields,omitempty"`
-	Media           map[string]Media `json:"media,omitempty"`
-	Warnings        []string         `json:"warnings,omitempty"`
-	Candidates      []string         `json:"candidates,omitempty"`
+	TitleContext    *TitleContext       `json:"title_context,omitempty"`
+	Disc            *DiscObservation    `json:"disc,omitempty"`
+	Catalog         *CatalogObservation `json:"catalog,omitempty"`
+	Payload         *PayloadProof       `json:"payload,omitempty"`
+	LaunchFile      string              `json:"launch_file,omitempty"`
+	Playlist        []PlaylistInput     `json:"playlist,omitempty"`
+	Hidden          bool                `json:"hidden,omitempty"`
+	Representation  string              `json:"representation,omitempty"`
+	ArcadeSnapshot  string              `json:"catalog_snapshot,omitempty"`
+	MatchedBy       string              `json:"matched_by,omitempty"`
+	MetadataRelease string              `json:"metadata_release,omitempty"`
+	ROM             string              `json:"rom"`
+	Member          string              `json:"member,omitempty"`
+	Size            int64               `json:"size,omitempty"`
+	SHA1            string              `json:"sha1,omitempty"`
+	Status          string              `json:"status"`
+	Reason          string              `json:"reason,omitempty"`
+	Game            string              `json:"game,omitempty"`
+	Release         string              `json:"release,omitempty"`
+	Fields          map[string]Value    `json:"fields,omitempty"`
+	Media           map[string]Media    `json:"media,omitempty"`
+	Warnings        []string            `json:"warnings,omitempty"`
+	Candidates      []string            `json:"candidates,omitempty"`
 }
 
 type Plan struct {
