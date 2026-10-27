@@ -71,3 +71,49 @@ func TestCatalogNamesAcrossRepresentationsRemainUnverified(t *testing.T) {
 		}
 	}
 }
+
+func TestMAMEQuotedFingerprintSizesSurviveAPIProjection(t *testing.T) {
+	root := t.TempDir()
+	data, roms := filepath.Join(root, "catalog"), filepath.Join(root, "roms")
+	game := filepath.Join(data, "platforms", "Arcade", "Example")
+	put := func(path, value string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(value), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put(filepath.Join(filepath.Dir(game), "_platform.yaml"), "name: Arcade\nkind: arcade\nauthority: {source: mame}\n")
+	put(filepath.Join(game, "game.yaml"), "title: Example\nreleases:\n  testset:\n    authority: {source: mame, entry_name: testset}\n    mame: {snapshot: synthetic}\nsources:\n  igdb:\n    matches:\n      - {release: testset, igdb_id: 123}\n")
+	fingerprints := "items:\n  - id: mame.synthetic.testset.rom-component.1\n    release: testset\n    source: {kind: dat, name: MAME, entry_name: testset}\n    file: {name: component.bin, kind: rom-component, size: '2048', crc32: '01234567'}\n"
+	put(filepath.Join(game, "fingerprints.yaml"), fingerprints)
+	put(filepath.Join(roms, "testset.zip"), "synthetic unverified archive")
+	token := strings.Repeat("s", 32)
+	s, err := NewLookup(Options{Token: token, Export: exporter.Options{DataRoot: data}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	observation, err := exporter.ObserveCatalogInput(roms, "testset.zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := lookupRequest(s, "POST", "/v1/lookup", token, LookupRequest{Platform: "Arcade", Inputs: []exporter.ObservedInput{observation}, GameBinding: true, Media: "none"})
+	var selection Selection
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &selection) != nil || selection.Coverage.Included != 1 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	input := selection.Inputs[0]
+	card := selection.Cards[input.Record.Game]
+	if card.Fingerprints.YAML != fingerprints || input.Record.ArcadeSnapshot != "synthetic" {
+		t.Fatal("source YAML or MAME binding changed", input.Record, card.Fingerprints)
+	}
+	evidence, form, err := romm.ProjectSnapshot(input.Record, []byte(card.Game.YAML), []byte(card.Fingerprints.YAML), romm.VerificationProof{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if form["igdb_id"] != "123" || len(evidence.Verification.Flags) != 0 || evidence.Verification.Authority != "" || evidence.Verification.SHA1 != "" {
+		t.Fatal("set-name metadata gained payload verification", form, evidence.Verification)
+	}
+}

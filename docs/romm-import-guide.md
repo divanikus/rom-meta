@@ -51,7 +51,8 @@ keep parent, parts and receipts together. There is no collection ceiling;
 gaps/ambiguities and media space; hashing/selected media can take time.
 
 Provider IDs respect release scope. Ambiguous providers are omitted while other
-metadata remains. Transport/document/proof errors stop planning. Renamed
+metadata remains. Fingerprint sizes accept YAML integers or decimal strings;
+invalid byte counts and transport/document/proof errors stop planning. Renamed
 translations never inherit retail identity by title similarity.
 
 Exact cartridge readers cover nine API families. CHD headers and complete catalog

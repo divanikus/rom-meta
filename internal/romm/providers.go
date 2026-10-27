@@ -91,13 +91,36 @@ type providerDocument struct {
 		Matches []map[string]any `yaml:"matches"`
 	} `yaml:"sources"`
 }
+
+// fingerprintSize accepts both byte-count formats emitted by DAT importers.
+// Decimal strings are exact integers, never rounded or silently defaulted.
+type fingerprintSize int64
+
+func (size *fingerprintSize) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind != yaml.ScalarNode || node.Tag != "!!int" && node.Tag != "!!str" {
+		return fmt.Errorf("fingerprint file.size must be a non-negative integer")
+	}
+	var value uint64
+	var err error
+	if node.Tag == "!!str" {
+		value, err = strconv.ParseUint(node.Value, 10, 63)
+	} else {
+		err = node.Decode(&value)
+	}
+	if err != nil || value > 1<<63-1 {
+		return fmt.Errorf("invalid fingerprint file.size %q: expected a non-negative int64", node.Value)
+	}
+	*size = fingerprintSize(value)
+	return nil
+}
+
 type fingerprintDocument struct {
 	Items []struct {
 		ID      string                                                           `yaml:"id"`
 		Release string                                                           `yaml:"release"`
 		Source  struct{ Kind, Name, System, DatFile, EntryName, EntryID string } `yaml:"source"`
 		File    struct {
-			Size                     int64 `yaml:"size"`
+			Size                     fingerprintSize `yaml:"size"`
 			SHA1, MD5, SHA256, CRC32 string
 		} `yaml:"file"`
 	} `yaml:"items"`
@@ -413,7 +436,7 @@ func assembleProviderEvidence(entry Entry, doc providerDocument, fps fingerprint
 		var expected []exporter.PayloadProof
 		for _, fp := range fps.Items {
 			if fp.Release == entry.Source.Release && fp.Source.Kind == "dat" && strings.EqualFold(fp.Source.Name, "No-Intro") {
-				expected = append(expected, exporter.PayloadProof{Size: fp.File.Size, SHA1: strings.ToLower(fp.File.SHA1), SHA256: strings.ToLower(fp.File.SHA256), MD5: strings.ToLower(fp.File.MD5), CRC32: strings.ToLower(fp.File.CRC32)})
+				expected = append(expected, exporter.PayloadProof{Size: int64(fp.File.Size), SHA1: strings.ToLower(fp.File.SHA1), SHA256: strings.ToLower(fp.File.SHA256), MD5: strings.ToLower(fp.File.MD5), CRC32: strings.ToLower(fp.File.CRC32)})
 			}
 		}
 		if entry.Source.MatchedBy != "hash" || !exporter.ExactPayloadSet(*entry.Source.Payload, expected) {
@@ -447,7 +470,7 @@ func assembleProviderEvidence(entry Entry, doc providerDocument, fps fingerprint
 		if entry.Source.MatchedBy != "hash" {
 			break
 		}
-		if fp.Release != entry.Source.Release || fp.File.Size != proof.Size || !strings.EqualFold(fp.File.SHA1, proof.SHA1) {
+		if fp.Release != entry.Source.Release || int64(fp.File.Size) != proof.Size || !strings.EqualFold(fp.File.SHA1, proof.SHA1) {
 			continue
 		}
 		if fp.File.MD5 != "" && !strings.EqualFold(fp.File.MD5, proof.MD5) || fp.File.SHA256 != "" && !strings.EqualFold(fp.File.SHA256, proof.SHA256) || fp.File.CRC32 != "" && !strings.EqualFold(fp.File.CRC32, proof.CRC32) {

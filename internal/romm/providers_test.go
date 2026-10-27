@@ -470,3 +470,41 @@ func TestReviewedIGDBReferenceDecisionsPreservePayloadProof(t *testing.T) {
 		})
 	}
 }
+
+func TestFingerprintSizesAcceptIntegersAndDecimalStrings(t *testing.T) {
+	for _, size := range []string{"2048", `"2048"`, `"002048"`, "0x800"} {
+		t.Run(size, func(t *testing.T) {
+			var doc fingerprintDocument
+			if err := yaml.Unmarshal([]byte("items:\n  - file: {size: "+size+"}\n"), &doc); err != nil {
+				t.Fatal(err)
+			}
+			if len(doc.Items) != 1 || doc.Items[0].File.Size != 2048 {
+				t.Fatal(doc)
+			}
+		})
+	}
+	for _, size := range []string{"-1", `"-1"`, "1.5", `"1.5"`, "true", `"bad"`, `" 2048 "`, "9223372036854775808", `"9223372036854775808"`, "[]", "{}"} {
+		t.Run("invalid/"+size, func(t *testing.T) {
+			var doc fingerprintDocument
+			if err := yaml.Unmarshal([]byte("items:\n  - file: {size: "+size+"}\n"), &doc); err == nil {
+				t.Fatalf("accepted invalid fingerprint size %s", size)
+			}
+		})
+	}
+}
+
+func TestQuotedFingerprintSizeKeepsExactVerification(t *testing.T) {
+	record := exporter.Record{Status: "matched", MatchedBy: "hash", Size: 2048, SHA1: strings.Repeat("a", 40), Release: "Game (USA)"}
+	proof := VerificationProof{Size: record.Size, SHA1: record.SHA1, SHA256: strings.Repeat("b", 64), MD5: strings.Repeat("c", 32), CRC32: "01234567"}
+	game := []byte("releases: {Game (USA): {}}\n")
+	for _, size := range []int{2048, 2049} {
+		fps := []byte(fmt.Sprintf("items:\n  - id: no-intro.1\n    release: Game (USA)\n    source: {kind: dat, name: No-Intro}\n    file: {size: '%d', sha1: '%s', crc32: '01234567'}\n", size, record.SHA1))
+		evidence, _, err := ProjectSnapshot(record, game, fps, proof, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if evidence.Verification.Flags["nointro_match"] != (size == 2048) {
+			t.Fatal("quoted size changed exact-match semantics", size, evidence.Verification)
+		}
+	}
+}
