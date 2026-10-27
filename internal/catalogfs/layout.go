@@ -15,8 +15,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"golang.org/x/text/encoding/charmap"
 	"gopkg.in/yaml.v3"
+	"rommeta/internal/zipnames"
 )
 
 const Marker = "catalog-storage.yaml"
@@ -96,13 +96,7 @@ func Packed(name string) (bool, error) {
 	return l.packed && l.member != "" && !isPack(l.member), e
 }
 
-func zipName(f *zip.File) string {
-	if f.Flags&0x800 == 0 {
-		n, _ := charmap.CodePage437.NewDecoder().String(f.Name)
-		return n
-	}
-	return f.Name
-}
+func zipName(f *zip.File) string { return zipnames.Name(f) }
 
 func safeMember(name string) bool {
 	if !utf8.ValidString(name) {

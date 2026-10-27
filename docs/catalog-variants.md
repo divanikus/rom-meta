@@ -115,6 +115,10 @@ disambiguation, not the catalog's derivative model.
 
 ## Workflow and limits
 
+The separate [preparation helper](prepare-variants.md) can turn explicit reviewed
+relationships into a new sparse catalog, with payload/digest checks, a held queue
+and an identical no-op repeat. It leaves the source catalog untouched.
+
 Prepare the explicit relationship and modified fingerprints outside the source
 tree, then validate and preview with ordinary commands:
 

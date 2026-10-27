@@ -20,6 +20,7 @@ import (
 	"rommeta/internal/catalogrules"
 	"rommeta/internal/catalogyaml"
 	"rommeta/internal/platformnames"
+	"rommeta/internal/zipnames"
 )
 
 const maxPayload = 512 << 20
@@ -216,7 +217,7 @@ func hashROMContext(ctx context.Context, path, system string) (hashes, string, e
 		defer archive.Close()
 		var payload *zip.File
 		for _, member := range archive.File {
-			if !member.FileInfo().IsDir() && payloadExtension(system, strings.ToLower(filepath.Ext(member.Name))) {
+			if !member.FileInfo().IsDir() && payloadExtension(system, strings.ToLower(filepath.Ext(zipnames.Name(member)))) {
 				if payload != nil {
 					return hashes{}, "", fmt.Errorf("ZIP contains multiple platform payloads")
 				}
@@ -227,15 +228,15 @@ func hashROMContext(ctx context.Context, path, system string) (hashes, string, e
 			return hashes{}, "", fmt.Errorf("ZIP has no platform payload")
 		}
 		if payload.UncompressedSize64 > maxPayload {
-			return hashes{}, payload.Name, fmt.Errorf("payload exceeds 512 MiB limit")
+			return hashes{}, zipnames.Name(payload), fmt.Errorf("payload exceeds 512 MiB limit")
 		}
 		input, err := payload.Open()
 		if err != nil {
-			return hashes{}, payload.Name, err
+			return hashes{}, zipnames.Name(payload), err
 		}
 		defer input.Close()
 		h, err := hashStream(contextReader{ctx, input}, maxPayload)
-		return h, payload.Name, err
+		return h, zipnames.Name(payload), err
 	}
 	input, err := catalogfs.Open(path)
 	if err != nil {

@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+
+	"rommeta/internal/zipnames"
 )
 
 func (p PayloadProof) Equal(other PayloadProof) bool { return reflect.DeepEqual(p, other) }
@@ -62,11 +64,11 @@ func observePayload(path, system string) (PayloadProof, error) {
 	var files []*zip.File
 	seen := map[string]bool{}
 	for _, f := range z.File {
-		if f.FileInfo().IsDir() || !payloadExtension(system, strings.ToLower(filepath.Ext(f.Name))) {
+		if f.FileInfo().IsDir() || !payloadExtension(system, strings.ToLower(filepath.Ext(zipnames.Name(f)))) {
 			continue
 		}
-		key := strings.ToLower(f.Name)
-		if !ValidInputPath(f.Name) || seen[key] || f.Mode()&os.ModeSymlink != 0 || f.Flags&1 != 0 || len(files) >= 16 {
+		key := strings.ToLower(zipnames.Name(f))
+		if !ValidInputPath(zipnames.Name(f)) || seen[key] || f.Mode()&os.ModeSymlink != 0 || f.Flags&1 != 0 || len(files) >= 16 {
 			return PayloadProof{}, fmt.Errorf("unsafe, duplicate or excessive ZIP payload members")
 		}
 		seen[key] = true
@@ -75,7 +77,7 @@ func observePayload(path, system string) (PayloadProof, error) {
 	if len(files) < 2 {
 		return InspectROM(path, system)
 	}
-	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
+	sort.Slice(files, func(i, j int) bool { return zipnames.Name(files[i]) < zipnames.Name(files[j]) })
 	var parts []PayloadProof
 	var total int64
 	seen = map[string]bool{}
@@ -97,7 +99,7 @@ func observePayload(path, system string) (PayloadProof, error) {
 			return PayloadProof{}, fmt.Errorf("duplicate or excessive ZIP payload bytes")
 		}
 		seen[h.sha256] = true
-		parts = append(parts, PayloadProof{Size: h.size, SHA1: h.sha1, SHA256: h.sha256, MD5: h.md5, CRC32: h.crc, Member: f.Name})
+		parts = append(parts, PayloadProof{Size: h.size, SHA1: h.sha1, SHA256: h.sha256, MD5: h.md5, CRC32: h.crc, Member: zipnames.Name(f)})
 	}
 	result := parts[0]
 	result.Components = parts[1:]

@@ -14,6 +14,9 @@ python -m unittest discover -s scripts -p 'test_*.py'
 python -m unittest discover -s examples/romm-importer -p 'test_*.py'
 ```
 
+The separate variant preparation helper is covered by `go test ./scripts/prepare-variants`.
+Its export regressions use only synthetic catalog/payload/media fixtures.
+
 The RomM tests use synthetic/fake runtime objects; a live database is not needed.
 Image normalization tests need Pillow; the importer runtime supplies it. Python
 helpers use Python 3.10 or newer. Catalogs, ROMs/BIOS, downloaded media, credentials,

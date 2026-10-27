@@ -3,7 +3,8 @@
   "source_roots": [
     "cmd/",
     "internal/",
-    "examples/romm-importer/"
+    "examples/romm-importer/",
+    "scripts/prepare-variants/"
   ],
   "files": [
     ".dockerignore",
@@ -26,6 +27,7 @@
     "docs/images/catalog-game-card.png",
     "docs/offline-export.md",
     "docs/portable-metadata.md",
+    "docs/prepare-variants.md",
     "docs/regional-content-identity.md",
     "docs/releases/0.1.0.md",
     "docs/reviewed-content-splits.md",
