@@ -5,10 +5,60 @@ into ordinary [variant and fingerprint YAML](catalog-variants.md). It runs from 
 source checkout with the Go toolchain in `go.mod`; normal offline exports do not
 need it. No additional dependency or core CLI command is installed.
 
-A source adapter or reviewer supplies the exact game folder and `based_on` key.
-The helper checks actual modified payloads and catalog preconditions. It does not
-discover parents, repair source names, download sources or independently establish
-that a source's parent assertion is correct.
+Optional external adapters can resolve published parent relationships into exact
+game/base keys, or a reviewer can supply them. Staging checks actual modified
+payloads and catalog preconditions. The helper does not download sources, guess
+parents from title similarity or independently establish source accuracy.
+
+## Collect relationships from local source metadata
+
+Source collection is an optional external mode of the same helper. Supply one or
+more local metadata sources; the command scans only the selected platforms'
+`translations/` subdirectories and builds the ordinary relationship JSON:
+
+```shell
+go run ./scripts/prepare-variants --catalog "/catalog-snapshot" --rom-root "/roms" --sources "/snapshots" --ga "ga.dat" --rha "rha" --hackhash "hackhash-detailed.json" --platforms nes,snes,ngpc --collect-links "/work/links.json" --report "/work/source-preview.json"
+```
+
+Preview writes only the requested report. Repeat with `--apply` and a new report
+path to save `links.json`, then use the staging command below. Omit source flags
+you do not need. Source paths are relative to `--sources`; RHA's root contains
+`database/`. `--subdir` changes the selected ROM subdirectory. All output paths
+must be new and separate from catalog, ROM and source trees.
+
+| Adapter | Relationship used |
+| --- | --- |
+| `--ga` | Gaming Alexandria Famicom DAT: the complete original name before a well-formed T-En label; a source naming assertion |
+| `--rha` | Romhack Archive `database/platform/base-ROM/output-ROM/romhack.json` hierarchy, with modified hashes and structured patch credits |
+| `--hackhash` | HackHash detailed JSON `machines[].details.baseRom`; strong published base hashes take precedence only when consistent with the source name |
+
+See the publishers' [GA page](https://www.gamingalexandria.com/wp/frontend-project/),
+[RHA schema](https://github.com/videogame-archive/romhack-archive/blob/main/docs/contributor-guide.md)
+and [HackHash project](https://github.com/darkblood159/HackHash). Use the detailed
+HackHash export with `baseRom`; the minimal DAT export lacks that relationship.
+RHA `info.translatedTitle` is a title-screen boolean, not a translated name.
+Its optional `info.name`, patch metadata and original source hierarchy are kept
+distinct. On Windows, retain the upstream hierarchy and use a checkout/extractor
+that supports long paths.
+
+Matching uses observed modified size/SHA1, with available MD5/CRC32 constraints.
+The parent must select one same-platform official release by full name/alias or
+published strong base hashes. Literal qualified names take precedence; optional
+punctuation handling keeps word boundaries and qualifiers: I, II cannot become III.
+No default release, bare title or edit-distance fallback is used. Source names
+remain assertions, not independent verification of the original bytes.
+
+The report separates held input files and malformed source rows. Missing or
+ambiguous parents, conflicting hashes and already-owned outputs are held.
+Damaged labels are reported without guessing repairs. Current collection handles
+raw cartridge files/single-payload ZIPs; CHD, ISO, RVZ and unsupported archives
+require representation-specific preparation. Merely collecting a source does
+not add a reader or optical parent adapter. Every source file is pinned by SHA256,
+duplicate JSON keys fail and staged application rechecks its preconditions.
+
+Collection makes fresh proposals and never replaces prior reviewed maps or live
+catalog entries. Unknown source fields can remain in their pinned snapshots;
+source extraction/parent accuracy is separate from successful catalog resolution.
 
 ## Preview and stage
 

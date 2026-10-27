@@ -24,6 +24,7 @@ import (
 	"rommeta/internal/catalogfs"
 	"rommeta/internal/exporter"
 	"rommeta/internal/providerrefs"
+	"rommeta/internal/zipnames"
 )
 
 const providerImport = "offline-providers"
@@ -31,6 +32,7 @@ const providerImport = "offline-providers"
 // ProviderEvidence binds native game identity to an explicit catalog card. Metadata
 // may use a card donor; verification never inherits another release's signatures.
 type ProviderEvidence struct {
+	Derivative       *DerivativeIdentity         `json:"derivative,omitempty"`
 	Conflicts        []ProviderConflict          `json:"conflicts,omitempty"`
 	ReferenceReviews []providerrefs.IGDBDecision `json:"reference_reviews,omitempty"`
 	Files            []FileState                 `json:"files"`
@@ -339,7 +341,7 @@ func payloadProof(entry Entry) (VerificationProof, error) {
 		}
 		count := 0
 		for _, m := range z.File {
-			if m.Name == entry.Source.Member {
+			if zipnames.Name(m) == entry.Source.Member {
 				count++
 				rc, e := m.Open()
 				if e != nil {
@@ -399,14 +401,22 @@ func ProjectSnapshot(record exporter.Record, gameYAML, fingerprintYAML []byte, p
 	if err := yaml.Unmarshal(fingerprintYAML, &fps); err != nil {
 		return nil, nil, err
 	}
+	var derivative *DerivativeIdentity
+	if record.Variant != "" {
+		var err error
+		derivative, err = snapshotVariant(record, gameYAML, fingerprintYAML, proof)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 	_, knownRelease := doc.Releases[record.Release]
 	_, knownBasis := doc.Releases[record.MetadataRelease]
-	if !knownRelease && !(record.MatchedBy == "game-name" && record.Release == "" && knownBasis) {
+	if derivative == nil && !knownRelease && !(record.MatchedBy == "game-name" && record.Release == "" && knownBasis) {
 		return nil, nil, fmt.Errorf("snapshot release missing")
 	}
 	optical := record.Catalog == nil && record.Disc != nil && record.MatchedBy == "game-name" && record.Release == "" && record.SHA1 == "" && exporter.ValidDiscObservation(record.ROM, record.Size, record.Disc) && proof.Size == 0 && proof.SHA1 == "" && proof.SHA256 == "" && proof.MD5 == "" && proof.CRC32 == ""
 	named := record.Disc == nil && record.Payload == nil && record.Catalog != nil && (record.MatchedBy == "catalog-name" || record.MatchedBy == "game-name") && record.SHA1 == "" && exporter.ValidCatalogObservation(record.ROM, record.Size, record.Catalog) && proof.Size == 0 && proof.SHA1 == "" && proof.SHA256 == "" && proof.MD5 == "" && proof.CRC32 == ""
-	if record.Status != "matched" || record.Disc != nil && !optical || record.Catalog != nil && !named || !optical && !named && (record.MatchedBy != "hash" && record.MatchedBy != "game-name" || record.Size != proof.Size || record.SHA1 != proof.SHA1 || len(proof.SHA256) != 64 || len(proof.MD5) != 32 || len(proof.CRC32) != 8) {
+	if derivative == nil && (record.Status != "matched" || record.Disc != nil && !optical || record.Catalog != nil && !named || !optical && !named && (record.MatchedBy != "hash" && record.MatchedBy != "game-name" || record.Size != proof.Size || record.SHA1 != proof.SHA1 || len(proof.SHA256) != 64 || len(proof.MD5) != 32 || len(proof.CRC32) != 8)) {
 		return nil, nil, fmt.Errorf("snapshot proof incomplete")
 	}
 	proof.Flags = map[string]bool{}
@@ -428,11 +438,22 @@ func ProjectSnapshot(record exporter.Record, gameYAML, fingerprintYAML []byte, p
 		}
 	}
 	evidence.Unsupported = limits
+	evidence.Derivative = derivative
+	if derivative != nil {
+		evidence.Unsupported = append(evidence.Unsupported, "Derived languages, translation version and credits: retained in derivative provenance; no equivalent native provider fields")
+	}
 	return evidence, providerForm(entry, evidence), nil
 }
 
 func assembleProviderEvidence(entry Entry, doc providerDocument, fps fingerprintDocument, proof VerificationProof, files []FileState) (*ProviderEvidence, error) {
-	if entry.Source.Payload != nil && len(entry.Source.Payload.Components) > 0 {
+	basis := entry.Source.Release
+	if entry.Source.Variant != "" {
+		basis = entry.Source.MetadataRelease
+		if entry.Source.Payload != nil {
+			proof.Components = entry.Source.Payload.Components
+		}
+	}
+	if entry.Source.Variant == "" && entry.Source.Payload != nil && len(entry.Source.Payload.Components) > 0 {
 		var expected []exporter.PayloadProof
 		for _, fp := range fps.Items {
 			if fp.Release == entry.Source.Release && fp.Source.Kind == "dat" && strings.EqualFold(fp.Source.Name, "No-Intro") {
@@ -461,13 +482,13 @@ func assembleProviderEvidence(entry Entry, doc providerDocument, fps fingerprint
 				}
 			}
 			if len(descriptions) > 0 {
-				evidence.SourceTexts = append(evidence.SourceTexts, SourceTextSnapshot{Source: source, MatchIndex: index, Scope: sourceScope(m, entry.Source.Release), SourceRelease: textValue(m["release"]), Descriptions: descriptions})
+				evidence.SourceTexts = append(evidence.SourceTexts, SourceTextSnapshot{Source: source, MatchIndex: index, Scope: sourceScope(m, basis), SourceRelease: textValue(m["release"]), Descriptions: descriptions})
 			}
 		}
 	}
 
 	for _, fp := range fps.Items {
-		if entry.Source.MatchedBy != "hash" {
+		if entry.Source.Variant != "" || entry.Source.MatchedBy != "hash" {
 			break
 		}
 		if fp.Release != entry.Source.Release || int64(fp.File.Size) != proof.Size || !strings.EqualFold(fp.File.SHA1, proof.SHA1) {
@@ -483,7 +504,7 @@ func assembleProviderEvidence(entry Entry, doc providerDocument, fps fingerprint
 		}
 	}
 	for _, name := range []string{"igdb", "screenscraper", "launchbox", "hasheous"} {
-		m, index, id, scope, e := chooseMatch(doc.Sources[name].Matches, sourceID[name], entry.Source.Release)
+		m, index, id, scope, e := chooseMatch(doc.Sources[name].Matches, sourceID[name], basis)
 		if e != nil {
 			evidence.Conflicts = append(evidence.Conflicts, ProviderConflict{Provider: name, Reason: e.Error()})
 			continue
@@ -522,7 +543,7 @@ func assembleProviderEvidence(entry Entry, doc providerDocument, fps fingerprint
 	// Provider references establish game identity, never payload verification. Require
 	// consensus across every reference in the explicit card before inheritance.
 	for ref, target := range map[string]string{"igdb_id": "igdb", "thegamesdb_id": "tgdb", "retroachievements_id": "retroachievements"} {
-		_, _, id, _, refErr := chooseMatch(doc.Sources["hasheous"].Matches, ref, entry.Source.Release)
+		_, _, id, _, refErr := chooseMatch(doc.Sources["hasheous"].Matches, ref, basis)
 		if refErr != nil {
 			evidence.Conflicts = append(evidence.Conflicts, ProviderConflict{Provider: "hasheous." + ref, Reason: refErr.Error()})
 			continue
@@ -566,10 +587,10 @@ func assembleProviderEvidence(entry Entry, doc providerDocument, fps fingerprint
 	// An exact scoped Hasheous response must additionally agree with the actual
 	// payload hash query. Truncated source query prefixes are retained as such.
 	for i, m := range doc.Sources["hasheous"].Matches {
-		if entry.Source.MatchedBy != "hash" {
+		if entry.Source.Variant != "" || entry.Source.MatchedBy != "hash" {
 			break
 		}
-		scope := sourceScope(m, entry.Source.Release)
+		scope := sourceScope(m, basis)
 		if scope != "exact-release" && scope != "listed-release" {
 			continue
 		}

@@ -355,6 +355,10 @@ def asset_rank(asset, record, card, policy):
     # Prefer the exact release folder, then ordinary card art, then same-card donor.
     parent = PurePosixPath(asset["path"]).parent.name
     scope_score = 0 if release and parent == release else (1 if parent == "media" else 2)
+    if record.get("variant"):
+        chain = record.get("variant_info", {}).get("chain", [record["variant"]])
+        scope_score = chain.index(parent) if parent in chain else (len(chain) if parent == basis else len(chain) + (1 if parent == "media" else 2))
+        return (scope_score, variant_score, region_score, source_score, asset["path"])
     return (variant_score, region_score, source_score, scope_score, asset["path"])
 
 
@@ -726,7 +730,7 @@ def reconcile_identities(entries):
     return {"identity_conflicts": conflicts, "reference_only": quarantined,
             "held_ids": [e["id"] for e in entries if e.get("quality_hold")],
             "identity_fills": sum(len(e.get("identity_fills", [])) for e in entries),
-            "unverified_game_bindings": [e["id"] for e in entries if e["record"].get("matched_by") in ("game-name", "catalog-name")]}
+            "unverified_game_bindings": [e["id"] for e in entries if e["record"].get("matched_by") in ("game-name", "catalog-name", "variant-chd-header")]}
 
 
 def update_reviews(runtime, selection, rows, baseline):
@@ -1215,7 +1219,7 @@ def build_batch(runtime, api, path, platform=None, limit=0, batch_size=100, *, c
                     result["parts"].append({"path": child_path.relative_to(path.parent).as_posix(), "sha256": hash_file(child_path)["sha256"], "platform_id": native["id"], "ids": [e["id"] for e in child["entries"]]})
                     report["included"] += len(child["entries"])
                     report["exact"] += sum(e["record"].get("matched_by", "hash") == "hash" for e in child["entries"])
-                    report["game_only"] += sum(e["record"].get("matched_by") in ("game-name", "catalog-name") for e in child["entries"])
+                    report["game_only"] += sum(e["record"].get("matched_by") in ("game-name", "catalog-name", "variant-chd-header") for e in child["entries"])
                     result["entries"] += len(child["entries"])
                     result["changed"] += sum(bool(e["patch"]) for e in child["entries"])
                     for key in ("resource_bytes", "unique_download_bytes"):

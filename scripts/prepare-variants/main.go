@@ -19,6 +19,7 @@ type options struct {
 
 func main() {
 	var o options
+	var c collectOptions
 	flag.StringVar(&o.Catalog, "catalog", "", "Read-only source catalog root")
 	flag.StringVar(&o.ROMRoot, "rom-root", "", "Read-only root for relative input paths")
 	flag.StringVar(&o.Sources, "sources", "", "Read-only root for pinned source snapshots")
@@ -27,8 +28,25 @@ func main() {
 	flag.StringVar(&o.Report, "report", "", "Optional new JSON report outside input trees")
 	flag.StringVar(&o.Media, "media", "artwork", "Copy artwork, all, or none")
 	flag.BoolVar(&o.Apply, "apply", false, "Materialize staging after checking all entries")
+	flag.StringVar(&c.Out, "collect-links", "", "New prepared-link JSON; collect instead of staging")
+	flag.StringVar(&c.GA, "ga", "", "Gaming Alexandria Famicom DAT, relative to --sources")
+	flag.StringVar(&c.RHA, "rha", "", "Romhack Archive root with database/, relative to --sources")
+	flag.StringVar(&c.HackHash, "hackhash", "", "HackHash detailed JSON, relative to --sources")
+	flag.StringVar(&c.Platforms, "platforms", "", "Comma-separated exact platform names/aliases for collection")
+	flag.StringVar(&c.Subdir, "subdir", "translations", "ROM subdirectory within each selected platform")
 	flag.Parse()
 	o.Progress = os.Stderr
+	if c.Out != "" {
+		if err := collectCLI(o, c); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+	if c.GA != "" || c.RHA != "" || c.HackHash != "" || c.Platforms != "" {
+		fmt.Fprintln(os.Stderr, "source adapters require --collect-links")
+		os.Exit(1)
+	}
 	r, err := run(o)
 	if r != nil {
 		if o.Report != "" {

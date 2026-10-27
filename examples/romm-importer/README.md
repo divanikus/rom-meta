@@ -20,6 +20,30 @@ The job needs DB/Redis, read-only config/ROMs, writable Resources/work and the
 native UID/GID. Check ownership instead of recursively changing the library.
 Back up native DB/Resources before the first write.
 
+## Prepared translations and other variants
+
+Use matching current API/CLI/importer builds with a prepared
+[variant catalog](../../docs/catalog-variants.md). The projector validates
+`variants`/`based_on` against source YAML, checks the modified payload's own
+fingerprints, and selects provider metadata using the terminal original release.
+A different catalog default does not substitute for that base.
+
+Plans retain `providers.derivative` with variant identity, base, evidence level,
+language and modification credits. Original provider identifiers refer to the
+underlying game; they are not newly assigned translation identities.
+Translation date/version/group never replace original developer or release date.
+Unsupported native credit/language fields remain explicit provenance.
+
+Patched payload matches, exact prepared names and declared CHD combined-header
+matches retain separate evidence. Header/name association requires
+`game_binding: true`; neither asserts payload integrity or original-ROM
+verification. No No-Intro/Redump/Hasheous signature flags inherit from the base.
+Existing owner fields, provider data and locks follow ordinary fill-only rules.
+
+Variant-owned media precedes its parent variants and original base. Changes are
+still planned/applied through the normal importer workflow; preparing or testing
+variants does not deploy an image, modify a live catalog or start another writer.
+
 ## 1. Build the job image
 
 From the repository root, using the Go version in `go.mod`:

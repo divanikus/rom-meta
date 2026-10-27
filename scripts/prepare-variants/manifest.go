@@ -62,7 +62,7 @@ type entry struct {
 	Inputs   []input           `json:"inputs"`
 }
 
-func decodeManifest(raw []byte) (*manifest, error) {
+func checkJSONKeys(raw []byte) error {
 	// encoding/json otherwise accepts duplicate keys and silently keeps the last.
 	tokens := json.NewDecoder(bytes.NewReader(raw))
 	var check func() error
@@ -105,10 +105,17 @@ func decodeManifest(raw []byte) (*manifest, error) {
 		return err
 	}
 	if err := check(); err != nil {
-		return nil, err
+		return err
 	}
 	if _, err := tokens.Token(); err != io.EOF {
-		return nil, fmt.Errorf("trailing JSON data")
+		return fmt.Errorf("trailing JSON data")
+	}
+	return nil
+}
+
+func decodeManifest(raw []byte) (*manifest, error) {
+	if err := checkJSONKeys(raw); err != nil {
+		return nil, err
 	}
 	var m manifest
 	dec := json.NewDecoder(bytes.NewReader(raw))

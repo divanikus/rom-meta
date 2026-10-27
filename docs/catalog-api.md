@@ -286,3 +286,8 @@ a failure after streaming starts uses HTTP 200 with an error frame.
 Stats defaults to one platform. Full scans are explicit and may be expensive.
 Cancellation stops between bounded game batches after in-flight filesystem calls.
 No writable acquisition cache or media payload scan is involved.
+
+Prepared CHD variants can enter `/v1/lookup` with explicit `game_binding: true`.
+The response retains `variant-chd-header` and its bounded observation; it does
+not assert raw payload integrity or original-release verification. Matching
+native consumers keep derivative provenance separate from original provider data.

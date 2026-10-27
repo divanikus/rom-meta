@@ -256,7 +256,7 @@ func selectionFromPlan(options Options, source *exporter.Plan, observations map[
 	server.selection.MediaMode, server.selection.GameBinding = options.Media, options.AllowGameBinding
 	records := []exporter.Record{}
 	for _, record := range source.Records {
-		if record.Status != "matched" || record.MatchedBy != "hash" && !(options.AllowGameBinding && (record.MatchedBy == "game-name" || record.MatchedBy == "catalog-name")) || record.Hidden || len(record.Playlist) > 0 {
+		if record.Status != "matched" || record.MatchedBy != "hash" && !(options.AllowGameBinding && (record.MatchedBy == "game-name" || record.MatchedBy == "catalog-name" || record.MatchedBy == "variant-chd-header" && record.Variant != "")) || record.Hidden || len(record.Playlist) > 0 {
 			reason := record.Reason
 			if reason == "" {
 				reason = "requires an exact single-file payload match"
