@@ -57,10 +57,21 @@ This supports metadata for RVZ/WUX/ISO, other cartridge archives and installed
 folders without inventing format or dump verification. Same-edition numbered
 disc folders can use explicit member names. Translations need their own prepared variant binding.
 
-MAME names must also have current `mame` release authority and snapshot evidence.
+MAME uses exact `authority.entry_name` identifiers with current `mame` source and
+snapshot evidence. Underscores remain significant; internal component filenames
+do not compete with a set identifier.
 Set version, members, BIOS/parent/CHD completeness and gameplay remain unverified.
 Missing or ambiguous source names are reported, never guessed. This capability
 does not add ES-DE launch readers; `export_systems` is a separate contract.
+
+PSP CHD metadata uses `system: psp` observations with `game_binding: true`.
+A standalone 2048-byte-sector UMD header can select one Redump metadata basis
+by declared raw SHA-1 and logical size, including renamed files. The response
+keeps `release` empty and records `metadata_release`; it proves no payload hash
+or dump integrity. Conflicts and unprepared translations stay unresolved. PSP
+Minis need their separate No-Intro DAT and Minis provider mappings (LaunchBox
+`Sony PSP Minis`, ScreenScraper system `172`). Enrich them separately before
+combining with UMD cards. This metadata reader adds no ES-DE launch/export support.
 
 ## ES-DE projection from client observations
 

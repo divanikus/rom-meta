@@ -56,6 +56,10 @@ type LookupResolver struct {
 }
 
 func LookupSystem(system string) bool {
+	// Metadata-only CHD reader; no ES-DE launch support.
+	if system == "psp" {
+		return true
+	}
 	spec, ok := systems[system]
 	return ok && !spec.Arcade && (!spec.Disc || DiscLookupSystem(system))
 }
@@ -156,6 +160,10 @@ func NewLookupCatalog(dataRoot, profilePath string) (*LookupCatalog, error) {
 				platform.Supported = true
 				platform.GameBinding = DiscLookupSystem(platform.System)
 			}
+		}
+		if doc != nil && field(doc, "name") == "Sony - PlayStation Portable" {
+			// Metadata observations are independent of ES-DE launch readers.
+			platform.System, platform.Supported, platform.GameBinding, platform.Reason = "psp", true, true, ""
 		}
 		if doc != nil && field(doc, "name") != "" {
 			platform.NameBinding = true

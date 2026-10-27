@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"rommeta/internal/catalogfs"
+	"rommeta/internal/catalogyaml"
 )
 
 // DiscObservation is bounded container evidence, never a whole-file or DAT hash.
@@ -31,6 +32,10 @@ type DiscFile struct {
 }
 
 func DiscLookupSystem(system string) bool {
+	// UMD header metadata, independent of launch readers.
+	if system == "psp" {
+		return true
+	}
 	spec, ok := systems[system]
 	return ok && spec.Disc && payloadExtension(system, ".chd")
 }
@@ -180,12 +185,17 @@ func (resolver *LookupResolver) bindDisc(input ObservedInput, allowGame bool) (R
 	if err != nil || matched {
 		return record, err
 	}
-	for _, name := range strings.Split(strings.ToLower(input.ROM), "/") {
-		if name == "translations" || strings.Contains(name, "[t-") {
-			record.Reason = "translated CHD identity is deferred"
-			return record, nil
+	if translationInput(&record) {
+		record.Reason = "translated CHD identity is deferred"
+		return record, nil
+	}
+	if resolver.Platform.System == "psp" {
+		matched, err := resolver.bindUMDHeader(&record)
+		if matched || err != nil {
+			return record, err
 		}
 	}
+
 	var first *Record
 	for _, file := range input.Disc.Files {
 		part := Record{ROM: file.Name, Status: "unmatched", Fields: map[string]Value{}, Media: map[string]Media{}}
@@ -221,4 +231,50 @@ func (resolver *LookupResolver) bindDisc(input ObservedInput, allowGame bool) (R
 	record.Game, record.MetadataRelease, record.Fields, record.Media = first.Game, first.MetadataRelease, first.Fields, first.Media
 	record.Warnings = append(first.Warnings, "Only CHD headers, file sizes and mtimes observed; no full-file hash, decompression, Redump or integrity verification")
 	return record, nil
+}
+
+// A UMD ISO is one 2048-byte-sector stream. Its declared CHD raw SHA1/size
+// can select a metadata basis, but is not a verified hash of the observed file.
+func (resolver *LookupResolver) bindUMDHeader(record *Record) (bool, error) {
+	if record.Disc.Directory || len(record.Disc.Files) != 1 {
+		return false, nil
+	}
+	h, err := hex.DecodeString(record.Disc.Files[0].Header)
+	if err != nil || len(h) != 124 {
+		return false, fmt.Errorf("invalid UMD CHD header")
+	}
+	if binary.BigEndian.Uint32(h[60:64]) != 2048 {
+		return false, nil
+	}
+	size := int64(binary.BigEndian.Uint64(h[32:40]))
+	sha1 := hex.EncodeToString(h[64:84])
+	matches := map[string]fingerprint{}
+	for _, fp := range resolver.index.BySize[size] {
+		if fp.variant != "" || fp.chd || fp.sha1 != sha1 {
+			continue
+		}
+		if err := loadGameDocument(resolver.Catalog.Root, fp.game); err != nil {
+			return false, err
+		}
+		release := catalogyaml.Value(catalogyaml.Value(fp.game.root, "releases"), fp.release)
+		if field(catalogyaml.Value(release, "authority"), "source") == "redump" {
+			matches[fp.targetKey()] = fp
+		}
+	}
+	if len(matches) == 0 {
+		return false, nil
+	}
+	if len(matches) > 1 {
+		record.Status, record.Reason = "ambiguous", "declared UMD CHD raw SHA1/size identifies multiple Redump releases"
+		return true, nil
+	}
+	for _, fp := range matches {
+		record.Status, record.MatchedBy, record.Reason = "matched", "game-name", "declared UMD CHD raw SHA1/size selects one Redump metadata basis; payload remains unverified"
+		if err := attachRecord(resolver.Catalog.Root, fp.game, fp.release, record, resolver.Catalog.Profile, resolver.Platform.System); err != nil {
+			return true, err
+		}
+		record.Release = ""
+		record.Warnings = append(record.Warnings, "Declared CHD header identity only; no decompression, payload integrity or Redump verification")
+	}
+	return true, nil
 }

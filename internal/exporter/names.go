@@ -141,7 +141,7 @@ func nameFallback(root string, index *catalogIndex, record *Record, profile Prof
 	return nil
 }
 
-func attachRecord(root string, g *game, release string, record *Record, profile Profile, system string) error {
+func loadGameDocument(root string, g *game) error {
 	if g.root == nil {
 		doc, digest, err := lookupDocument(root, filepath.Join(g.path, "game.yaml"))
 		if err != nil {
@@ -151,6 +151,13 @@ func attachRecord(root string, g *game, release string, record *Record, profile 
 			return fmt.Errorf("catalog changed behind cached lookup index; review and restart API")
 		}
 		g.root = doc
+	}
+	return nil
+}
+
+func attachRecord(root string, g *game, release string, record *Record, profile Profile, system string) error {
+	if err := loadGameDocument(root, g); err != nil {
+		return err
 	}
 	record.Game, _ = filepath.Rel(root, g.path)
 	record.Game = filepath.ToSlash(record.Game)

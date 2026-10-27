@@ -128,6 +128,21 @@ func (resolver *LookupResolver) bindCatalog(input ObservedInput, allowGame bool)
 	candidates := resolver.index.ByName[nameKey(name)]
 	unique := map[string]fingerprint{}
 	for _, candidate := range candidates {
+		// MAME short names are identifiers. Generic payload aliases and punctuation
+		// normalization must not make another set compete with the exact authority.
+		if resolver.Platform.Platform == "Arcade" {
+			if candidate.variant != "" {
+				continue
+			}
+			if err := loadGameDocument(resolver.Catalog.Root, candidate.game); err != nil {
+				return record, err
+			}
+			release := catalogyaml.Value(catalogyaml.Value(candidate.game.root, "releases"), candidate.release)
+			authority, mame := catalogyaml.Value(release, "authority"), catalogyaml.Value(release, "mame")
+			if field(authority, "source") != "mame" || field(authority, "entry_name") != name || field(mame, "snapshot") == "" {
+				continue
+			}
+		}
 		if !translated || candidate.variant != "" {
 			unique[candidate.targetKey()] = candidate
 		}
@@ -139,12 +154,7 @@ func (resolver *LookupResolver) bindCatalog(input ObservedInput, allowGame bool)
 			err := attachFingerprintRecord(resolver.Catalog.Root, candidate, &record, resolver.Catalog.Profile, resolver.Platform.System)
 			if err == nil && resolver.Platform.Platform == "Arcade" {
 				release := catalogyaml.Value(catalogyaml.Value(candidate.game.root, "releases"), candidate.release)
-				authority, mame := catalogyaml.Value(release, "authority"), catalogyaml.Value(release, "mame")
-				if field(authority, "source") != "mame" || field(authority, "entry_name") != name || field(mame, "snapshot") == "" {
-					record.Status, record.Reason = "ambiguous", "set name lacks current MAME authority/snapshot evidence"
-				} else {
-					record.ArcadeSnapshot = field(mame, "snapshot")
-				}
+				record.ArcadeSnapshot = field(catalogyaml.Value(release, "mame"), "snapshot")
 			}
 			return record, err
 		}
@@ -155,6 +165,10 @@ func (resolver *LookupResolver) bindCatalog(input ObservedInput, allowGame bool)
 	}
 	if translated {
 		record.Reason = "translated payload identity requires an explicit catalog binding"
+		return record, nil
+	}
+	if resolver.Platform.Platform == "Arcade" {
+		record.Status, record.Reason = "unmatched", "set short name is absent from current MAME release authority/snapshot"
 		return record, nil
 	}
 	// A multidisc directory may omit the Disc qualifier. Every member must identify

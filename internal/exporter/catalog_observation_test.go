@@ -1,10 +1,13 @@
 package exporter
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"rommeta/internal/catalogfstest"
 )
 
 func TestCatalogObservationFolderMembershipAndStatDrift(t *testing.T) {
@@ -79,5 +82,81 @@ func TestCatalogMAMERequiresExactSetAuthority(t *testing.T) {
 	first := plan.Records[0]
 	if first.Status != "matched" || first.Release != "game1" || first.ArcadeSnapshot != "test-snapshot" || first.SHA1 != "" || first.Payload != nil || plan.Records[1].Status == "matched" {
 		t.Fatal(plan.Records)
+	}
+}
+
+func TestCatalogMAMEIgnoresPayloadNamesAndPreservesSetUnderscores(t *testing.T) {
+	for _, packed := range []bool{false, true} {
+		t.Run(fmt.Sprint("packed=", packed), func(t *testing.T) {
+			options, _, _ := fixture(t)
+			arcadeFixture(t, options)
+			cards := []struct{ title, set, payload string }{
+				{"Current Game", "exact2", "shared.bin"},
+				{"Different Game", "exact_2", "exact2.bin"},
+				{"Another Game", "other", "exact2.bin"},
+			}
+			for _, card := range cards {
+				folder := filepath.Join(options.DataRoot, "platforms", "Arcade", card.title)
+				game := []byte(fmt.Sprintf("title: %s\nreleases:\n  %s:\n    authority: {source: mame, entry_name: %s}\n    mame: {snapshot: test-snapshot}\n", card.title, card.set, card.set))
+				fingerprints := []byte(fmt.Sprintf("items:\n  - release: %s\n    file: {name: %s}\n", card.set, card.payload))
+				put(t, filepath.Join(folder, "game.yaml"), game)
+				put(t, filepath.Join(folder, "fingerprints.yaml"), fingerprints)
+			}
+			if packed {
+				catalogfstest.Pack(t, filepath.Join(options.DataRoot, "platforms", "Arcade"))
+			}
+			catalog, err := NewLookupCatalog(options.DataRoot, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			resolver, err := catalog.Open("Arcade")
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, name := range []string{"exact2.zip", "exact_2.zip", "exact2"} {
+				directory := filepath.Ext(name) == ""
+				input := ObservedInput{ROM: name, Outer: FileDigest{Size: 1}, Catalog: &CatalogObservation{Kind: "name-stat-v1", Directory: directory, Files: []CatalogFile{{Name: name, Size: 1, MtimeNS: 1}}}}
+				plan, err := resolver.ResolveBindings([]ObservedInput{input}, true)
+				if err != nil {
+					t.Fatal(err)
+				}
+				record := plan.Records[0]
+				want := name
+				if !directory {
+					want = name[:len(name)-4]
+				}
+				if record.Status != "matched" || record.Release != want || record.ArcadeSnapshot != "test-snapshot" || record.MatchedBy != "catalog-name" || record.Payload != nil || record.SHA1 != "" {
+					t.Fatalf("%s: %+v", name, record)
+				}
+			}
+			input := ObservedInput{ROM: "shared.zip", Outer: FileDigest{Size: 1}, Catalog: &CatalogObservation{Kind: "name-stat-v1", Files: []CatalogFile{{Name: "shared.zip", Size: 1, MtimeNS: 1}}}}
+			plan, err := resolver.ResolveBindings([]ObservedInput{input}, true)
+			if err != nil || plan.Records[0].Status == "matched" || plan.Records[0].Game != "" || len(plan.Records[0].Fields) != 0 {
+				t.Fatal(plan, err)
+			}
+		})
+	}
+}
+
+func TestCatalogMAMEKeepsDuplicateAuthorityAmbiguous(t *testing.T) {
+	options, _, _ := fixture(t)
+	card := arcadeFixture(t, options)
+	game, err := os.ReadFile(filepath.Join(card, "game.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	put(t, filepath.Join(filepath.Dir(card), "Duplicate", "game.yaml"), game)
+	catalog, err := NewLookupCatalog(options.DataRoot, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver, err := catalog.Open("Arcade")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := ObservedInput{ROM: "game1.zip", Outer: FileDigest{Size: 1}, Catalog: &CatalogObservation{Kind: "name-stat-v1", Files: []CatalogFile{{Name: "game1.zip", Size: 1, MtimeNS: 1}}}}
+	plan, err := resolver.ResolveBindings([]ObservedInput{input}, true)
+	if err != nil || plan.Records[0].Status != "ambiguous" || plan.Records[0].Game != "" {
+		t.Fatal(plan, err)
 	}
 }

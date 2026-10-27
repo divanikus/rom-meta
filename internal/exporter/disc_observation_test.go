@@ -121,3 +121,75 @@ func TestDiscGameBindingOptInAndCatalogMissingDisc(t *testing.T) {
 		t.Fatal("catalog missing disc accepted", plan, err)
 	}
 }
+
+func TestPSPMetadataUsesDeclaredUMDHeaderWithoutLaunchReader(t *testing.T) {
+	options, _, _ := fixture(t)
+	platform := filepath.Join(options.DataRoot, "platforms", "Sony - PlayStation Portable")
+	put(t, filepath.Join(platform, "_platform.yaml"), []byte("name: Sony - PlayStation Portable\n"))
+	card := filepath.Join(platform, "UMD Game")
+	put(t, filepath.Join(card, "game.yaml"), []byte("title: UMD Game\nreleases:\n  UMD Game (USA) (En,Fr):\n    authority: {source: redump, entry_name: 'UMD Game (USA) (En,Fr)'}\n"))
+	put(t, filepath.Join(card, "fingerprints.yaml"), []byte("items:\n  - release: UMD Game (USA) (En,Fr)\n    file: {name: game.iso, size: 204800, sha1: '0100000000000000000000000000000000000000'}\n"))
+	h := syntheticCHD()
+	binary.BigEndian.PutUint64(h[32:40], 204800)
+	binary.BigEndian.PutUint32(h[56:60], 2048*8)
+	binary.BigEndian.PutUint32(h[60:64], 2048)
+	for _, name := range []string{"Renamed.chd", "Translated [T-En].chd"} {
+		put(t, filepath.Join(options.ROMRoot, name), h)
+	}
+	catalog, err := NewLookupCatalog(options.DataRoot, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver, err := catalog.Open("Sony - PlayStation Portable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolver.Platform.System != "psp" || len(resolver.Platform.ExportSystems) != 0 || !resolver.Platform.GameBinding {
+		t.Fatal(resolver.Platform)
+	}
+	input, err := ObserveInput(options.ROMRoot, "psp", "Renamed.chd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := resolver.ResolveBindings([]ObservedInput{input}, false)
+	if err != nil || plan.Records[0].Status == "matched" {
+		t.Fatal(plan, err)
+	}
+	plan, err = resolver.ResolveBindings([]ObservedInput{input}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := plan.Records[0]
+	if record.Status != "matched" || record.MatchedBy != "game-name" || record.Release != "" || record.MetadataRelease != "UMD Game (USA) (En,Fr)" || record.SHA1 != "" || record.Payload != nil || record.Disc == nil {
+		t.Fatalf("%+v", record)
+	}
+	translated, err := ObserveInput(options.ROMRoot, "psp", "Translated [T-En].chd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err = resolver.ResolveBindings([]ObservedInput{translated}, true)
+	if err != nil || plan.Records[0].Status == "matched" {
+		t.Fatal(plan, err)
+	}
+	// An unknown declaration and a conflicting Redump target cannot select a card.
+	input.Disc.Files[0].Header = strings.Replace(input.Disc.Files[0].Header, "0100000000000000000000000000000000000000", "0200000000000000000000000000000000000000", 1)
+	plan, err = resolver.ResolveBindings([]ObservedInput{input}, true)
+	if err != nil || plan.Records[0].Status == "matched" {
+		t.Fatal(plan, err)
+	}
+	duplicate := filepath.Join(platform, "Another UMD Game")
+	put(t, filepath.Join(duplicate, "game.yaml"), []byte("title: Another UMD Game\nreleases:\n  Other (USA):\n    authority: {source: redump, entry_name: 'Other (USA)'}\n"))
+	put(t, filepath.Join(duplicate, "fingerprints.yaml"), []byte("items:\n  - release: Other (USA)\n    file: {name: other.iso, size: 204800, sha1: '0100000000000000000000000000000000000000'}\n"))
+	resolver, err = catalog.Open("Sony - PlayStation Portable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input, err = ObserveInput(options.ROMRoot, "psp", "Renamed.chd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err = resolver.ResolveBindings([]ObservedInput{input}, true)
+	if err != nil || plan.Records[0].Status != "ambiguous" || plan.Records[0].Game != "" {
+		t.Fatal(plan, err)
+	}
+}
