@@ -1,7 +1,7 @@
 # Prepared translations and other derived variants
 
 A prepared catalog can recognize translated or modified files through their own
-fingerprints and export the original release's metadata/media. Keep a derivative
+fingerprints and export the original game's metadata/media. Keep a derivative
 inside the original game bundle. The external preparation tool or user supplies
 the relationship; RomMeta does not search for a parent from an unfamiliar title.
 
@@ -35,9 +35,23 @@ variants:
       relationship: reviewed-source-parent
 ```
 
-Each variant requires a nonempty `kind` and exact `based_on` key in the same
-bundle. A base can be another variant; chains must end at an official release.
-Missing references, cycles and overlapping release/variant keys are errors.
+Each variant requires a nonempty `kind`. If the exact original release is unknown,
+omit `based_on`: the containing bundle supplies the original-game relationship.
+For example, this translation needs no original disc revision or patch version:
+
+```yaml
+variants:
+  English translation:
+    title: Example Quest Translated
+    kind: translation
+    languages: [en]
+```
+
+When known, `based_on` can name an exact official release or another variant in
+the same bundle. A chain may end at an official release or a game-only variant.
+A supplied `based_on` must be a nonempty string; omit it instead of using null or
+an empty value. Missing named references, cycles and overlapping release/variant
+keys are errors.
 Variant keys must be safe catalog/media folder names. Unknown provenance fields
 are preserved. Default release selection stays within official releases.
 
@@ -90,11 +104,16 @@ from header/stat observations requires explicit `game_binding: true`.
 
 ## Inheritance and display
 
-The terminal `based_on` release selects existing provider metadata and media
-using the export profile. A different `default_release` is not substituted.
+When a chain names an exact terminal release, that release selects existing
+provider metadata and media using the export profile. A different `default_release`
+is not substituted. Without an exact terminal release, export uses ordinary game
+metadata selection: a valid `default_release`, or the conventional default when
+none is configured. This selects metadata, not the historical disc that was patched.
+
 Description, original release date, developer, publisher, genres and players
-inherit from that base; a variant's explicitly supplied fields override it.
-Parent variant overrides apply before child overrides.
+inherit through this selection; a variant's explicitly supplied fields override
+it. Parent variant overrides apply before child overrides. The translated payload
+keeps its own fingerprints regardless of whether the exact base is known.
 
 The translated title and declared language remain separate from the base region
 and language. Translator/group and modification version are credits; they do not
@@ -107,8 +126,12 @@ No base media needs duplication in the catalog. Generated assets use the actual
 launch path, including renamed files and subfolders.
 
 Export records expose `variant` and `variant_info` separately from the official
-`release` field. `metadata_release` identifies the terminal base; fields/media
-record `from_release` or `from_variant` provenance. Variant info retains
+`release` field. `metadata_release` identifies the selected metadata release;
+for a game-only relationship it is the game's metadata default, not an asserted
+original input. In that case inherited fields/media use `selection: game` and
+retain the actual `from_release` when applicable. Exact-base inheritance retains
+`selection: base`; derivative overrides use `from_variant`. An absent
+`variant_info.based_on` means that variant is linked only to the game. Variant info retains
 ancestor modification credits for chained derivatives. Language/title formatting is
 the existing `titles` policy. Its `variants` option controls display
 disambiguation, not the catalog's derivative model.

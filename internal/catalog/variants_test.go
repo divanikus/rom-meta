@@ -21,6 +21,12 @@ func TestValidateVariantReferencesAndMedia(t *testing.T) {
 	if err != nil || len(issues) > 0 {
 		t.Fatalf("%v %v", issues, err)
 	}
+	writeFile(t, filepath.Join(path, "game.yaml"), strings.Replace(valid, "    based_on: Base\n", "", 1))
+	issues, err = Validate(root)
+	if err != nil || len(issues) > 0 {
+		t.Fatalf("game-only variant rejected: %v %v", issues, err)
+	}
+	writeFile(t, filepath.Join(path, "game.yaml"), valid)
 	for _, bad := range []string{
 		strings.Replace(good, "variant: English", "variant: Missing", 1),
 		strings.Replace(good, "variant: English", "variant: English\n    release: Base", 1),

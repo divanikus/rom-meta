@@ -6,7 +6,8 @@ bundles, then generate frontend metadata from the prepared catalog locally or ov
 your network.
 Catalog data stays in readable YAML with source evidence and explicit overrides.
 Prepared [translations and hacks](docs/catalog-variants.md) can inherit metadata
-from their explicit original release while retaining their own fingerprints.
+from their original game, with an optional exact release, while retaining their
+own fingerprints.
 
 ![RomMeta web browser showing a game card with cover artwork, metadata and alternate titles](docs/images/catalog-game-card.png)
 

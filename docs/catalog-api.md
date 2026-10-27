@@ -95,7 +95,10 @@ Stored video members seek in place. No frontend installation or catalog edit occ
 
 The shared resolver supports explicit `variants`/`based_on` and exclusive variant
 fingerprints. Records use `variant` and `variant_info`; `release` stays empty for
-a derivative and `metadata_release` identifies its terminal official base.
+a derivative. `based_on` is optional: without an exact terminal base, the variant
+inherits ordinary game metadata. `metadata_release` then identifies the game's
+selected metadata default rather than an original-disc identity, and inherited
+fields/media use `selection: game`. Explicit bases retain their existing behavior.
 Inherited fields/media retain `from_release`; explicit derivative overrides use
 `from_variant`. `variant_binding` in platform capabilities advertises this path.
 Full named catalog association still requires `game_binding: true` and is weaker

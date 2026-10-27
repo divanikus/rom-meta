@@ -89,7 +89,7 @@ type PlaylistInput struct {
 // VariantInfo retains modification identity separately from inherited metadata.
 type VariantInfo struct {
 	Kind      string                `json:"kind"`
-	BasedOn   string                `json:"based_on"`
+	BasedOn   string                `json:"based_on,omitempty"`
 	Chain     []string              `json:"chain"`
 	Ancestors []catalogyaml.Variant `json:"ancestors,omitempty"`
 	Languages []string              `json:"languages,omitempty"`

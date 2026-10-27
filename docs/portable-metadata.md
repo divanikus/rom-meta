@@ -184,8 +184,11 @@ official releases and should not become unrelated game folders.
 
 `variant` is the common entity; its `kind` field distinguishes `translation`,
 `hack`, `restoration`, `bugfix`, `mod`, and future categories. A linked variant has
-a `based_on` reference to an official release or another variant in the same game
-bundle. Runtime validation, recognition and inherited export metadata are described
+an optional `based_on` reference to an official release or another variant in the
+same game bundle. Omit it when only the original game is known; the containing
+bundle supplies the game relationship and ordinary game metadata selection.
+Patch version and exact original revision are not prerequisites. Runtime
+validation, recognition and inherited export metadata are described
 in [prepared variants](catalog-variants.md). See ADR 0040 for the model rules.
 
 Manual fold corrections live beside the game they correct:

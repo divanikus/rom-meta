@@ -10,53 +10,62 @@ import (
 )
 
 func TestVariantCombinedCHDExportAndLookup(t *testing.T) {
-	options, old, _ := variantFixture(t)
-	platform := "Sony - PlayStation"
-	path := filepath.Join(options.DataRoot, "platforms", platform, "Game")
-	raw, err := os.ReadFile(filepath.Join(old, "game.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	put(t, filepath.Join(path, "game.yaml"), raw)
-	put(t, filepath.Join(filepath.Dir(path), "_platform.yaml"), []byte("name: Sony - PlayStation\n"))
-	chd := syntheticCHD()
-	chd[84] = 2
-	put(t, filepath.Join(path, "fingerprints.yaml"), []byte(fmt.Sprintf("items:\n  - variant: Fixed\n    file:\n      kind: chd-combined-sha1\n      name: Translated.chd\n      sha1: %x\n", chd[84:104])))
-	rom := "translations/Completely renamed.chd"
-	put(t, filepath.Join(options.ROMRoot, filepath.FromSlash(rom)), chd)
-	options.Platform, options.System = "psx", "psx"
-	result, err := Build(options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result.Records) != 1 {
-		t.Fatalf("%+v", result.Records)
-	}
-	r := result.Records[0]
-	if r.Representation != "chd-container" || r.Variant != "Fixed" || r.MatchedBy != "variant-chd-header" || r.Release != "" || r.MetadataRelease != "Original (Japan)" || r.Disc == nil ||
-		r.Fields["description"].Value != "Original Japanese release description" || r.Payload == nil || r.Payload.SHA1 == fmt.Sprintf("%x", chd[84:104]) {
-		t.Fatalf("CHD identity/proof conflated: %+v", r)
-	}
-	for i := 0; i < 2; i++ {
-		catalog, err := NewLookupCatalog(options.DataRoot, "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		resolver, err := catalog.Open(platform)
-		if err != nil {
-			t.Fatal(err)
-		}
-		input, err := ObserveInput(options.ROMRoot, "psx", rom)
-		if err != nil {
-			t.Fatal(err)
-		}
-		plan, err := resolver.ResolveBindings([]ObservedInput{input}, true)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got := plan.Records[0]; got.Variant != "Fixed" || got.MatchedBy != "variant-chd-header" || got.Payload != nil || got.Release != "" {
-			t.Fatalf("native CHD variant: %+v", got)
-		}
+	for _, gameOnly := range []bool{false, true} {
+		t.Run(fmt.Sprint("game-only=", gameOnly), func(t *testing.T) {
+			options, old, _ := variantFixture(t)
+			platform := "Sony - PlayStation"
+			path := filepath.Join(options.DataRoot, "platforms", platform, "Game")
+			raw, err := os.ReadFile(filepath.Join(old, "game.yaml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantBasis, wantDescription := "Original (Japan)", "Original Japanese release description"
+			if gameOnly {
+				raw = []byte(strings.Replace(string(raw), "    based_on: Original (Japan)\n", "", 1))
+				wantBasis, wantDescription = "Original (USA)", "Wrong default description"
+			}
+			put(t, filepath.Join(path, "game.yaml"), raw)
+			put(t, filepath.Join(filepath.Dir(path), "_platform.yaml"), []byte("name: Sony - PlayStation\n"))
+			chd := syntheticCHD()
+			chd[84] = 2
+			put(t, filepath.Join(path, "fingerprints.yaml"), []byte(fmt.Sprintf("items:\n  - variant: Fixed\n    file:\n      kind: chd-combined-sha1\n      name: Translated.chd\n      sha1: %x\n", chd[84:104])))
+			rom := "translations/Completely renamed.chd"
+			put(t, filepath.Join(options.ROMRoot, filepath.FromSlash(rom)), chd)
+			options.Platform, options.System = "psx", "psx"
+			result, err := Build(options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(result.Records) != 1 {
+				t.Fatalf("%+v", result.Records)
+			}
+			r := result.Records[0]
+			if r.Representation != "chd-container" || r.Variant != "Fixed" || r.MatchedBy != "variant-chd-header" || r.Release != "" || r.MetadataRelease != wantBasis || r.Disc == nil ||
+				r.Fields["description"].Value != wantDescription || r.Payload == nil || r.Payload.SHA1 == fmt.Sprintf("%x", chd[84:104]) {
+				t.Fatalf("CHD identity/proof conflated: %+v", r)
+			}
+			for i := 0; i < 2; i++ {
+				catalog, err := NewLookupCatalog(options.DataRoot, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				resolver, err := catalog.Open(platform)
+				if err != nil {
+					t.Fatal(err)
+				}
+				input, err := ObserveInput(options.ROMRoot, "psx", rom)
+				if err != nil {
+					t.Fatal(err)
+				}
+				plan, err := resolver.ResolveBindings([]ObservedInput{input}, true)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got := plan.Records[0]; got.Variant != "Fixed" || got.MatchedBy != "variant-chd-header" || got.Payload != nil || got.Release != "" || got.MetadataRelease != wantBasis {
+					t.Fatalf("native CHD variant: %+v", got)
+				}
+			}
+		})
 	}
 }
 

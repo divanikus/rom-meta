@@ -13,7 +13,7 @@ type Variant struct {
 	Name      string   `json:"name"`
 	Title     string   `json:"title,omitempty"`
 	Kind      string   `json:"kind"`
-	BasedOn   string   `json:"based_on"`
+	BasedOn   string   `json:"based_on,omitempty"`
 	Languages []string `json:"languages,omitempty"`
 	Group     string   `json:"group,omitempty"`
 	Version   string   `json:"version,omitempty"`
@@ -74,6 +74,9 @@ func Variants(root *yaml.Node) ([]Variant, error) {
 		}
 		for _, field := range []string{"kind", "based_on"} {
 			value := Value(node, field)
+			if field == "based_on" && value == nil {
+				continue
+			}
 			if value == nil || value.Kind != yaml.ScalarNode || value.Tag != "!!str" || strings.TrimSpace(value.Value) == "" {
 				return fmt.Errorf("variant %q requires a nonempty %s", name, field)
 			}
@@ -102,7 +105,8 @@ func Variants(root *yaml.Node) ([]Variant, error) {
 }
 
 // VariantChain returns the requested variant followed by parent variants and the
-// terminal official release. It never substitutes default_release or guesses names.
+// terminal official release, or an empty release for a game-only association.
+// It never substitutes a metadata default for an unknown original release.
 func VariantChain(root *yaml.Node, name string) ([]string, string, error) {
 	variants, err := Variants(root)
 	if err != nil {
@@ -129,6 +133,9 @@ func variantChain(releases *yaml.Node, variants map[string]Variant, name string)
 		}
 		seen[current] = true
 		chain = append(chain, current)
+		if variant.BasedOn == "" {
+			return chain, "", nil
+		}
 		if Value(releases, variant.BasedOn) != nil {
 			return chain, variant.BasedOn, nil
 		}

@@ -9,7 +9,6 @@ import (
 
 	"gopkg.in/yaml.v3"
 	"rommeta/internal/catalogyaml"
-	"rommeta/internal/releasepolicy"
 )
 
 type catalogIndex struct {
@@ -158,12 +157,7 @@ func attachRecord(root string, g *game, release string, record *Record, profile 
 	record.Release = release
 	basis := release
 	if basis == "" {
-		basis = field(g.root, "default_release")
-		if catalogyaml.Value(catalogyaml.Value(g.root, "releases"), basis) == nil {
-			var names []string
-			_ = catalogyaml.Mapping(catalogyaml.Value(g.root, "releases"), func(name string, _ *yaml.Node) error { names = append(names, name); return nil })
-			basis = releasepolicy.Choose(names, nil, nil)
-		}
+		basis = catalogyaml.DefaultRelease(g.root)
 	}
 	record.MetadataRelease = basis
 	record.Fields = resolveFields(g, basis, profile)

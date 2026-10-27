@@ -61,23 +61,27 @@ func attachFingerprintRecord(root string, fp fingerprint, record *Record, profil
 		}
 	}
 	record.VariantInfo = info
+	selection := "base"
+	if base == "" {
+		selection = "game"
+	}
 	for key, value := range record.Fields {
 		if key != "title" {
 			if value.FromRelease == "" {
-				value.FromRelease = base
+				value.FromRelease = record.MetadataRelease
 			}
 			if value.Selection == "" {
-				value.Selection = "base"
+				value.Selection = selection
 			}
 			record.Fields[key] = value
 		}
 	}
 	for role, media := range record.Media {
 		if media.FromRelease == "" {
-			media.FromRelease = base
+			media.FromRelease = record.MetadataRelease
 		}
 		if media.Selection == "" {
-			media.Selection = "base"
+			media.Selection = selection
 		}
 		record.Media[role] = media
 	}
@@ -97,7 +101,7 @@ func attachFingerprintRecord(root string, fp fingerprint, record *Record, profil
 				record.Fields[key] = Value{Value: value.text, Language: value.language, Source: "local", Selection: "variant", FromVariant: owner}
 			}
 		}
-		baseRegions := catalogyaml.Strings(catalogyaml.Value(catalogyaml.Value(catalogyaml.Value(g.root, "releases"), base), "regions"))
+		baseRegions := catalogyaml.Strings(catalogyaml.Value(catalogyaml.Value(catalogyaml.Value(g.root, "releases"), record.MetadataRelease), "regions"))
 		media, warnings, err := resolveMedia(root, g, owner, record.ROM, profile, true, system, baseRegions, []string{owner})
 		if err != nil {
 			return err

@@ -42,3 +42,28 @@ func TestVariantGraph(t *testing.T) {
 		}
 	}
 }
+
+func TestGameOnlyVariantChainAndOptionalBaseValidation(t *testing.T) {
+	const source = "releases:\n  Game (Japan): {}\nvariants:\n  English:\n    kind: translation\n    languages: [en]\n  Fixed:\n    kind: bugfix\n    based_on: English\n"
+	doc, err := Parse([]byte(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"English", "Fixed"} {
+		chain, base, err := VariantChain(doc.Root(), name)
+		if err != nil || base != "" || chain[len(chain)-1] != "English" {
+			t.Fatalf("%s: %v %q %v", name, chain, base, err)
+		}
+	}
+	// Omission means game-only. Malformed supplied references remain errors.
+	for _, value := range []string{"''", "null", "[]", "{}", "42", "Missing", "Fixed"} {
+		raw := strings.Replace(source, "    languages:", "    based_on: "+value+"\n    languages:", 1)
+		broken, err := Parse([]byte(raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = Variants(broken.Root()); err == nil {
+			t.Fatalf("accepted based_on: %s", value)
+		}
+	}
+}

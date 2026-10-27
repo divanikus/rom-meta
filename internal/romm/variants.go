@@ -36,8 +36,12 @@ func snapshotVariant(r exporter.Record, gameRaw, fpRaw []byte, p VerificationPro
 	if err != nil {
 		return nil, err
 	}
-	if r.MetadataRelease != base {
-		return nil, fmt.Errorf("variant metadata release differs from its explicit base")
+	metadataRelease := base
+	if metadataRelease == "" {
+		metadataRelease = catalogyaml.DefaultRelease(g.Root())
+	}
+	if r.MetadataRelease != metadataRelease {
+		return nil, fmt.Errorf("variant metadata release differs from its base or game metadata selection")
 	}
 	all, err := catalogyaml.Variants(g.Root())
 	if err != nil {
@@ -114,5 +118,5 @@ func snapshotVariant(r exporter.Record, gameRaw, fpRaw []byte, p VerificationPro
 	default:
 		return nil, fmt.Errorf("unsupported derivative proof %q", r.MatchedBy)
 	}
-	return &DerivativeIdentity{Variant: r.Variant, MetadataRelease: base, MatchedBy: r.MatchedBy, Info: info}, nil
+	return &DerivativeIdentity{Variant: r.Variant, MetadataRelease: metadataRelease, MatchedBy: r.MatchedBy, Info: info}, nil
 }

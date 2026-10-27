@@ -10,6 +10,11 @@ game/base keys, or a reviewer can supply them. Staging checks actual modified
 payloads and catalog preconditions. The helper does not download sources, guess
 parents from title similarity or independently establish source accuracy.
 
+The core also accepts variants linked only to their containing game, with
+`based_on` omitted. See [game-only catalog records](catalog-variants.md#catalog-records).
+This staging helper still requires exact release/variant parents in its manifest;
+its current evidence format does not yet collect game-only relationships.
+
 ## Collect relationships from local source metadata
 
 Source collection is an optional external mode of the same helper. Supply one or

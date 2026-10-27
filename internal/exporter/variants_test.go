@@ -193,3 +193,98 @@ func TestVariantNameDoesNotReplaceWrongPayloadHash(t *testing.T) {
 		}
 	}
 }
+
+func TestGameOnlyVariantsExportAndCachedLookup(t *testing.T) {
+	for _, tc := range []struct {
+		name, target, defaultRelease string
+		packed, override             bool
+	}{
+		{name: "direct", target: "English", defaultRelease: "Original (USA)"},
+		{name: "chained packed", target: "Fixed", defaultRelease: "Original (USA)", packed: true, override: true},
+		{name: "conventional fallback", target: "Fixed", defaultRelease: "Missing"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			options, path, payload := variantFixture(t)
+			raw, err := os.ReadFile(filepath.Join(path, "game.yaml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			data := strings.Replace(string(raw), "    based_on: Original (Japan)\n", "", 1)
+			data = strings.Replace(data, "default_release: Original (USA)", "default_release: "+tc.defaultRelease, 1)
+			data = strings.Replace(data, "Wrong default description", "Game card description", 1)
+			data = strings.Replace(data, "Wrong default developer", "Game card developer", 1)
+			data = strings.Replace(data, "  Original (Japan):", "    publisher: Game card publisher\n    genres: [Adventure]\n    players: 2\n    release_date: '1991-05-06'\n  Original (Japan):", 1)
+			put(t, filepath.Join(path, "game.yaml"), []byte(data))
+			fp, _ := os.ReadFile(filepath.Join(path, "fingerprints.yaml"))
+			put(t, filepath.Join(path, "fingerprints.yaml"), []byte(strings.Replace(string(fp), "variant: Fixed", "variant: "+tc.target, 1)))
+			if tc.override {
+				put(t, filepath.Join(path, "media", "English", "box-front.world.local.png"), []byte("synthetic translation art"))
+			}
+			if tc.packed {
+				catalogfstest.Pack(t, filepath.Dir(path))
+			}
+			before := treeHashes(t, options.ROMRoot)
+			check := func(r Record) {
+				t.Helper()
+				if r.Status != "matched" || r.Variant != tc.target || r.Release != "" || r.MetadataRelease != "Original (USA)" || r.SHA1 != fmt.Sprintf("%x", sha1.Sum(payload)) {
+					t.Fatalf("game-only identity: %+v", r)
+				}
+				if r.Fields["description"].Value != "Game card description" || r.Fields["developer"].Value != "Game card developer" || r.Fields["genres"].Value != "Adventure" || r.Fields["players"].Value != "2" || r.Fields["release_date"].Value != "1991-05-06" {
+					t.Fatalf("missing game metadata: %+v", r.Fields)
+				}
+				if r.Fields["description"].Selection != "game" || r.Fields["description"].FromRelease != "Original (USA)" || r.TitleContext.Regional != "Translated Adventure" || strings.Join(r.TitleContext.Languages, ",") != "en" || len(r.TitleContext.Regions) != 0 {
+					t.Fatalf("metadata selection became original identity: %+v", r)
+				}
+				if r.VariantInfo == nil || tc.target == "English" && r.VariantInfo.BasedOn != "" || tc.target == "Fixed" && (r.VariantInfo.BasedOn != "English" || len(r.VariantInfo.Ancestors) != 1 || r.VariantInfo.Ancestors[0].BasedOn != "") {
+					t.Fatalf("wrong ancestry: %+v", r.VariantInfo)
+				}
+				if r.Media["cover"].SourcePath == "" {
+					t.Fatal("missing inherited media")
+				}
+				if tc.override && r.Media["cover"].FromVariant != "English" {
+					t.Fatal("lost parent variant art")
+				}
+				if !tc.override && (r.Media["cover"].Selection != "game" || r.Media["cover"].FromRelease != "Original (USA)") {
+					t.Fatalf("wrong cover provenance: %+v", r.Media)
+				}
+			}
+			plan, err := Build(options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(plan.Records[0])
+			if err = Apply(plan, nil); err != nil {
+				t.Fatal(err)
+			}
+			xml, err := os.ReadFile(filepath.Join(options.Out, "gamelists", "n64", "gamelist.xml"))
+			if err != nil || !strings.Contains(string(xml), "Game card description") || !strings.Contains(string(xml), "./translations/Entirely renamed.z64") {
+				t.Fatalf("export: %s %v", xml, err)
+			}
+			for i := 0; i < 2; i++ {
+				catalog, err := NewLookupCatalog(options.DataRoot, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				resolver, err := catalog.Open("Nintendo - Nintendo 64")
+				if err != nil {
+					t.Fatal(err)
+				}
+				observed, err := ObserveInput(options.ROMRoot, "n64", "translations/Entirely renamed.z64")
+				if err != nil {
+					t.Fatal(err)
+				}
+				got, err := resolver.Resolve([]ObservedInput{observed})
+				if err != nil {
+					t.Fatal(err)
+				}
+				check(got.Records[0])
+				if i == 1 && resolver.IndexStats.Cached != 1 {
+					t.Fatalf("cache not reused: %+v", resolver.IndexStats)
+				}
+			}
+			if !reflect.DeepEqual(before, treeHashes(t, options.ROMRoot)) {
+				t.Fatal("export changed ROMs")
+			}
+		})
+	}
+}

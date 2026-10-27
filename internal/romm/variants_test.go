@@ -193,3 +193,49 @@ func TestVariantNativeCombinedCHDStaysHeaderEvidence(t *testing.T) {
 		t.Fatal("CHD header became raw proof")
 	}
 }
+
+func TestGameOnlyVariantNativeProjectionUsesGameMetadata(t *testing.T) {
+	for _, explicitDefault := range []bool{true, false} {
+		t.Run(fmt.Sprint("default=", explicitDefault), func(t *testing.T) {
+			root, roms := derivativeFixture(t)
+			name := filepath.Join(root, "platforms", "Sega - Game Gear", "Game", "game.yaml")
+			raw, err := os.ReadFile(name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			data := strings.Replace(string(raw), "    based_on: Original (Japan)\n", "", 1)
+			data = strings.Replace(data, "developer: Wrong developer}", "developer: Game developer, descriptions: {en: Game card prose}}", 1)
+			if !explicitDefault {
+				data = strings.Replace(data, "default_release: Original (USA)\n", "", 1)
+			}
+			if err = os.WriteFile(name, []byte(data), 0600); err != nil {
+				t.Fatal(err)
+			}
+			s := derivativeSelection(t, root, roms, "gamegear", "Sega - Game Gear", "translations/Completely renamed.gg", false)
+			item := s.Inputs[0]
+			card := s.Cards[item.Record.Game]
+			p := item.Payload
+			proof := VerificationProof{Size: p.Size, SHA1: p.SHA1, SHA256: p.SHA256, MD5: p.MD5, CRC32: p.CRC32, Flags: map[string]bool{"redump_match": true}}
+			ev, form, err := ProjectSnapshot(item.Record, []byte(card.Game.YAML), []byte(card.Fingerprints.YAML), proof, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if item.Record.Release != "" || ev.Derivative.MetadataRelease != "Original (USA)" || ev.Derivative.Info.Ancestors[0].BasedOn != "" || ev.Slots["igdb"].ID != 10 || form["summary"] != "Game card prose" || !strings.Contains(form["name"], "Translated Adventure") {
+				t.Fatalf("game metadata projection: %+v %v", ev, form)
+			}
+			for _, set := range ev.Verification.Flags {
+				if set {
+					t.Fatal("original verification inherited")
+				}
+			}
+			if ev.Verification.Authority != "" || ev.Verification.HasheousMatchIndex != nil || ev.Verification.SHA1 != proof.SHA1 {
+				t.Fatal("modified proof changed")
+			}
+			wrong := item.Record
+			wrong.MetadataRelease = "Original (Japan)"
+			if _, _, err := ProjectSnapshot(wrong, []byte(card.Game.YAML), []byte(card.Fingerprints.YAML), proof, nil); err == nil {
+				t.Fatal("accepted arbitrary metadata release")
+			}
+		})
+	}
+}
