@@ -239,3 +239,93 @@ func TestGameOnlyVariantNativeProjectionUsesGameMetadata(t *testing.T) {
 		})
 	}
 }
+
+func TestNativeVariantCHDGroupValidatesEveryMember(t *testing.T) {
+	root, roms := derivativeFixture(t)
+	old := filepath.Join(root, "platforms", "Sega - Game Gear", "Game")
+	game := filepath.Join(root, "platforms", "Sony - PlayStation", "Game")
+	if err := os.MkdirAll(game, 0755); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(old, "game.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw = []byte(strings.Replace(string(raw), "\nsources:", "\n  Second:\n    kind: translation\n    group: Second team\nsources:", 1))
+	if err = os.WriteFile(filepath.Join(game, "game.yaml"), raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(filepath.Dir(game), "_platform.yaml"), []byte("name: Sony - PlayStation\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	folder := filepath.Join(roms, "translations", "Renamed")
+	if err = os.MkdirAll(folder, 0755); err != nil {
+		t.Fatal(err)
+	}
+	fps := "items:\n"
+	for i := 1; i <= 2; i++ {
+		h := make([]byte, 256)
+		copy(h, "MComprHD")
+		binary.BigEndian.PutUint32(h[8:12], 124)
+		binary.BigEndian.PutUint32(h[12:16], 5)
+		binary.BigEndian.PutUint64(h[32:40], 2352*10)
+		binary.BigEndian.PutUint64(h[40:48], 124)
+		binary.BigEndian.PutUint32(h[56:60], 2352*4)
+		binary.BigEndian.PutUint32(h[60:64], 2352)
+		h[64] = 1
+		h[84] = byte(i)
+		variant := "Fixed"
+		if i == 2 {
+			variant = "Second"
+		}
+		fps += fmt.Sprintf("  - variant: %s\n    file: {kind: chd-combined-sha1, sha1: '%x'}\n", variant, h[84:104])
+		if err = os.WriteFile(filepath.Join(folder, fmt.Sprintf("Unknown (Disc %d).chd", i)), h, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = os.WriteFile(filepath.Join(game, "fingerprints.yaml"), []byte(fps), 0600); err != nil {
+		t.Fatal(err)
+	}
+	selected := derivativeSelection(t, root, roms, "psx", "Sony - PlayStation", "translations/Renamed", false)
+	evidence, _ := projectDerivative(t, selected)
+	if len(evidence.Derivative.DiscVariants) != 2 || evidence.Derivative.DiscVariants[1].Variant != "Second" || evidence.Derivative.DiscVariants[1].MetadataRelease != "Original (USA)" || !emptyProof(evidence.Verification) {
+		t.Fatalf("lost independent disc evidence: %+v", evidence)
+	}
+	r := selected.Inputs[0].Record
+	card := selected.Cards[r.Game]
+	for _, kind := range []string{"missing map", "missing member", "wrong name", "wrong variant", "wrong metadata", "forged credit", "wrong header", "wrong parent", "raw proof"} {
+		t.Run(kind, func(t *testing.T) {
+			b, _ := json.Marshal(r)
+			var changed exporter.Record
+			if err := json.Unmarshal(b, &changed); err != nil {
+				t.Fatal(err)
+			}
+			proof := VerificationProof{}
+			switch kind {
+			case "missing map":
+				changed.DiscVariants = nil
+			case "missing member":
+				changed.DiscVariants = changed.DiscVariants[:1]
+			case "wrong name":
+				changed.DiscVariants[1].Name = "Other.chd"
+			case "wrong variant":
+				changed.DiscVariants[1].Variant = "Fixed"
+			case "wrong metadata":
+				changed.DiscVariants[1].MetadataRelease = "Original (Japan)"
+			case "forged credit":
+				changed.DiscVariants[1].Info.Group = "Forged"
+			case "wrong header":
+				h, _ := hex.DecodeString(changed.Disc.Files[1].Header)
+				h[84] = 99
+				changed.Disc.Files[1].Header = hex.EncodeToString(h)
+			case "wrong parent":
+				changed.Variant = "Second"
+			case "raw proof":
+				proof.SHA1 = strings.Repeat("f", 40)
+			}
+			if _, _, err := ProjectSnapshot(changed, []byte(card.Game.YAML), []byte(card.Fingerprints.YAML), proof, nil); err == nil {
+				t.Fatal("accepted forged group")
+			}
+		})
+	}
+}

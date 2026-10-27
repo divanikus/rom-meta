@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"path"
 	"reflect"
 	"strings"
 
@@ -14,10 +15,11 @@ import (
 
 // DerivativeIdentity retains modification identity outside original provider data.
 type DerivativeIdentity struct {
-	Variant         string                `json:"variant"`
-	MetadataRelease string                `json:"metadata_release"`
-	MatchedBy       string                `json:"matched_by"`
-	Info            *exporter.VariantInfo `json:"variant_info"`
+	DiscVariants    []exporter.DiscVariant `json:"disc_variants,omitempty"`
+	Variant         string                 `json:"variant"`
+	MetadataRelease string                 `json:"metadata_release"`
+	MatchedBy       string                 `json:"matched_by"`
+	Info            *exporter.VariantInfo  `json:"variant_info"`
 }
 
 func emptyProof(p VerificationProof) bool {
@@ -25,6 +27,9 @@ func emptyProof(p VerificationProof) bool {
 }
 
 func snapshotVariant(r exporter.Record, gameRaw, fpRaw []byte, p VerificationProof) (*DerivativeIdentity, error) {
+	if len(r.DiscVariants) > 0 {
+		return snapshotVariantCHDGroup(r, gameRaw, fpRaw, p)
+	}
 	if r.Status != "matched" || r.Variant == "" || r.Release != "" {
 		return nil, fmt.Errorf("invalid derivative identity")
 	}
@@ -119,4 +124,30 @@ func snapshotVariant(r exporter.Record, gameRaw, fpRaw []byte, p VerificationPro
 		return nil, fmt.Errorf("unsupported derivative proof %q", r.MatchedBy)
 	}
 	return &DerivativeIdentity{Variant: r.Variant, MetadataRelease: metadataRelease, MatchedBy: r.MatchedBy, Info: info}, nil
+}
+
+func snapshotVariantCHDGroup(r exporter.Record, gameRaw, fpRaw []byte, p VerificationProof) (*DerivativeIdentity, error) {
+	if r.Status != "matched" || r.MatchedBy != "variant-chd-header" || r.Release != "" || r.Payload != nil || r.Catalog != nil || r.SHA1 != "" || len(r.Playlist) > 0 || !emptyProof(p) || !exporter.ValidDiscObservation(r.ROM, r.Size, r.Disc) || !r.Disc.Directory || len(r.DiscVariants) != len(r.Disc.Files) {
+		return nil, fmt.Errorf("invalid derivative CHD group")
+	}
+	var first *DerivativeIdentity
+	for i, member := range r.DiscVariants {
+		file := r.Disc.Files[i]
+		if member.Name != file.Name {
+			return nil, fmt.Errorf("derivative member differs from observed disc")
+		}
+		child := exporter.Record{Status: "matched", MatchedBy: "variant-chd-header", ROM: path.Join(r.ROM, file.Name), Size: file.Size, Game: r.Game, Variant: member.Variant, MetadataRelease: member.MetadataRelease, VariantInfo: member.Info, Disc: &exporter.DiscObservation{Kind: r.Disc.Kind, Files: []exporter.DiscFile{file}}}
+		identity, err := snapshotVariant(child, gameRaw, fpRaw, VerificationProof{})
+		if err != nil {
+			return nil, fmt.Errorf("derivative disc %s: %w", file.Name, err)
+		}
+		if first == nil {
+			first = identity
+		}
+	}
+	if first == nil || r.Variant != first.Variant || r.MetadataRelease != first.MetadataRelease || !reflect.DeepEqual(r.VariantInfo, first.Info) {
+		return nil, fmt.Errorf("CHD group metadata differs from its first member")
+	}
+	first.DiscVariants = append([]exporter.DiscVariant(nil), r.DiscVariants...)
+	return first, nil
 }

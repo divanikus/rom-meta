@@ -102,6 +102,16 @@ patch versions or official/variant combinations stay unsupported. Normal ES-DE C
 export also retains its existing compressed-file observation. Metadata lookup
 from header/stat observations requires explicit `game_binding: true`.
 
+Native metadata lookup also accepts an observed numbered CHD directory when every
+member independently matches a prepared variant in the same game. `disc_variants`
+retains each filename, variant, metadata basis and modification credits. The first
+disc supplies the group's display metadata; no combined patch identity or complete
+playable edition is inferred. Different known member versions remain separate
+provenance. An unknown member, conflicting identity or different game holds the
+whole group. Native projection validates every member against the pinned source
+YAML and keeps the header/stat proof without retail verification. Existing M3U
+export edition rules are unchanged.
+
 ## Inheritance and display
 
 When a chain names an exact terminal release, that release selects existing

@@ -97,7 +97,17 @@ type VariantInfo struct {
 	Version   string                `json:"version,omitempty"`
 }
 
+// DiscVariant retains each observed disc's prepared identity in a metadata group.
+// The first member supplies group metadata; this does not invent a patch edition.
+type DiscVariant struct {
+	Name            string       `json:"name"`
+	Variant         string       `json:"variant"`
+	MetadataRelease string       `json:"metadata_release"`
+	Info            *VariantInfo `json:"variant_info"`
+}
+
 type Record struct {
+	DiscVariants    []DiscVariant       `json:"disc_variants,omitempty"`
 	Variant         string              `json:"variant,omitempty"`
 	VariantInfo     *VariantInfo        `json:"variant_info,omitempty"`
 	TitleContext    *TitleContext       `json:"title_context,omitempty"`

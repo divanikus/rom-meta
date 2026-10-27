@@ -40,6 +40,12 @@ matches retain separate evidence. Header/name association requires
 verification. No No-Intro/Redump/Hasheous signature flags inherit from the base.
 Existing owner fields, provider data and locks follow ordinary fill-only rules.
 
+For numbered CHD directories, every observed member must have a declared variant
+identity in the same source game. Plans retain `disc_variants` under the derivative
+provenance and use the first member's metadata basis. Each member's source credits
+and base remain independent; the group does not assert a coherent patch edition
+or complete playable disc set. Unknown or conflicting members prevent an update.
+
 Variant-owned media precedes its parent variants and original base. Changes are
 still planned/applied through the normal importer workflow; preparing or testing
 variants does not deploy an image, modify a live catalog or start another writer.

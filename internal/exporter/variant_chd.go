@@ -4,13 +4,20 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"path"
 	"sort"
 )
 
-// bindVariantCHD identifies declared standalone CHD content. It never promotes
+// bindVariantCHD identifies declared CHD content. It never promotes
 // an embedded hash into full-file, decompressed payload or Redump track proof.
 func bindVariantCHD(root string, index *catalogIndex, record *Record, profile Profile, system string) (bool, error) {
-	if record.Disc == nil || len(record.Disc.Files) != 1 {
+	if record.Disc == nil {
+		return false, nil
+	}
+	if len(record.Disc.Files) > 1 {
+		return bindVariantCHDGroup(root, index, record, profile, system)
+	}
+	if len(record.Disc.Files) != 1 {
 		return false, nil
 	}
 	file := record.Disc.Files[0]
@@ -54,5 +61,54 @@ func bindVariantCHD(root string, index *catalogIndex, record *Record, profile Pr
 		return true, err
 	}
 	record.Warnings = append(record.Warnings, "Variant identity uses declared CHD header content; no decompression, payload integrity or Redump track verification")
+	return true, nil
+}
+
+// Every observed member must have a declared modified identity in the same game.
+// Different member bases/versions remain distinct provenance, not an inferred edition.
+func bindVariantCHDGroup(root string, index *catalogIndex, record *Record, profile Profile, system string) (bool, error) {
+	if record.Payload != nil || !ValidDiscObservation(record.ROM, record.Size, record.Disc) || !record.Disc.Directory {
+		return false, nil
+	}
+	var first *Record
+	members := []DiscVariant{}
+	complete := true
+	for _, file := range record.Disc.Files {
+		part := Record{ROM: path.Join(record.ROM, file.Name), Size: file.Size, Disc: &DiscObservation{Kind: record.Disc.Kind, Files: []DiscFile{file}}, Status: "unsupported", Fields: map[string]Value{}, Media: map[string]Media{}}
+		handled, err := bindVariantCHD(root, index, &part, profile, system)
+		if err != nil {
+			return true, err
+		}
+		if handled && part.Status != "matched" {
+			record.Status, record.Reason = part.Status, part.Reason
+			record.Candidates = part.Candidates
+			return true, nil
+		}
+		if !handled {
+			complete = false
+			continue
+		}
+		if first == nil {
+			copy := part
+			first = &copy
+		} else if first.Game != part.Game {
+			record.Status, record.Reason = "ambiguous", "CHD variants identify different catalog games"
+			return true, nil
+		}
+		members = append(members, DiscVariant{Name: file.Name, Variant: part.Variant, MetadataRelease: part.MetadataRelease, Info: part.VariantInfo})
+	}
+	if first == nil {
+		return false, nil
+	}
+	if !complete {
+		record.Status, record.Reason = "unmatched", "CHD folder member lacks a declared variant identity"
+		return true, nil
+	}
+	rom, size, disc, representation := record.ROM, record.Size, record.Disc, record.Representation
+	*record = *first
+	record.ROM, record.Size, record.Disc, record.Representation = rom, size, disc, representation
+	record.DiscVariants = members
+	record.Reason = "all observed CHD members match prepared variants of one catalog game"
+	record.Warnings = append(record.Warnings, "Group metadata uses the first observed disc; member variants remain separate, without an inferred patch edition or completeness claim")
 	return true, nil
 }
