@@ -75,6 +75,12 @@ Generic aliases cannot erase qualifiers or cross editions. Known source regions
 need compatible releases; regional preference cannot retarget an edition.
 Ambiguous/incompatible candidates skip.
 
+On PSP, a catalog-side No-Intro `(Minis)` collection label can match an untagged
+media name. This applies to video and artwork, records `psp_minis_label` in match
+evidence and keeps the original release key. Explicit source labels, regions,
+other qualifiers and ambiguous owners remain significant; labels are not removed
+globally. Provider coverage can still be incomplete.
+
 Partial fetch appends matches only for successful new downloads, preserving prior
 matches, custom fields and recovery evidence. Failed/zero downloads add no match;
 existing files resume by presence. These rules do not retroactively verify old media.

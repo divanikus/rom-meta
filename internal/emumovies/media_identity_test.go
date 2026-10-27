@@ -164,3 +164,55 @@ func TestFetchVideoResumePreservesHistoryAndOmitsFailedDownloads(t *testing.T) {
 		t.Fatal("zero-download repeat changed metadata")
 	}
 }
+
+func TestPSPMinisCatalogLabelMatchesUntaggedMedia(t *testing.T) {
+	const platform = "Sony - PlayStation Portable"
+	for _, tc := range []struct {
+		source, release, system string
+		want                    bool
+	}{
+		{"Example (Europe)", "Example (Europe) (Minis)", platform, true},
+		{"Example (USA)", "Example (Europe) (Minis)", platform, false},
+		{"Example (Japan)", "Example (USA) (Minis)", platform, false},
+		{"Example (Europe) (Minis)", "Example (Europe) (Minis)", platform, true},
+		{"Example (Europe) (Minis)", "Example (Europe)", platform, false},
+		{"Example (Europe)", "Example (Europe) (Minis) (Demo)", platform, false},
+		{"Example (Europe)", "Example (Europe) (Minis) (Unknown Edition)", platform, false},
+		{"Example (Europe)", "Example (Europe) [Minis]", platform, false},
+		{"Example (Europe)", "Example (Europe) (Minis)", "Nintendo - Nintendo DS", false},
+		{"Example (Europe)", "Example (Europe) (Minis)", "Sony - PlayStation Portable (PSN) (Minis) (Encrypted)", true},
+	} {
+		t.Run(tc.system+"/"+tc.source+"/"+tc.release, func(t *testing.T) {
+			game := identityGame("minis", tc.release)
+			game.Platform = tc.system
+			entry := FTPEntry{Name: tc.source + ".mp4", Size: 123}
+			full, ok := matchVideoEntry(tc.system, "videos", "HQ", "ftps", "example.test", entry, []catalogGame{game})
+			index := newMediaGameIndex([]catalogGame{game})
+			indexed, indexedOK := matchVideoEntry(tc.system, "videos", "HQ", "ftps", "example.test", entry, index.candidates(entry.Name))
+			if ok != tc.want || indexedOK != ok || !reflect.DeepEqual(full, indexed) {
+				t.Fatalf("video full=%+v/%v indexed=%+v/%v want=%v", full, ok, indexed, indexedOK, tc.want)
+			}
+			art, artOK := matchArtworkFile(artworkPackage{Platform: tc.system}, "art", filepath.Join("art", tc.source+".png"), 123, index.candidates(entry.Name))
+			if artOK != tc.want {
+				t.Fatalf("art=%+v/%v want=%v", art, artOK, tc.want)
+			}
+			if ok && (full.Release != tc.release || art.Release != tc.release) {
+				t.Fatal("catalog release key changed", full, art)
+			}
+		})
+	}
+	// A source name without the collection tag cannot choose between two owners.
+	base := identityGame("retail", "Example (Europe)")
+	base.Platform = platform
+	mini := identityGame("mini", "Example (Europe) (Minis)")
+	mini.Platform = platform
+	games := []catalogGame{base, mini}
+	entry := FTPEntry{Name: "Example (Europe).mp4", Size: 123}
+	if c, ok := matchVideoEntry(platform, "videos", "HQ", "ftps", "example.test", entry, newMediaGameIndex(games).candidates(entry.Name)); ok {
+		t.Fatal("ambiguous retail/digital owner chosen", c)
+	}
+	entry.Name = "Example (Europe) (Minis).mp4"
+	if c, ok := matchVideoEntry(platform, "videos", "HQ", "ftps", "example.test", entry, newMediaGameIndex(games).candidates(entry.Name)); !ok || c.Game != "mini" {
+		t.Fatal("explicit source label lost its owner", c, ok)
+	}
+}

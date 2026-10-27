@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 
+	"rommeta/internal/platformnames"
 	"rommeta/internal/regions"
 )
 
@@ -73,3 +74,15 @@ func mediaIdentityKey(value string) string {
 }
 
 var mediaAttributePattern = regexp.MustCompile(`(?i)^(?:(?:disc|disk|cd|side|track)\s*(?:[0-9]+|[a-z]|[ivxlcdm]+)(?:\s+of\s+[0-9]+)?|rev(?:ision)?\s+(?:[a-z]|[0-9]+(?:\.[0-9a-z]+)*)|v(?:ersion)?\s*[0-9]+(?:\.[0-9a-z]+)*|[0-9]{4}-[0-9]{2}-[0-9]{2})$`)
+
+var pspMinisLabel = regexp.MustCompile(`(?i)\(\s*minis\s*\)`)
+
+// No-Intro's PSP collection label is absent from some provider media names.
+// Permit that catalog-side fallback only on PSP. Explicit source labels,
+// other qualifiers, regions and ambiguous owners retain the usual guards.
+func catalogMediaName(platform, sourceName, catalogName string) string {
+	if !pspMinisLabel.MatchString(catalogName) || pspMinisLabel.MatchString(sourceName) || platformnames.ForSource(platform, platformnames.SourceEmuMovies) != "Sony PSP" {
+		return catalogName
+	}
+	return strings.TrimSpace(pspMinisLabel.ReplaceAllString(catalogName, " "))
+}

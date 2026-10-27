@@ -728,7 +728,8 @@ func scoreVideoAgainstGame(stem string, game catalogGame) (string, int, []string
 	bestRelease, bestScore := "", 0
 	var bestKeys []string
 	for _, release := range releases {
-		if !mediaIdentityCompatible(stem, release.Name) {
+		matchName := catalogMediaName(game.Platform, stem, release.Name)
+		if !mediaIdentityCompatible(stem, matchName) {
 			continue
 		}
 		releaseRegions := release.Regions
@@ -740,7 +741,7 @@ func scoreVideoAgainstGame(stem string, game catalogGame) (string, int, []string
 		}
 		score := 0
 		var matched []string
-		if intersects(fileExactKeys, exactTitleKeys(release.Name)) {
+		if intersects(fileExactKeys, exactTitleKeys(matchName)) {
 			score = 160
 			matched = append(matched, "release")
 		}
@@ -748,13 +749,13 @@ func scoreVideoAgainstGame(stem string, game catalogGame) (string, int, []string
 			title, key string
 			score      int
 		}{{release.Title, "release_title", 118}, {release.Name, "release_name", 112}, {game.Title, "title", 110}} {
-			if intersects(fileBaseKeys, titleMatchKeys(candidate.title)) && candidate.score > score {
+			if intersects(fileBaseKeys, titleMatchKeys(catalogMediaName(game.Platform, stem, candidate.title))) && candidate.score > score {
 				score = candidate.score
 				matched = []string{candidate.key}
 			}
 		}
 		for _, alias := range game.Aliases {
-			if intersects(fileBaseKeys, titleMatchKeys(alias)) && 122 > score {
+			if intersects(fileBaseKeys, titleMatchKeys(catalogMediaName(game.Platform, stem, alias))) && 122 > score {
 				score = 122
 				matched = []string{"alias"}
 			}
@@ -762,6 +763,9 @@ func scoreVideoAgainstGame(stem string, game catalogGame) (string, int, []string
 		if score > 0 && regionOverlap(fileRegions, releaseRegions) {
 			score += 12
 			matched = appendUnique(matched, "region")
+		}
+		if score > 0 && matchName != release.Name {
+			matched = appendUnique(matched, "psp_minis_label")
 		}
 		if score > bestScore || (score > 0 && score == bestScore && release.Name == game.DefaultRelease) {
 			bestRelease, bestScore, bestKeys = release.Name, score, matched

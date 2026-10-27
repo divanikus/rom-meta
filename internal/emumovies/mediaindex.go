@@ -24,15 +24,19 @@ func newMediaGameIndex(games []catalogGame) mediaGameIndex {
 		}
 	}
 	for i, game := range games {
-		add(index.base, titleMatchKeys(game.Title), i)
+		addBase := func(name string) {
+			add(index.base, titleMatchKeys(name), i)
+			add(index.base, titleMatchKeys(catalogMediaName(game.Platform, "", name)), i)
+		}
+		addBase(game.Title)
 		for _, alias := range game.Aliases {
-			add(index.base, titleMatchKeys(alias), i)
+			addBase(alias)
 		}
 		for _, release := range game.Releases {
 			add(index.exact, exactTitleKeys(release.Name), i)
 			add(index.exact, exactTitleKeys(release.MAMESet), i)
-			add(index.base, titleMatchKeys(release.Title), i)
-			add(index.base, titleMatchKeys(release.Name), i)
+			addBase(release.Title)
+			addBase(release.Name)
 		}
 	}
 	return index
