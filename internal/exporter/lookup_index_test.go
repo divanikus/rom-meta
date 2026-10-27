@@ -328,3 +328,41 @@ func TestPortableLookupStampKeepsMaterialDifferences(t *testing.T) {
 		}
 	}
 }
+
+func TestLookupReleasesParsedCardsBetweenRequests(t *testing.T) {
+	for _, packed := range []bool{false, true} {
+		t.Run(fmt.Sprint(packed), func(t *testing.T) {
+			catalog, _ := indexFixture(t, packed)
+			resolver := openIndexTest(t, catalog, 0, 3)
+			assertReleased := func() {
+				t.Helper()
+				for _, games := range resolver.index.GamesByName {
+					for _, game := range games {
+						if game.root != nil || game.mediaStyles != nil {
+							t.Fatal("lookup retains a full parsed card after its request", game.path)
+						}
+					}
+				}
+			}
+			observe := func(id int) ObservedInput {
+				name := fmt.Sprintf("Authority %d.zip", id)
+				return ObservedInput{ROM: name, Outer: FileDigest{Size: 4}, Catalog: &CatalogObservation{Kind: "name-stat-v1", Files: []CatalogFile{{Name: name, Size: 4, MtimeNS: 1}}}}
+			}
+			for round := 0; round < 2; round++ {
+				for id := 0; id < 3; id++ {
+					plan, err := resolver.ResolveBindings([]ObservedInput{observe(id)}, true)
+					if err != nil || len(plan.Records) != 1 || plan.Records[0].Status != "matched" || plan.Records[0].Fields["title"].Value == "" {
+						t.Fatal("metadata changed while reusing the compact index", plan, err)
+					}
+					assertReleased()
+				}
+			}
+			bad := observe(1)
+			bad.ROM = "../unsafe.zip"
+			if _, err := resolver.ResolveBindings([]ObservedInput{observe(0), bad}, true); err == nil {
+				t.Fatal("invalid observation accepted")
+			}
+			assertReleased()
+		})
+	}
+}

@@ -1,5 +1,7 @@
 FROM scratch
 COPY --chmod=755 bin/linux-amd64/rom-meta /rom-meta
+# Go budget for a 2 GiB container; override for a different runtime limit.
+ENV GOMEMLIMIT=1536MiB
 USER 568:568
 EXPOSE 8787
 ENTRYPOINT ["/rom-meta", "serve"]

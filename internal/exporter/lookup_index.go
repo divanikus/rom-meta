@@ -296,9 +296,9 @@ func readLookupEntry(root, path string) (lookupEntry, error) {
 func newCatalogIndex() *catalogIndex {
 	return &catalogIndex{BySize: map[int64][]fingerprint{}, ByName: map[string][]fingerprint{}, GamesByName: map[string][]*game{}}
 }
-func (e lookupEntry) add(index *catalogIndex, path string) {
+func (e lookupEntry) add(index *catalogIndex, path string) *game {
 	if e.GameDigest == "" {
-		return
+		return nil
 	}
 	g := &game{path: path, name: e.Title, documentDigest: e.GameDigest}
 	for _, key := range e.GameNames {
@@ -324,6 +324,7 @@ func (e lookupEntry) add(index *catalogIndex, path string) {
 		}
 		index.BySize[fp.Size] = append(index.BySize[fp.Size], fingerprint{game: g, release: fp.Release, variant: fp.Variant, chd: fp.CHD, size: fp.Size, sha1: fp.SHA1, sha256: fp.SHA256, md5: fp.MD5, crc: fp.CRC})
 	}
+	return g
 }
 func (catalog *LookupCatalog) openIndex(resolver *LookupResolver, folder string) error {
 	packed, err := catalogfs.PlatformLayout(folder)
@@ -380,7 +381,9 @@ func (catalog *LookupCatalog) openIndex(resolver *LookupResolver, folder string)
 			updates[item.Name()] = lookupRow{before, entry}
 			resolver.IndexStats.Rebuilt++
 		}
-		entry.add(resolver.index, path)
+		if game := entry.add(resolver.index, path); game != nil {
+			resolver.games = append(resolver.games, game)
+		}
 		relative, _ := filepath.Rel(catalog.Root, path)
 		if entry.GameDigest != "" {
 			resolver.DocumentDigests[filepath.ToSlash(filepath.Join(relative, "game.yaml"))] = entry.GameDigest

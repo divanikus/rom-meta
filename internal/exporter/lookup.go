@@ -50,6 +50,7 @@ type LookupResolver struct {
 	Catalog         *LookupCatalog
 	Platform        LookupPlatform
 	index           *catalogIndex
+	games           []*game // Compact identities; parsed card trees live for one request.
 	DocumentDigests map[string]string
 	IndexStats      LookupIndexStats
 }
@@ -200,6 +201,12 @@ func (resolver *LookupResolver) Resolve(inputs []ObservedInput) (*Plan, error) {
 // ResolveBindings explicitly permits game-only identity, never dump verification.
 // Existing exports and default exact API lookups retain their previous behavior.
 func (resolver *LookupResolver) ResolveBindings(inputs []ObservedInput, allowGame bool) (*Plan, error) {
+	defer func() {
+		for _, game := range resolver.games {
+			game.root = nil
+			game.mediaStyles = nil
+		}
+	}()
 	catalog := resolver.Catalog
 	plan := &Plan{SchemaVersion: 1, Target: "es-de", Platform: resolver.Platform.Platform, System: resolver.Platform.System, DataRoot: catalog.Root, Profile: catalog.Profile, Records: []Record{}}
 	seen := map[string]bool{}

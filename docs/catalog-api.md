@@ -126,6 +126,8 @@ such edits. Selected-document SHA checks still apply.
 Read-only catalogs can use prebuilt indexes or a writable directory via
 `--lookup-cache-dir /cache`; `--lookup-cache-dir -` disables persisted indexes.
 Only one platform index stays in memory; returning to another reuses disk summaries.
+Parsed card documents and media-style maps are released after each lookup;
+compact names, fingerprints and source digests remain indexed.
 
 ## Automatic updates
 
@@ -250,6 +252,10 @@ Cross-build a static Linux binary at `bin/linux-amd64/rom-meta`, then use
 `docker/Dockerfile.api`. The image runs as UID/GID 568 with a read-only catalog,
 optional profile/selected-ROM mounts and optional token environment. It needs no
 RomM database or Resources access.
+
+The image sets `GOMEMLIMIT=1536MiB` for a 2 GiB container. Override it for other
+runtime limits, leaving space for non-Go memory and temporary files; see the
+[Go memory-limit guide](https://go.dev/doc/gc-guide#Memory_limit).
 
 Use prebuilt indexes, a writable cache mount or disabled persistence. Deflated
 media also needs writable temporary space: the scratch image has no default
