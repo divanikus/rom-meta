@@ -10,10 +10,62 @@ game/base keys, or a reviewer can supply them. Staging checks actual modified
 payloads and catalog preconditions. The helper does not download sources, guess
 parents from title similarity or independently establish source accuracy.
 
-The core also accepts variants linked only to their containing game, with
-`based_on` omitted. See [game-only catalog records](catalog-variants.md#catalog-records).
-This staging helper still requires exact release/variant parents in its manifest;
-its current evidence format does not yet collect game-only relationships.
+Variants can link only to their containing game: omit `based_on` and use a
+reviewed original-game association. Exact release/variant parents remain optional.
+See [game-only catalog records](catalog-variants.md#catalog-records).
+
+## Prepare published T-En fingerprints without local ROMs
+
+A local T-En XML DAT supplies published output identities; your reviewed map
+supplies the original game. The DAT alone does not identify that game. Add `dat`
+to an ordinary relationship entry, naming the exact `rom` or `disk` output:
+
+```json
+{
+  "schema_version": 1,
+  "entries": [{
+    "platform": "Sony - PlayStation",
+    "game": "Original Game",
+    "variant": {
+      "key": "Name from the source",
+      "title": "Translated Game",
+      "kind": "translation",
+      "languages": ["en"]
+    },
+    "dat": {"path": "ps1-ten.xml", "name": "Exact disk name from DAT"},
+    "evidence": {
+      "relationship": "reviewed",
+      "links": [{"source": "Reviewed project mapping", "entry": "Translation record", "parent": "Original Game"}]
+    },
+    "expected_documents": {
+      "game.yaml": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "fingerprints.yaml": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+    }
+  }]
+}
+```
+
+Replace placeholder names/digests with the reviewed bundle and current document
+SHA256 values. Variant keys are arbitrary identifiers; no translation-name
+vocabulary is required. `dat.path` is relative to `--sources`. The DAT header must
+match the entry's platform. Its content is pinned by SHA256 automatically; an
+existing snapshot pin must agree. The exact output name supplies `file`; supplied
+file constraints must agree with that output. Keep a separate original-game
+source link: an output hash does not itself prove a parent.
+
+Use the normal staging command below, omitting `--rom-root` and `inputs` when
+preparing only published identities. Raw `rom` records supply positive size and
+SHA1 with optional MD5/CRC32. Optical `disk` SHA1 becomes `chd-combined-sha1`,
+without claiming compressed-file size or raw-disc hashes. No local game is needed.
+Underscore-prefixed documentation/BIOS containers and multi-ROM groups are not imported by
+this adapter. Missing/duplicate output names, platform/hash conflicts and stale
+source pins fail explicitly.
+
+Optional `inputs` still verify local files; `--rom-root` is then required. A CHD
+input checks its header/stat identity, without full-image hashing or an integrity
+claim. Game-only relationships use `reviewed`; release-name/base-hash evidence
+still requires an exact `based_on`. Ordinary offline export recognizes a prepared
+variant by its own fingerprint, even after the file is renamed.
 
 ## Collect relationships from local source metadata
 
@@ -101,8 +153,8 @@ Do not replace newer production bundles with an older sparse staging copy.
 ## Relationship JSON
 
 This is the helper's versioned input, not a core import command. One entry defines
-one modified payload identity and may list several input paths with the same
-bytes. Paths are relative to `--rom-root`, starting with the exact platform
+one modified output identity and may list several input paths with the same
+bytes. An entry with `dat` can instead use the published identity without inputs. Paths are relative to `--rom-root`, starting with the exact platform
 folder. Both catalog SHA256 values describe the original source documents before
 any entry in this plan is added.
 
@@ -163,8 +215,9 @@ also agree. Omit `member` for a raw file. Optional input `size` and `mtime_ns`
 bind the outer file's saved stat signature. Archives are read without extraction;
 UTF-8 and legacy CP437 member names use the same decoder as catalog ZIPs and
 export observations.
-Representation-specific CHD identities and multi-payload sets need separate
-preparation adapters; this helper does not reinterpret their hashes.
+Published T-En `disk` records and optional standalone CHD inputs use the explicit
+CHD representation above. Other disc formats and multi-payload sets need separate
+preparation adapters; their hashes are not reinterpreted.
 
 Top-level `snapshots` can pin local source files with `path`, `sha256` and
 optional `url`; `path` is relative to `--sources`. Source files are checked
@@ -184,8 +237,8 @@ Allowed relationship evidence:
   optionally MD5/CRC32. Those hashes must agree with the exact official base
   release's fingerprint. This verifies the supplied source claim against the
   catalog; it does not read or reconstruct an unmodified ROM.
-- `reviewed`: an explicit reviewed relationship; preserve the decision's
-  reference in its source link.
+- `reviewed`: an explicit reviewed game or release relationship; preserve the
+  decision's reference in its source link. Omit `based_on` for a game-only link.
 
 Unknown top-level/entry fields and duplicate JSON keys fail. Names, parents,
 strong hashes, input changes, conflicting ownership across selected bundles,

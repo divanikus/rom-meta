@@ -5,6 +5,8 @@ import (
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -12,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"rommeta/internal/exporter"
 	"rommeta/internal/zipnames"
 )
 
@@ -46,8 +49,8 @@ func resolved(name string) (string, error) {
 }
 
 func checkOutput(o options) error {
-	if o.Catalog == "" || o.ROMRoot == "" || o.Links == "" || o.Out == "" {
-		return fmt.Errorf("--catalog, --rom-root, --links and --out required")
+	if o.Catalog == "" || o.Links == "" || o.Out == "" {
+		return fmt.Errorf("--catalog, --links and --out required; --rom-root required for actual inputs")
 	}
 	if o.Media != "artwork" && o.Media != "all" && o.Media != "none" {
 		return fmt.Errorf("--media must be artwork, all or none")
@@ -154,6 +157,9 @@ func checkSnapshots(m *manifest, o options) error {
 }
 
 func verifyInput(root string, in input, want fingerprint) (os.FileInfo, error) {
+	if root == "" {
+		return nil, fmt.Errorf("--rom-root required for actual inputs")
+	}
 	name, err := regularInput(root, in.Path)
 	if err != nil {
 		return nil, err
@@ -164,6 +170,35 @@ func verifyInput(root string, in input, want fingerprint) (os.FileInfo, error) {
 	}
 	if in.Size != 0 && before.Size() != in.Size || in.MTimeNS != 0 && before.ModTime().UnixNano() != in.MTimeNS {
 		return nil, fmt.Errorf("input stat changed: %s", in.Path)
+	}
+	if want.Kind == "chd-combined-sha1" {
+		if in.Member != "" {
+			return nil, fmt.Errorf("CHD identity requires a standalone CHD")
+		}
+		// The existing disc reader parses the common CHD header; no PS1 game
+		// identity or whole-file payload digest is inferred by this reader choice.
+		observed, err := exporter.ObserveInput(root, "psx", in.Path)
+		if err != nil {
+			return nil, err
+		}
+		if observed.Disc == nil || len(observed.Disc.Files) != 1 {
+			return nil, fmt.Errorf("missing CHD header")
+		}
+		header, err := hex.DecodeString(observed.Disc.Files[0].Header)
+		if err != nil || len(header) != 124 {
+			return nil, fmt.Errorf("invalid CHD header")
+		}
+		if !strings.EqualFold(hex.EncodeToString(header[84:104]), want.SHA1) || want.Size != 0 && binary.BigEndian.Uint64(header[32:40]) != uint64(want.Size) {
+			return nil, fmt.Errorf("CHD declared identity mismatch")
+		}
+		after, err := os.Stat(name)
+		if err != nil {
+			return nil, err
+		}
+		if !sameStat(before, after) {
+			return nil, fmt.Errorf("CHD changed during observation")
+		}
+		return after, nil
 	}
 	f, err := os.Open(name)
 	if err != nil {

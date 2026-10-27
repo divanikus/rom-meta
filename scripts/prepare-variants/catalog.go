@@ -40,7 +40,10 @@ func addEntry(g, f *catalogyaml.Document, e entry) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	v := map[string]any{"kind": e.Variant.Kind, "based_on": e.Variant.BasedOn}
+	v := map[string]any{"kind": e.Variant.Kind}
+	if e.Variant.BasedOn != "" {
+		v["based_on"] = e.Variant.BasedOn
+	}
 	if e.Variant.Title != "" {
 		v["title"] = e.Variant.Title
 	}
@@ -64,6 +67,9 @@ func addEntry(g, f *catalogyaml.Document, e entry) (bool, error) {
 	}
 	if e.Evidence.Relationship == "source-release-name" {
 		source["base_binary_identity"] = "not-proven-by-base-hash"
+	}
+	if e.Variant.BasedOn == "" {
+		source["relationship_scope"] = "game"
 	}
 	v["source"] = source
 	node, err := yamlNode(v)
@@ -97,7 +103,13 @@ func addEntry(g, f *catalogyaml.Document, e entry) (bool, error) {
 	if items.Kind != yaml.SequenceNode {
 		return false, fmt.Errorf("fingerprint items must be a sequence")
 	}
-	file := map[string]any{"name": e.File.Name, "size": e.File.Size}
+	file := map[string]any{"name": e.File.Name}
+	if e.File.Kind != "" {
+		file["kind"] = e.File.Kind
+	}
+	if e.File.Size != 0 {
+		file["size"] = e.File.Size
+	}
 	for k, value := range map[string]string{"sha1": e.File.SHA1, "sha256": e.File.SHA256, "md5": e.File.MD5, "crc32": e.File.CRC32} {
 		if value != "" {
 			file[k] = strings.ToLower(value)
@@ -111,14 +123,14 @@ func addEntry(g, f *catalogyaml.Document, e entry) (bool, error) {
 	for _, existing := range items.Content {
 		owner := catalogyaml.Scalar(catalogyaml.Value(existing, "variant"))
 		existingFile := catalogyaml.Value(existing, "file")
-		if catalogyaml.Scalar(catalogyaml.Value(existingFile, "kind")) != "" {
+		if catalogyaml.Scalar(catalogyaml.Value(existingFile, "kind")) != e.File.Kind {
 			continue
 		}
 		same := false
 		for _, k := range []string{"sha1", "sha256"} {
 			want := strings.ToLower(catalogyaml.Scalar(catalogyaml.Value(catalogyaml.Value(fp, "file"), k)))
 			got := strings.ToLower(catalogyaml.Scalar(catalogyaml.Value(existingFile, k)))
-			same = same || want != "" && want == got && e.File.Size == catalogyaml.Int64(catalogyaml.Value(existingFile, "size"))
+			same = same || want != "" && want == got && (e.File.Kind == "chd-combined-sha1" || e.File.Size == catalogyaml.Int64(catalogyaml.Value(existingFile, "size")))
 		}
 		if !same {
 			continue

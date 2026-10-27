@@ -89,6 +89,9 @@ func checkOwnership(bundles map[string]*bundle) error {
 			file := catalogyaml.Value(item, "file")
 			kind := catalogyaml.Scalar(catalogyaml.Value(file, "kind"))
 			size := catalogyaml.Int64(catalogyaml.Value(file, "size"))
+			if kind == "chd-combined-sha1" {
+				size = 0
+			}
 			for _, hash := range []string{"sha1", "sha256"} {
 				text := strings.ToLower(catalogyaml.Scalar(catalogyaml.Value(file, hash)))
 				if text == "" {

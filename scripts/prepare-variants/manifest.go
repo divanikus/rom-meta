@@ -28,12 +28,13 @@ type variant struct {
 	Key       string   `json:"key"`
 	Title     string   `json:"title,omitempty"`
 	Kind      string   `json:"kind"`
-	BasedOn   string   `json:"based_on"`
+	BasedOn   string   `json:"based_on,omitempty"`
 	Languages []string `json:"languages,omitempty"`
 	Group     string   `json:"group,omitempty"`
 	Version   string   `json:"version,omitempty"`
 }
 type fingerprint struct {
+	Kind   string `json:"kind,omitempty"`
 	Name   string `json:"name"`
 	Size   int64  `json:"size"`
 	SHA1   string `json:"sha1,omitempty"`
@@ -52,14 +53,22 @@ type evidence struct {
 	Links         []map[string]any `json:"links"`
 	Normalization []string         `json:"normalization,omitempty"`
 }
+
+// datReference names an exact published output in a pinned local T-En XML DAT.
+// It supplies output identity only; the reviewed game relationship stays separate.
+type datReference struct {
+	Path string `json:"path"`
+	Name string `json:"name"`
+}
 type entry struct {
+	DAT      *datReference     `json:"dat,omitempty"`
 	Platform string            `json:"platform"`
 	Game     string            `json:"game"`
 	Variant  variant           `json:"variant"`
 	File     fingerprint       `json:"file"`
 	Evidence evidence          `json:"evidence"`
 	Expected map[string]string `json:"expected_documents"`
-	Inputs   []input           `json:"inputs"`
+	Inputs   []input           `json:"inputs,omitempty"`
 }
 
 func checkJSONKeys(raw []byte) error {
@@ -161,10 +170,16 @@ func safeRelative(s string) bool {
 }
 func validHash(s string, n int) bool { b, e := hex.DecodeString(s); return e == nil && len(b) == n }
 func validateEntry(e entry) error {
-	for _, s := range []string{e.Platform, e.Game, e.Variant.Key, e.Variant.BasedOn} {
+	for _, s := range []string{e.Platform, e.Game, e.Variant.Key} {
 		if !safeName(s) || strings.HasPrefix(s, ".") {
 			return fmt.Errorf("unsafe catalog name %q", s)
 		}
+	}
+	if e.Variant.BasedOn != "" && (!safeName(e.Variant.BasedOn) || strings.HasPrefix(e.Variant.BasedOn, ".")) {
+		return fmt.Errorf("unsafe base reference")
+	}
+	if e.Variant.BasedOn == "" && e.Evidence.Relationship != "reviewed" {
+		return fmt.Errorf("game-only association requires reviewed game evidence")
 	}
 	if strings.HasPrefix(e.Game, "_") {
 		return fmt.Errorf("leading-underscore game is skipped by core catalog validation")
@@ -172,8 +187,12 @@ func validateEntry(e entry) error {
 	if e.Variant.Kind == "" {
 		return fmt.Errorf("variant kind required")
 	}
-	if e.File.Name == "" || e.File.Size <= 0 || (e.File.SHA1 == "" && e.File.SHA256 == "") {
-		return fmt.Errorf("need payload name, positive size and SHA1 or SHA256")
+	if e.File.Kind == "chd-combined-sha1" {
+		if e.File.Name == "" || e.File.Size < 0 || !validHash(e.File.SHA1, 20) || strings.Trim(e.File.SHA1, "0") == "" || e.File.SHA256 != "" || e.File.MD5 != "" || e.File.CRC32 != "" {
+			return fmt.Errorf("CHD identity needs combined SHA1, optional logical size and no raw-file digests")
+		}
+	} else if e.File.Kind != "" || e.File.Name == "" || e.File.Size <= 0 || (e.File.SHA1 == "" && e.File.SHA256 == "") {
+		return fmt.Errorf("need supported representation, payload name, positive size and SHA1 or SHA256")
 	}
 	for _, h := range []struct {
 		s string
@@ -201,8 +220,8 @@ func validateEntry(e entry) error {
 			}
 		}
 	}
-	if len(e.Inputs) == 0 {
-		return fmt.Errorf("at least one actual input required")
+	if len(e.Inputs) == 0 && e.DAT == nil {
+		return fmt.Errorf("actual input or an exact published T-En DAT output required")
 	}
 	for _, in := range e.Inputs {
 		if !safeRelative(in.Path) || (in.Member != "" && !safeRelative(in.Member)) || in.Size < 0 || in.MTimeNS < 0 {

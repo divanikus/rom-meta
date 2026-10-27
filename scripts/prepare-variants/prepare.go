@@ -85,6 +85,9 @@ func run(o options) (result *report, failure error) {
 		return nil, err
 	}
 	r := &report{SchemaVersion: 1, ManifestSHA256: digest(raw), Media: o.Media, Status: "preview", Entries: len(m.Entries), Holds: m.Holds}
+	if err := resolveTEn(m, o); err != nil {
+		return r, err
+	}
 	if err := checkSnapshots(m, o); err != nil {
 		r.Errors = append(r.Errors, err.Error())
 		r.Status = "blocked"
@@ -95,7 +98,7 @@ func run(o options) (result *report, failure error) {
 	var inputs []checkedInput
 	for i, e := range m.Entries {
 		if i%50 == 0 {
-			progress(o, "Checking relationships and payloads: %d/%d", i, len(m.Entries))
+			progress(o, "Checking relationships and output identities: %d/%d", i, len(m.Entries))
 		}
 		label := fmt.Sprintf("%s/%s/%s", e.Platform, e.Game, e.Variant.Key)
 		fail := func(err error) { r.Errors = append(r.Errors, label+": "+err.Error()) }

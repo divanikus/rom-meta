@@ -21,7 +21,7 @@ func main() {
 	var o options
 	var c collectOptions
 	flag.StringVar(&o.Catalog, "catalog", "", "Read-only source catalog root")
-	flag.StringVar(&o.ROMRoot, "rom-root", "", "Read-only root for relative input paths")
+	flag.StringVar(&o.ROMRoot, "rom-root", "", "Optional read-only root for local input paths")
 	flag.StringVar(&o.Sources, "sources", "", "Read-only root for pinned source snapshots")
 	flag.StringVar(&o.Links, "links", "", "Prepared relationship JSON (schema_version 1)")
 	flag.StringVar(&o.Out, "out", "", "Separate sparse staging catalog; never the source")
