@@ -1,9 +1,10 @@
 # Prepare translations and hacks
 
 The separate `scripts/prepare-variants` helper converts explicit relationships
-into ordinary [variant and fingerprint YAML](catalog-variants.md). It runs from a
-source checkout with the Go toolchain in `go.mod`; normal offline exports do not
-need it. No additional dependency or core CLI command is installed.
+into ordinary [variant and fingerprint YAML](catalog-variants.md). The compiled
+`prepare-variants.exe` runs as a standalone console program on Windows x64, without
+Go or a source checkout. Normal offline exports consume prepared variants directly.
+The helper remains separate from the core CLI.
 
 Source-first discovery resolves published relationships and unique catalog names
 into game links, with a terminal review queue for uncertain cases. The older
@@ -14,6 +15,45 @@ snapshots; it does not download sources or select fuzzy title matches.
 Variants can link only to their containing game: omit `based_on` and use a
 reviewed original-game association. Exact release/variant parents remain optional.
 See [game-only catalog records](catalog-variants.md#catalog-records).
+
+## Run the standalone helper
+
+Extract a `prepare-variants-<version>-windows-amd64.zip` helper package into a
+folder and open PowerShell there:
+
+```powershell
+.\prepare-variants.exe --help
+```
+
+The package includes the executable, `README.txt`, this guide, build information
+and dependency licenses. Follow the source download/setup steps below, then run:
+
+```powershell
+.\prepare-variants.exe --catalog "D:\RomMetaWork\catalog" --sources "D:\RomMetaWork\sources" --discover "D:\RomMetaWork\review"
+.\prepare-variants.exe --review "D:\RomMetaWork\review"
+.\prepare-variants.exe --workspace "D:\RomMetaWork\review" --out "D:\RomMetaWork\prepared"
+```
+
+Replace the example paths with your folders. The last command previews; add
+`--apply` to create staging after review. Source discovery needs neither local
+ROMs nor Go. It is a terminal program; launching it from PowerShell keeps the
+output visible. Linux builds use `./prepare-variants` after `chmod +x`.
+
+The shell examples below use `prepare-variants` as the command name. In the
+extracted Windows folder, use `.\prepare-variants.exe`; on Linux use
+`./prepare-variants`, or add the executable directory to PATH.
+
+Standalone helper packages are built separately from the main CLI archives.
+Existing published 0.1.0 main CLI assets are unchanged. If a helper archive is not
+available with a release, developers can build one from a clean checkout using
+[the packaging instructions](../CONTRIBUTING.md). To build just a local Windows
+executable with the Go toolchain from `go.mod`:
+
+```shell
+go build -trimpath -o bin/prepare-variants.exe ./scripts/prepare-variants
+```
+
+Go is required for that build, not for running the resulting executable.
 
 ## Download the source metadata
 
@@ -107,12 +147,12 @@ add missing descriptions/artwork to original cards.
 
 Start with a read-only catalog snapshot containing original games and locally
 obtained translation XML DAT files (see downloads above). No ROM directory, API key or exact patch version is
-required. Run from the source checkout:
+required. Run the standalone helper:
 
 ```shell
-go run ./scripts/prepare-variants --catalog "/catalog-snapshot" --sources "/snapshots" --discover "/work/translation-review"
-go run ./scripts/prepare-variants --review "/work/translation-review"
-go run ./scripts/prepare-variants --workspace "/work/translation-review" --out "/work/variant-catalog" --media artwork
+prepare-variants --catalog "/catalog-snapshot" --sources "/snapshots" --discover "/work/translation-review"
+prepare-variants --review "/work/translation-review"
+prepare-variants --workspace "/work/translation-review" --out "/work/variant-catalog" --media artwork
 ```
 
 Discovery searches `--sources` recursively for supported XML DATs and ZIP
@@ -266,7 +306,7 @@ more local metadata sources; the command scans only the selected platforms'
 `translations/` subdirectories and builds the ordinary relationship JSON:
 
 ```shell
-go run ./scripts/prepare-variants --catalog "/catalog-snapshot" --rom-root "/roms" --sources "/snapshots" --ga "ga.dat" --rha "rha" --hackhash "hackhash-detailed.json" --platforms nes,snes,ngpc --collect-links "/work/links.json" --report "/work/source-preview.json"
+prepare-variants --catalog "/catalog-snapshot" --rom-root "/roms" --sources "/snapshots" --ga "ga.dat" --rha "rha" --hackhash "hackhash-detailed.json" --platforms nes,snes,ngpc --collect-links "/work/links.json" --report "/work/source-preview.json"
 ```
 
 Preview writes only the requested report. Repeat with `--apply` and a new report
@@ -315,7 +355,7 @@ Run from the checkout root. Keep the source catalog, ROMs, pinned snapshots,
 relationship JSON and staging directory outside Git:
 
 ```shell
-go run ./scripts/prepare-variants --catalog "/catalog" --rom-root "/roms" --sources "/snapshots" --links "/work/links.json" --out "/work/variant-catalog" --report "/work/preview.json"
+prepare-variants --catalog "/catalog" --rom-root "/roms" --sources "/snapshots" --links "/work/links.json" --out "/work/variant-catalog" --report "/work/preview.json"
 ```
 
 Review the held queue, errors, file count and copy size. Repeat with `--apply`
