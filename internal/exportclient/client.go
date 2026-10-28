@@ -260,9 +260,27 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 		}
 		var candidates []struct{ platform, system string }
 		for _, platform := range capabilities.Platforms {
-			for _, id := range platform.ExportSystems {
+			covered := false
+			ids := platform.ExportSystems
+			for _, group := range capabilities.Platforms {
+				if group.Platform == platform.Platform {
+					continue
+				}
+				for _, member := range group.Catalogs {
+					if member == platform.Platform {
+						covered = true
+						if job.Single && !known && strings.EqualFold(requestedSystem, platform.Platform) {
+							ids = group.ExportSystems
+						}
+					}
+				}
+			}
+			if covered && !(job.Single && !known && strings.EqualFold(requestedSystem, platform.Platform)) {
+				continue
+			}
+			for _, id := range ids {
 				label, _ := exporter.SystemPlatform(id)
-				if known && id == system || job.Single && !known && (strings.EqualFold(requestedSystem, platform.Platform) || strings.EqualFold(requestedSystem, label)) && id == platform.System {
+				if known && id == system || job.Single && !known && (strings.EqualFold(requestedSystem, platform.Platform) || strings.EqualFold(requestedSystem, label)) && (id == platform.System || len(ids) == 1) {
 					candidates = append(candidates, struct{ platform, system string }{platform.Platform, id})
 				}
 			}

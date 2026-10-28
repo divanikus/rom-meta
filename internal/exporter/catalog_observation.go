@@ -174,16 +174,16 @@ func (resolver *LookupResolver) bindCatalog(input ObservedInput, allowGame bool)
 	// A multidisc directory may omit the Disc qualifier. Every member must identify
 	// one catalog card; no title-only or region/edition guessing is performed.
 	if input.Catalog.Directory && len(input.Catalog.Files) > 1 && len(input.Catalog.Files) <= 32 {
-		edition, _, _ := discEdition(input.Catalog.Files[0].Name)
-		sameEdition := nameKey(edition) == nameKey(name)
+		edition, _, _ := catalogMemberEdition(input.Catalog.Files[0].Name)
+		sameEdition := true
 		games := map[string]*game{}
 		for i, file := range input.Catalog.Files {
-			key, number, total := discEdition(file.Name)
+			key, number, total := catalogMemberEdition(file.Name)
 			if number != i+1 || total != 0 && total != len(input.Catalog.Files) || key != edition {
 				sameEdition = false
 				break
 			}
-			choices := resolver.index.ByName[nameKey(file.Name)]
+			choices := resolver.index.ByName[nameKey(catalogMemberName(file.Name))]
 			if len(choices) == 0 {
 				sameEdition = false
 				break
@@ -202,4 +202,17 @@ func (resolver *LookupResolver) bindCatalog(input ObservedInput, allowGame bool)
 	}
 	record.Status, record.Reason = "unmatched", "no unique complete catalog release name"
 	return record, nil
+}
+
+// Catalog members are files, including compressed optical formats without a launch reader.
+func catalogMemberName(name string) string { return strings.TrimSuffix(name, filepath.Ext(name)) }
+
+// Play/install roles differ within one edition. Region, language, revision and
+// all other qualifiers remain significant. The directory label supplies no identity.
+func catalogMemberEdition(name string) (string, int, int) {
+	edition, number, total := discEdition(catalogMemberName(name))
+	for _, role := range []string{" (Play Disc)", " (Content Install Disc)"} {
+		edition = strings.ReplaceAll(edition, role, "")
+	}
+	return edition, number, total
 }

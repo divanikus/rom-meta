@@ -28,6 +28,8 @@ type ObservedInput struct {
 	Catalog *CatalogObservation `json:"catalog,omitempty"`
 }
 type LookupPlatform struct {
+	Catalogs       []string `json:"catalogs,omitempty"`
+	header, family string
 	VariantBinding bool     `json:"variant_binding,omitempty"`
 	ExportSystems  []string `json:"export_systems,omitempty"`
 	Platform       string   `json:"platform"`
@@ -147,7 +149,7 @@ func NewLookupCatalog(dataRoot, profilePath string) (*LookupCatalog, error) {
 			return nil, err
 		} else {
 			for _, system := range SupportedSystems() {
-				if systems[system].Platform == field(doc, "name") {
+				if systems[system].Platform == catalogFamily(field(doc, "name")) {
 					platform.ExportSystems = append(platform.ExportSystems, system)
 				}
 			}
@@ -166,6 +168,8 @@ func NewLookupCatalog(dataRoot, profilePath string) (*LookupCatalog, error) {
 			platform.System, platform.Supported, platform.GameBinding, platform.Reason = "psp", true, true, ""
 		}
 		if doc != nil && field(doc, "name") != "" {
+			platform.header = field(doc, "name")
+			platform.family = catalogFamily(platform.header)
 			platform.NameBinding = true
 			platform.Aliases = []string{field(doc, "name"), field(doc, "display_name")}
 			for alias, target := range map[string]string{
@@ -184,6 +188,7 @@ func NewLookupCatalog(dataRoot, profilePath string) (*LookupCatalog, error) {
 		platform.VariantBinding = platform.Supported && platform.Platform != "Arcade"
 		catalog.Platforms = append(catalog.Platforms, platform)
 	}
+	catalog.groupDatasets()
 	return catalog, nil
 }
 func (catalog *LookupCatalog) Open(platform string) (*LookupResolver, error) {
@@ -197,10 +202,13 @@ func (catalog *LookupCatalog) Open(platform string) (*LookupResolver, error) {
 	if selected == nil || !selected.Supported {
 		return nil, fmt.Errorf("platform has no supported catalog lookup reader")
 	}
-	folder := filepath.Join(catalog.Root, "platforms", platform)
 	resolver := &LookupResolver{Catalog: catalog, Platform: *selected, DocumentDigests: map[string]string{}}
-	err := catalog.openIndex(resolver, folder)
-	return resolver, err
+	for _, folder := range catalog.scope(platform) {
+		if err := catalog.openIndex(resolver, filepath.Join(catalog.Root, "platforms", folder)); err != nil {
+			return nil, err
+		}
+	}
+	return resolver, nil
 }
 func (resolver *LookupResolver) Resolve(inputs []ObservedInput) (*Plan, error) {
 	return resolver.ResolveBindings(inputs, false)

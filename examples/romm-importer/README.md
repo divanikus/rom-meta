@@ -131,6 +131,11 @@ the source during apply. `check` is a read-only repeat report, not an apply plan
 or integrity scan.
 
 Use `--all`, repeated `--platform`, filename `--match` or per-platform `--limit`.
+The API hardware entry automatically includes related disc/digital catalogs
+advertised in `catalogs`; no per-game routing is needed. Ambiguous matches are
+skipped. Numbered RVZ/ISO disc folders can supply game metadata when every complete
+member name identifies the same game and edition, including play/install discs.
+This is name-based metadata binding, without dump verification.
 Bounded parts are generated without a collection ceiling; keep parent, parts and
 receipts together outside Git. After partial failure, fix the cause and create a
 fresh fill-only plan. Use receipts/before-values for scoped recovery; do not

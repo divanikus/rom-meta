@@ -27,6 +27,12 @@ complete release name for files/folders, independently of ES-DE launch readers.
 including modern systems and MAME. `/v1/health` returns the last published view
 without waiting for active work; it does not establish freshness or completion.
 
+Related disc/digital datasets advertise `catalogs` on the hardware entry.
+Lookup through that entry searches the listed datasets together; an explicit
+member folder keeps its own scope. Wii/Wii U, PS3 PSN and PSP Minis remain
+separate DATs. Cross-dataset collisions stay ambiguous. This does not add launch
+readers for formats listed only under `name_binding`.
+
 `POST /v1/lookup` accepts client observations:
 
 ```json

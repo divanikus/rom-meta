@@ -38,6 +38,11 @@ func (catalog *LookupCatalog) OpenExport(platform, system, snapshot string) (*Ex
 	found := false
 	for _, p := range catalog.Platforms {
 		if p.Platform == platform {
+			if p.header != p.family && p.family != "" {
+				if _, err := systemFor(p.header, system); err == nil {
+					found = true
+				}
+			}
 			for _, id := range p.ExportSystems {
 				if id == system {
 					found = true
@@ -54,7 +59,12 @@ func (catalog *LookupCatalog) OpenExport(platform, system, snapshot string) (*Ex
 		r.arcade, err = loadArcadeIndex(catalog.Root, snapshot)
 	} else {
 		lookup := &LookupResolver{Catalog: catalog, Platform: LookupPlatform{Platform: platform, System: system}, DocumentDigests: map[string]string{}}
-		err = catalog.openIndex(lookup, filepath.Join(catalog.Root, "platforms", platform))
+		for _, folder := range catalog.scope(platform) {
+			err = catalog.openIndex(lookup, filepath.Join(catalog.Root, "platforms", folder))
+			if err != nil {
+				return nil, err
+			}
+		}
 		r.index = lookup.index
 		r.DocumentDigests = lookup.DocumentDigests
 	}

@@ -113,7 +113,18 @@ func Build(options Options) (*Plan, error) {
 	if systems[system].Arcade {
 		arcade, err = loadArcadeIndex(root, options.ArcadeSnapshot)
 	} else {
-		index, err = buildIndex(root, platformReal, options.Progress)
+		catalog, e := NewLookupCatalog(root, options.ProfilePath)
+		if e != nil {
+			return nil, e
+		}
+		index = newCatalogIndex()
+		for _, folder := range catalog.scope(platform) {
+			part, e := buildIndex(root, filepath.Join(root, "platforms", folder), options.Progress)
+			if e != nil {
+				return nil, e
+			}
+			mergeCatalogIndex(index, part)
+		}
 	}
 	if err != nil {
 		return nil, err

@@ -73,6 +73,11 @@ Review, then repeat with `--apply`. `--all` discovers supported folders;
 `--platforms` selects named ones. Use a separate `--platform` export for custom
 nested system paths, including custom Xbox 360 roots.
 
+Related disc/digital catalogs are searched together for one hardware system,
+including `--all` and `--api`. PS3 disc and PSN records can therefore share one
+ES-DE system folder. Exact names/hashes still select a card; conflicting matches
+are reported. This does not add readers for Wii/Wii U or unsupported containers.
+
 ## Prepared translations
 
 A catalog can supply explicit `variants`/`based_on` relationships and modified

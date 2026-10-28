@@ -335,7 +335,7 @@ func (catalog *LookupCatalog) openIndex(resolver *LookupResolver, folder string)
 	if err != nil {
 		return err
 	}
-	cache := openLookupDisk(catalog.CacheDir, catalog.Root, resolver.Platform.Platform)
+	cache := openLookupDisk(catalog.CacheDir, catalog.Root, filepath.Base(folder))
 	if cache != nil {
 		defer cache.db.Close()
 	} else if catalog.requireIndexWrite {
@@ -343,7 +343,9 @@ func (catalog *LookupCatalog) openIndex(resolver *LookupResolver, folder string)
 	}
 	updates := map[string]lookupRow{}
 	seen := map[string]bool{}
-	resolver.index = newCatalogIndex()
+	if resolver.index == nil {
+		resolver.index = newCatalogIndex()
+	}
 	for _, item := range entries {
 		if !item.IsDir() || strings.HasPrefix(item.Name(), ".") || strings.HasPrefix(item.Name(), "_") || catalogrules.IsIgnoredGameFolder(item.Name()) {
 			continue

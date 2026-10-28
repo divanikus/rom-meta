@@ -503,3 +503,27 @@ releases:
 		})
 	}
 }
+
+func TestRemoteMixedDiscAndDigitalCatalogParity(t *testing.T) {
+	root, roms := t.TempDir(), t.TempDir()
+	card(t, root, "ps3", "Disc", "Disc", "Disc (USA)", "Disc.iso", []byte("disc"))
+	digital := "Sony - PlayStation 3 (PSN) (Content)"
+	folder := filepath.Join(root, "platforms", digital)
+	put(t, filepath.Join(folder, "_platform.yaml"), []byte("name: "+digital+"\n"))
+	put(t, filepath.Join(folder, "Download", "game.yaml"), []byte("title: Download\ndefault_release: Download (USA)\nreleases:\n  Download (USA): {}\n"))
+	put(t, filepath.Join(folder, "Download", "fingerprints.yaml"), []byte("items: []\n"))
+	put(t, filepath.Join(roms, "Download (USA).ps3"), []byte("NPUB00001\n"))
+	s := server(t, root, nil)
+	assertLocalParity(t, root, roms, "ps3", s.URL)
+	assertLocalParity(t, root, roms, digital, s.URL)
+	batchRoot := t.TempDir()
+	put(t, filepath.Join(batchRoot, "ps3", "Download (USA).ps3"), []byte("NPUB00001\n"))
+	local, err := exporter.BuildBatch(exporter.BatchOptions{All: true, Options: exporter.Options{DataRoot: root, ROMRoot: batchRoot, Out: filepath.Join(t.TempDir(), "local")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote, err := Build(context.Background(), Options{API: s.URL, BatchOptions: exporter.BatchOptions{All: true, Options: exporter.Options{ROMRoot: batchRoot, Out: filepath.Join(t.TempDir(), "remote")}}})
+	if err != nil || len(local.Plans) != 1 || len(remote.Batch.Plans) != 1 || local.Plans[0].Matched != 1 || remote.Batch.Plans[0].Matched != 1 {
+		t.Fatalf("mixed --all: %+v %+v %v", local, remote, err)
+	}
+}

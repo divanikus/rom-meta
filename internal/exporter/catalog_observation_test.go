@@ -160,3 +160,74 @@ func TestCatalogMAMEKeepsDuplicateAuthorityAmbiguous(t *testing.T) {
 		t.Fatal(plan, err)
 	}
 }
+
+func TestCatalogRVZMultidiscNamesPreserveEditionAndGame(t *testing.T) {
+	for _, foreign := range []bool{false, true} {
+		t.Run(fmt.Sprint(foreign), func(t *testing.T) {
+			options, _, _ := fixture(t)
+			platform := "Nintendo - GameCube"
+			path := familyCard(t, options.DataRoot, platform, "Adventure", "Adventure (USA) (Disc 1)")
+			put(t, filepath.Join(path, "game.yaml"), []byte("title: Adventure\ndefault_release: Adventure (USA) (Disc 1)\nreleases:\n  Adventure (USA) (Disc 1): {}\n  Adventure (USA) (Disc 2): {}\n"))
+			name := "Adventure (USA)"
+			put(t, filepath.Join(options.ROMRoot, name, "Adventure (USA) (Disc 1).rvz"), []byte("disc1"))
+			second := "Adventure (USA) (Disc 2).rvz"
+			if foreign {
+				second = "Adventure (Europe) (Disc 2).rvz"
+			}
+			put(t, filepath.Join(options.ROMRoot, name, second), []byte("disc2"))
+			observed, err := ObserveCatalogInput(options.ROMRoot, name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			catalog, err := NewLookupCatalog(options.DataRoot, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			resolver, err := catalog.Open(platform)
+			if err != nil {
+				t.Fatal(err)
+			}
+			plan, err := resolver.ResolveBindings([]ObservedInput{observed}, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			record := plan.Records[0]
+			if foreign && record.Status == "matched" || !foreign && (record.Status != "matched" || record.Release != "" || record.MatchedBy != "game-name") {
+				t.Fatalf("foreign=%v: %+v", foreign, record)
+			}
+		})
+	}
+}
+
+func TestCatalogPlayAndInstallDiscsUseCompleteMemberNames(t *testing.T) {
+	options, _, _ := fixture(t)
+	platform := "Microsoft - Xbox 360"
+	path := familyCard(t, options.DataRoot, platform, "Racing", "Racing (USA) (En,Fr) (Disc 1) (Play Disc) (Rev 1)")
+	put(t, filepath.Join(path, "game.yaml"), []byte("title: Racing\ndefault_release: Racing (USA) (En,Fr) (Disc 1) (Play Disc) (Rev 1)\nreleases:\n  Racing (USA) (En,Fr) (Disc 1) (Play Disc) (Rev 1): {}\n  Racing (USA) (En,Fr) (Disc 2) (Content Install Disc) (Rev 1): {}\n"))
+	folder := "Racing (USA) [abcdef12]"
+	for _, name := range []string{"Racing (USA) (En,Fr) (Disc 1) (Play Disc) (Rev 1).iso", "Racing (USA) (En,Fr) (Disc 2) (Content Install Disc) (Rev 1).iso"} {
+		put(t, filepath.Join(options.ROMRoot, folder, name), []byte("synthetic disc"))
+	}
+	input, err := ObserveCatalogInput(options.ROMRoot, folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := NewLookupCatalog(options.DataRoot, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver, err := catalog.Open(platform)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := resolver.ResolveBindings([]ObservedInput{input}, true)
+	if err != nil || plan.Records[0].Status != "matched" || plan.Records[0].Release != "" {
+		t.Fatalf("%+v %v", plan, err)
+	}
+	// Directory names do not authorize mixed revisions.
+	input.Catalog.Files[1].Name = "Racing (USA) (En,Fr) (Disc 2) (Content Install Disc).iso"
+	plan, err = resolver.ResolveBindings([]ObservedInput{input}, true)
+	if err != nil || plan.Records[0].Status == "matched" {
+		t.Fatal("mixed revision accepted", plan, err)
+	}
+}

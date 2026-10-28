@@ -2,12 +2,7 @@ package exporter
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
-	"strings"
-
-	"rommeta/internal/catalogfs"
 )
 
 type systemSpec struct {
@@ -53,6 +48,7 @@ func SupportedSystems() []string {
 }
 
 func systemFor(platform, requested string) (string, error) {
+	platform = catalogFamily(platform)
 	if requested != "" {
 		spec, ok := systems[requested]
 		if !ok || spec.Platform != platform {
@@ -91,35 +87,27 @@ func nameExtension(ext string) bool {
 // alias, display name or representation suffix is the physical catalog path.
 func storedPlatforms(root string) (map[string][]string, error) {
 	result := map[string][]string{}
-	entries, err := catalogfs.ReadDir(filepath.Join(root, "platforms"))
+	catalog, err := NewLookupCatalog(root, "")
 	if err != nil {
 		return nil, err
 	}
-	wanted := map[string]bool{}
-	for _, spec := range systems {
-		wanted[spec.Platform] = true
+	covered := map[string]bool{}
+	for _, p := range catalog.Platforms {
+		for _, member := range p.Catalogs {
+			if member != p.Platform {
+				covered[member] = true
+			}
+		}
 	}
-	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") || strings.HasPrefix(entry.Name(), "_") {
+	for _, p := range catalog.Platforms {
+		if covered[p.Platform] {
 			continue
 		}
-		path := filepath.Join(root, "platforms", entry.Name())
-		real, err := realPath(path)
-		if err != nil {
-			return nil, err
-		}
-		if !within(root, real) {
-			return nil, fmt.Errorf("catalog platform escapes data root")
-		}
-		doc, err := readDocument(filepath.Join(real, "_platform.yaml"))
-		if os.IsNotExist(err) {
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
-		if name := field(doc, "name"); wanted[name] {
-			result[name] = append(result[name], entry.Name())
+		for _, id := range p.ExportSystems {
+			canonical := systems[id].Platform
+			if position(result[canonical], p.Platform) < 0 {
+				result[canonical] = append(result[canonical], p.Platform)
+			}
 		}
 	}
 	return result, nil
