@@ -15,6 +15,7 @@ import (
 
 // DerivativeIdentity retains modification identity outside original provider data.
 type DerivativeIdentity struct {
+	OriginalTitle   string                 `json:"original_title,omitempty"`
 	DiscVariants    []exporter.DiscVariant `json:"disc_variants,omitempty"`
 	Variant         string                 `json:"variant"`
 	MetadataRelease string                 `json:"metadata_release"`
@@ -150,4 +151,19 @@ func snapshotVariantCHDGroup(r exporter.Record, gameRaw, fpRaw []byte, p Verific
 	}
 	first.DiscVariants = append([]exporter.DiscVariant(nil), r.DiscVariants...)
 	return first, nil
+}
+
+func translationIdentity(info *exporter.VariantInfo) bool {
+	if info == nil {
+		return false
+	}
+	if strings.EqualFold(info.Kind, "translation") {
+		return true
+	}
+	for _, ancestor := range info.Ancestors {
+		if strings.EqualFold(ancestor.Kind, "translation") {
+			return true
+		}
+	}
+	return false
 }

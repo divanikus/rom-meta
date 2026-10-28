@@ -142,6 +142,24 @@ func sortedTitleValues(values []string) []string {
 	return out
 }
 
+// OriginalGameTitle returns the unmodified game's regional title for a native
+// library card. Exported derivative filenames and title policies stay separate.
+func OriginalGameTitle(gameYAML []byte, release string) (string, error) {
+	doc, err := catalogyaml.Parse(gameYAML)
+	if err != nil {
+		return "", err
+	}
+	if release != "" {
+		if catalogyaml.Value(catalogyaml.Value(doc.Root(), "releases"), release) == nil {
+			return "", fmt.Errorf("original title release missing")
+		}
+		if title := releaseTitleContext(doc.Root(), release).Regional; title != "" {
+			return title, nil
+		}
+	}
+	return field(doc.Root(), "title"), nil
+}
+
 func releaseTitleContext(root *yaml.Node, release string) *TitleContext {
 	node := catalogyaml.Value(catalogyaml.Value(root, "releases"), release)
 	authority := catalogyaml.Value(node, "authority")

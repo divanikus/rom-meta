@@ -442,7 +442,22 @@ func ProjectSnapshot(record exporter.Record, gameYAML, fingerprintYAML []byte, p
 	if derivative != nil {
 		evidence.Unsupported = append(evidence.Unsupported, "Derived languages, translation version and credits: retained in derivative provenance; no equivalent native provider fields")
 	}
-	return evidence, providerForm(entry, evidence), nil
+	form := providerForm(entry, evidence)
+	if derivative != nil && translationIdentity(derivative.Info) {
+		title, err := exporter.OriginalGameTitle(gameYAML, record.MetadataRelease)
+		if err != nil {
+			return nil, nil, err
+		}
+		derivative.OriginalTitle = title
+		name := rawString(before, "name")
+		// Accept filesystem-derived names and our prior derivative title. Explicit
+		// owner names and locks remain protected during ordinary fill-only imports.
+		automatic := name == "" || name == rawString(before, "fs_name") || name == rawString(before, "fs_name_no_ext") || name == rawString(before, "fs_name_no_tags") || name == record.Fields["title"].Value
+		if title != "" && automatic && !fieldLocked(before, "name") {
+			form["name"] = title
+		}
+	}
+	return evidence, form, nil
 }
 
 func assembleProviderEvidence(entry Entry, doc providerDocument, fps fingerprintDocument, proof VerificationProof, files []FileState) (*ProviderEvidence, error) {

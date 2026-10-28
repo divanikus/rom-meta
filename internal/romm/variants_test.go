@@ -98,8 +98,11 @@ func projectDerivative(t *testing.T, s catalogapi.Selection) (*ProviderEvidence,
 	if ev.Verification.Authority != "" || ev.Verification.HasheousMatchIndex != nil {
 		t.Fatal("inherited authority")
 	}
-	if form["summary"] != "Inherited Japanese-release prose" || !strings.Contains(form["name"], "Translated Adventure") {
+	if form["summary"] != "Inherited Japanese-release prose" || form["name"] != "Original" {
 		t.Fatal(form)
+	}
+	if !strings.Contains(item.Record.Fields["title"].Value, "Translated Adventure") || ev.Derivative.OriginalTitle != "Original" {
+		t.Fatal("lost derivative export title or original native title")
 	}
 	return ev, form
 }
@@ -220,7 +223,7 @@ func TestGameOnlyVariantNativeProjectionUsesGameMetadata(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if item.Record.Release != "" || ev.Derivative.MetadataRelease != "Original (USA)" || ev.Derivative.Info.Ancestors[0].BasedOn != "" || ev.Slots["igdb"].ID != 10 || form["summary"] != "Game card prose" || !strings.Contains(form["name"], "Translated Adventure") {
+			if item.Record.Release != "" || ev.Derivative.MetadataRelease != "Original (USA)" || ev.Derivative.Info.Ancestors[0].BasedOn != "" || ev.Slots["igdb"].ID != 10 || form["summary"] != "Game card prose" || form["name"] != "Original" {
 				t.Fatalf("game metadata projection: %+v %v", ev, form)
 			}
 			for _, set := range ev.Verification.Flags {
@@ -327,5 +330,60 @@ func TestNativeVariantCHDGroupValidatesEveryMember(t *testing.T) {
 				t.Fatal("accepted forged group")
 			}
 		})
+	}
+}
+
+func TestVariantNativeDisplayUsesOriginalAndPreservesOwnerName(t *testing.T) {
+	root, roms := derivativeFixture(t)
+	selection := derivativeSelection(t, root, roms, "gamegear", "Sega - Game Gear", "translations/Completely renamed.gg", false)
+	item := selection.Inputs[0]
+	card := selection.Cards[item.Record.Game]
+	proof := VerificationProof{Size: item.Payload.Size, SHA1: item.Payload.SHA1, SHA256: item.Payload.SHA256, MD5: item.Payload.MD5, CRC32: item.Payload.CRC32}
+	for _, tc := range []struct {
+		name, current, want string
+		locked              bool
+	}{
+		{"blank", "", "Original", false},
+		{"filesystem", "Completely renamed", "Original", false},
+		{"previous variant title", item.Record.Fields["title"].Value, "Original", false},
+		{"custom name", "My custom title", "My custom title", false},
+		{"locked", "Completely renamed", "Completely renamed", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := map[string]json.RawMessage{"name": raw(tc.current), "fs_name_no_tags": raw("Completely renamed")}
+			if tc.locked {
+				before["locked_fields"] = raw([]string{"name"})
+			}
+			_, form, err := ProjectSnapshot(item.Record, []byte(card.Game.YAML), []byte(card.Fingerprints.YAML), proof, before)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if form["name"] != tc.want {
+				t.Fatalf("name %q; want %q", form["name"], tc.want)
+			}
+		})
+	}
+}
+
+func TestNonTranslationVariantKeepsItsOwnNativeTitle(t *testing.T) {
+	root, roms := derivativeFixture(t)
+	file := filepath.Join(root, "platforms", "Sega - Game Gear", "Game", "game.yaml")
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(file, bytes.ReplaceAll(data, []byte("kind: translation"), []byte("kind: hack")), 0600); err != nil {
+		t.Fatal(err)
+	}
+	s := derivativeSelection(t, root, roms, "gamegear", "Sega - Game Gear", "translations/Completely renamed.gg", false)
+	item := s.Inputs[0]
+	card := s.Cards[item.Record.Game]
+	p := item.Payload
+	ev, form, err := ProjectSnapshot(item.Record, []byte(card.Game.YAML), []byte(card.Fingerprints.YAML), VerificationProof{Size: p.Size, SHA1: p.SHA1, SHA256: p.SHA256, MD5: p.MD5, CRC32: p.CRC32}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(form["name"], "Translated Adventure") || ev.Derivative.OriginalTitle != "" {
+		t.Fatal(form, ev.Derivative)
 	}
 }

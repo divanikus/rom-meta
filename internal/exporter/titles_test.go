@@ -242,3 +242,20 @@ releases:
 		}
 	}
 }
+
+func TestOriginalGameTitleUsesTheMetadataEdition(t *testing.T) {
+	raw := []byte("title: Main card\nreleases:\n  Original Name (Japan) (Rev 1): {regions: [Japan]}\n  Another (Europe): {title: Regional Name, regions: [Europe]}\n")
+	for _, tc := range []struct{ release, want string }{
+		{"Original Name (Japan) (Rev 1)", "Original Name"},
+		{"Another (Europe)", "Regional Name"},
+		{"", "Main card"},
+	} {
+		title, err := OriginalGameTitle(raw, tc.release)
+		if err != nil || title != tc.want {
+			t.Fatalf("%q: %q, %v", tc.release, title, err)
+		}
+	}
+	if _, err := OriginalGameTitle(raw, "Missing"); err == nil {
+		t.Fatal("accepted absent original release")
+	}
+}

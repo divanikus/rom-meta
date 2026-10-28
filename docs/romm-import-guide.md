@@ -88,6 +88,12 @@ input proofs, then imports generated parts. Fill-only preserves owner data,
 covers and locks. Do not scan/edit selected games or mutate the source during
 apply. Reload RomM and inspect game pages.
 
+For prepared translations, the native card uses the original game's regional
+metadata title. Translation titles/credits remain in derivative provenance and
+exported filenames. Existing filesystem-derived or previously generated variant
+names can change; explicit custom names and name locks are preserved. Other hacks
+keep their own title unless their ancestry includes a translation.
+
 Receipts record completed parts. After failure, fix the cause and create a fresh
 plan with new filenames; completed imports remain. For a read-only repeat:
 
