@@ -85,7 +85,7 @@ func catalogMediaName(platform, sourceName, catalogName string, providerSystem .
 	switch platformnames.ForSource(platform, platformnames.SourceEmuMovies) {
 	case "Sony PSP":
 		label = pspMinisLabel
-	case "Nintendo Wii":
+	case "Nintendo Wii", "Nintendo WiiWare":
 		if len(providerSystem) == 0 || !strings.EqualFold(strings.TrimSpace(providerSystem[0]), "Nintendo WiiWare") {
 			return catalogName
 		}

@@ -876,6 +876,9 @@ func queryGameWithFingerprint(client *http.Client, settings sourceSettings, syst
 	if err != nil {
 		return gameMetadata{}, false, fmt.Errorf("ScreenScraper search response could not be read: %w", err)
 	}
+	if response.StatusCode == 431 && strings.Contains(strings.ToLower(string(body)), "repassez demain") {
+		return gameMetadata{}, false, ErrDailyQuota
+	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		message := strings.TrimSpace(string(body))
 		if response.StatusCode == http.StatusForbidden && isDeveloperCredentialMessage(message) {

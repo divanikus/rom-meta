@@ -253,3 +253,25 @@ func TestFMTownsMappingsAllowLocalRegistryOverrides(t *testing.T) {
 		}
 	}
 }
+
+func TestDigitalCatalogMappingsStayDistinctFromDiscs(t *testing.T) {
+	r := DefaultRegistry()
+	for _, tc := range []struct{ alias, platform, video, id string }{
+		{"wii", "Nintendo - Wii", "Nintendo Wii", "16"},
+		{"wiidigital", "Nintendo - Wii (Digital) (CDN)", "Nintendo WiiWare", "16"},
+		{"wiiu", "Nintendo - Wii U", "Nintendo Wii U", "18"},
+		{"wiiueshop", "Nintendo - Wii U (Digital) (CDN)", "Nintendo Wii U eShop", "18"},
+		{"ps3", "Sony - PlayStation 3", "Sony PlayStation 3", "59"},
+		{"ps3psn", "Sony - PlayStation 3 (PSN) (Content)", "Sony Playstation 3 - PSN", "59"},
+	} {
+		if got := r.ResolveCLI(tc.alias); got != tc.platform {
+			t.Errorf("%s resolved to %s", tc.alias, got)
+		}
+		if got := r.ForSource(tc.platform, SourceEmuMovies); got != tc.video {
+			t.Errorf("%s video source %s", tc.platform, got)
+		}
+		if id, ok := r.SourceID(tc.platform, SourceScreenScraper); !ok || id != tc.id {
+			t.Errorf("%s SS id %s", tc.platform, id)
+		}
+	}
+}

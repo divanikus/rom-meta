@@ -316,15 +316,23 @@ aliases:
     launchbox: "Nintendo Wii"
     screenscraper_id: 16
   - match: "Nintendo - Wii (Digital) (CDN)"
-    display: "Wii"
-    emumovies: "Nintendo Wii"
+    keys: [wiidigital, wiiware]
+    display: "Wii (Digital)"
+    emumovies: "Nintendo WiiWare"
     igdb: "Nintendo Wii"
     launchbox: "Nintendo Wii"
     screenscraper_id: 16
-  - match: "Nintendo - Wii U (Digital) (CDN)"
+  - match: "Nintendo - Wii U"
     keys: [wiiu]
     display: "Wii U"
     emumovies: "Nintendo Wii U"
+    igdb: "Nintendo Wii U"
+    launchbox: "Nintendo Wii U"
+    screenscraper_id: 18
+  - match: "Nintendo - Wii U (Digital) (CDN)"
+    keys: [wiiueshop]
+    display: "Wii U (Digital)"
+    emumovies: "Nintendo Wii U eShop"
     igdb: "Nintendo Wii U"
     launchbox: "Nintendo Wii U"
     screenscraper_id: 18
@@ -458,6 +466,13 @@ aliases:
     keys: [ps3, "Sony Playstation 3 - Retail"]
     display: "PlayStation 3"
     emumovies: "Sony PlayStation 3"
+    igdb: "PlayStation 3"
+    launchbox: "Sony Playstation 3"
+    screenscraper_id: 59
+  - match: "Sony - PlayStation 3 (PSN) (Content)"
+    keys: [ps3psn]
+    display: "PlayStation 3 (PSN)"
+    emumovies: "Sony Playstation 3 - PSN"
     igdb: "PlayStation 3"
     launchbox: "Sony Playstation 3"
     screenscraper_id: 59

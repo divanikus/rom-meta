@@ -112,3 +112,12 @@ returns them for the requested system. A declared child system remains eligible.
 WiiWare video matching can omit the catalog's `(WiiWare)` label only inside the
 provider's exact Nintendo WiiWare directory. Wii disc videos cannot use this
 fallback; regions, edition qualifiers and ambiguous owners remain checked.
+
+Digital DATs keep their own catalog platforms: `wiidigital` selects Wii Digital
+CDN, `wiiueshop` selects Wii U Digital CDN, and `ps3psn` selects PS3 PSN Content.
+The `wii`, `wiiu` and `ps3` aliases select disc catalogs. Provider metadata uses
+the corresponding hardware platform; EmuMovies uses WiiWare, Wii U eShop or PSN.
+
+ScreenScraper's daily quota and its HTTP 431 return-tomorrow response stop that
+provider's run. Incomplete searches remain resumable instead of becoming saved
+negative matches. Other HTTP 431 errors retain their normal error handling.

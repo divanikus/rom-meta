@@ -223,6 +223,7 @@ func TestWiiWareLabelFallbackRequiresItsOwnVideoDirectory(t *testing.T) {
 		want                                      bool
 	}{
 		{"digital folder", "Nintendo - Wii", "Nintendo WiiWare", "Example (Europe) (WiiWare)", "Example (Europe).mp4", true},
+		{"digital catalog", "Nintendo - Wii (Digital) (CDN)", "Nintendo WiiWare", "Example (Europe) (WiiWare)", "Example (Europe).mp4", true},
 		{"retail folder", "Nintendo - Wii", "Nintendo Wii", "Example (Europe) (WiiWare)", "Example (Europe).mp4", false},
 		{"different hardware", "Nintendo - Wii U", "Nintendo WiiWare", "Example (Europe) (WiiWare)", "Example (Europe).mp4", false},
 		{"different region", "Nintendo - Wii", "Nintendo WiiWare", "Example (Europe) (WiiWare)", "Example (USA).mp4", false},

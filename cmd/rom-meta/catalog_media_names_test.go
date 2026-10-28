@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -57,7 +56,7 @@ sources:
 	}
 }
 
-func TestMediaNamesRejectsUnknownAndAmbiguousAliases(t *testing.T) {
+func TestMediaNamesDistinguishesDiscAndDigitalAliases(t *testing.T) {
 	root := t.TempDir()
 	for _, name := range []string{"Nintendo - Wii U", "Nintendo - Wii U (Digital) (CDN)"} {
 		if err := os.MkdirAll(filepath.Join(root, "platforms", name), 0755); err != nil {
@@ -67,8 +66,10 @@ func TestMediaNamesRejectsUnknownAndAmbiguousAliases(t *testing.T) {
 			t.Fatal(got, err)
 		}
 	}
-	if _, err := catalogPlatformDirectory(root, "wiiu"); err == nil || !strings.Contains(err.Error(), "multiple directories") {
-		t.Fatal(err)
+	for alias, want := range map[string]string{"wiiu": "Nintendo - Wii U", "wiiueshop": "Nintendo - Wii U (Digital) (CDN)"} {
+		if got, err := catalogPlatformDirectory(root, alias); err != nil || got != want {
+			t.Fatal(alias, got, err)
+		}
 	}
 	if _, err := catalogPlatformDirectory(root, "missing-system"); err == nil {
 		t.Fatal("unknown platform silently accepted")

@@ -164,6 +164,8 @@ func TestScreenScraperClassifiesServerResponseInsteadOfRequestText(t *testing.T)
 		{"unavailable login service", 503, "login service not found", false, false},
 		{"rate limit", 429, "retry after 403 seconds", false, false},
 		{"daily quota", 430, "quota exceeded", true, false},
+		{"return tomorrow", 431, "Faite du tri dans vos ROMs et repassez demain!", true, false},
+		{"ordinary header error", 431, "Request Header Fields Too Large", false, false},
 		{"game absent", 404, "jeu introuvable", false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

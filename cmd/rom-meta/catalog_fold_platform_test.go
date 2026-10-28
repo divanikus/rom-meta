@@ -45,19 +45,19 @@ func TestCatalogFoldUsesRealWiiUDirectory(t *testing.T) {
 	}
 }
 
-func TestCatalogFoldRejectsUnknownAndAmbiguousPlatforms(t *testing.T) {
+func TestCatalogFoldDistinguishesDiscAndDigitalPlatforms(t *testing.T) {
 	root := t.TempDir()
 	for _, name := range []string{"Nintendo - Wii U", "Nintendo - Wii U (Digital) (CDN)"} {
 		if err := os.MkdirAll(filepath.Join(root, "platforms", name), 0755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for _, tc := range []struct{ input, want string }{{"wiiu", "multiple directories"}, {"missing-system", "no catalog platform directory"}} {
+	for _, tc := range []struct{ input, want string }{{"missing-system", "no catalog platform directory"}} {
 		if err := runCatalogFold([]string{"--data-root", root, "--platform=" + tc.input}); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Fatalf("%s: got %v, want %s", tc.input, err, tc.want)
 		}
 	}
-	for _, name := range []string{"Nintendo - Wii U", "Nintendo - Wii U (Digital) (CDN)"} {
+	for _, name := range []string{"Nintendo - Wii U", "Nintendo - Wii U (Digital) (CDN)", "wiiu", "wiiueshop"} {
 		if err := runCatalogFold([]string{"--data-root", root, "--platform", name}); err != nil {
 			t.Fatal(err)
 		}
