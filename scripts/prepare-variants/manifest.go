@@ -58,10 +58,11 @@ type newGame struct {
 	Title string `json:"title"`
 }
 
-// datReference names an exact published output in a pinned local T-En XML DAT.
+// datReference names an exact published output in a pinned local translation XML DAT.
 // It supplies output identity only; the reviewed game relationship stays separate.
 type datReference struct {
 	Path           string `json:"path"`
+	Member         string `json:"member,omitempty"`
 	Name           string `json:"name"`
 	SourcePlatform string `json:"source_platform,omitempty"`
 }
@@ -232,7 +233,7 @@ func validateEntry(e entry) error {
 		}
 	}
 	if len(e.Inputs) == 0 && e.DAT == nil {
-		return fmt.Errorf("actual input or an exact published T-En DAT output required")
+		return fmt.Errorf("actual input or an exact published translation DAT output required")
 	}
 	for _, in := range e.Inputs {
 		if !safeRelative(in.Path) || (in.Member != "" && !safeRelative(in.Member)) || in.Size < 0 || in.MTimeNS < 0 {

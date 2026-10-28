@@ -1,10 +1,16 @@
 package main
 
 import (
+	"archive/zip"
+	"crypto/sha256"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"os"
+	"regexp"
 	"strings"
+
+	"golang.org/x/text/language"
 )
 
 type tenOutput struct {
@@ -29,17 +35,25 @@ type tenDocument struct {
 	Games    []tenMachine `xml:"game"`
 }
 type tenSource struct {
-	header   string
-	outputs  map[string]fingerprint
-	sha256   string
-	machines []tenMachine
+	header    string
+	outputs   map[string]fingerprint
+	sha256    string
+	machines  []tenMachine
+	platform  string
+	prefix    string
+	languages []string
 }
 
 // readTEn reads a local published output list. No original game is inferred from
 // the output label, patch credits, header or a default catalog release.
 func readTEn(o options, name string, m *manifest) (*tenSource, error) {
+	return readTranslationDAT(o, datReference{Path: name}, m)
+}
+
+func readTranslationDAT(o options, ref datReference, m *manifest) (*tenSource, error) {
+	name := ref.Path
 	if o.Sources == "" {
-		return nil, fmt.Errorf("--sources required for T-En DAT references")
+		return nil, fmt.Errorf("--sources required for translation DAT references")
 	}
 	path, err := regularInput(o.Sources, name)
 	if err != nil {
@@ -49,10 +63,10 @@ func readTEn(o options, name string, m *manifest) (*tenSource, error) {
 	if err != nil {
 		return nil, err
 	}
-	if before.Size() > 32<<20 {
-		return nil, fmt.Errorf("T-En DAT exceeds 32 MiB")
+	if ref.Member == "" && before.Size() > 32<<20 {
+		return nil, fmt.Errorf("translation DAT exceeds 32 MiB")
 	}
-	raw, err := os.ReadFile(path)
+	raw, hash, err := readDATBytes(path, ref.Member)
 	if err != nil {
 		return nil, err
 	}
@@ -61,14 +75,13 @@ func readTEn(o options, name string, m *manifest) (*tenSource, error) {
 		return nil, err
 	}
 	if !sameStat(before, after) {
-		return nil, fmt.Errorf("T-En DAT changed while reading")
+		return nil, fmt.Errorf("translation DAT changed while reading")
 	}
-	hash := digest(raw)
 	pinned := false
 	for _, s := range m.Snapshots {
 		if s.Path == name {
 			if !strings.EqualFold(s.SHA256, hash) {
-				return nil, fmt.Errorf("pinned T-En DAT changed: %s", name)
+				return nil, fmt.Errorf("pinned translation DAT changed: %s", name)
 			}
 			pinned = true
 		}
@@ -80,10 +93,11 @@ func readTEn(o options, name string, m *manifest) (*tenSource, error) {
 	if err := xml.Unmarshal(raw, &d); err != nil {
 		return nil, err
 	}
-	if !strings.Contains(strings.ToLower(d.Header.Name), "[t-en]") {
-		return nil, fmt.Errorf("expected a T-En XML DAT header")
+	platform, prefix, langs, err := translationHeader(d.Header.Name)
+	if err != nil {
+		return nil, err
 	}
-	result := &tenSource{header: d.Header.Name, outputs: map[string]fingerprint{}, sha256: hash, machines: append(d.Machines, d.Games...)}
+	result := &tenSource{header: d.Header.Name, outputs: map[string]fingerprint{}, sha256: hash, machines: append(d.Machines, d.Games...), platform: platform, prefix: prefix, languages: langs}
 	add := func(row tenOutput, kind string) error {
 		if row.Status == "nodump" {
 			return nil
@@ -93,7 +107,7 @@ func readTEn(o options, name string, m *manifest) (*tenSource, error) {
 			return fmt.Errorf("disk record has ambiguous raw-file attributes: %s", row.Name)
 		}
 		if _, exists := result.outputs[row.Name]; exists {
-			return fmt.Errorf("duplicate T-En output name: %s", row.Name)
+			return fmt.Errorf("duplicate translation DAT output name: %s", row.Name)
 		}
 		result.outputs[row.Name] = f
 		return nil
@@ -130,44 +144,147 @@ func resolveTEn(m *manifest, o options) error {
 		}
 		// The DAT proves the published output identity, not its original game.
 		if len(e.Evidence.Links) == 0 {
-			return fmt.Errorf("T-En output needs a separate reviewed original-game link")
+			return fmt.Errorf("translation DAT output needs a separate reviewed original-game link")
 		}
-		src := loaded[e.DAT.Path]
+		cacheKey := e.DAT.Path + "\x00" + e.DAT.Member
+		src := loaded[cacheKey]
 		if src == nil {
 			var err error
-			src, err = readTEn(o, e.DAT.Path, m)
+			src, err = readTranslationDAT(o, *e.DAT, m)
 			if err != nil {
 				return err
 			}
-			loaded[e.DAT.Path] = src
+			loaded[cacheKey] = src
 		}
 		sourcePlatform := e.Platform
 		if e.DAT.SourcePlatform != "" {
 			sourcePlatform = e.DAT.SourcePlatform
 		}
 		if !safeName(sourcePlatform) {
-			return fmt.Errorf("unsafe T-En source platform")
+			return fmt.Errorf("unsafe translation DAT source platform")
 		}
-		if !strings.HasPrefix(strings.ToLower(src.header), strings.ToLower(sourcePlatform+" [T-En]")) {
-			return fmt.Errorf("T-En platform differs from selected game: %s", e.Platform)
+		if !strings.EqualFold(src.prefix, sourcePlatform) {
+			return fmt.Errorf("translation DAT platform differs from selected game: %s", e.Platform)
 		}
 		output, ok := src.outputs[e.DAT.Name]
 		if !ok {
-			return fmt.Errorf("T-En output missing or unsupported: %s", e.DAT.Name)
+			return fmt.Errorf("translation DAT output missing or unsupported: %s", e.DAT.Name)
 		}
 		supplied := e.File
 		if supplied.Name != "" && supplied.Name != output.Name || supplied.Kind != "" && supplied.Kind != output.Kind || supplied.Size != 0 && supplied.Size != output.Size {
-			return fmt.Errorf("supplied output differs from T-En record")
+			return fmt.Errorf("supplied output differs from translation DAT record")
 		}
 		for _, pair := range [][2]string{{supplied.SHA1, output.SHA1}, {supplied.SHA256, output.SHA256}, {supplied.MD5, output.MD5}, {supplied.CRC32, output.CRC32}} {
 			if pair[0] != "" && !strings.EqualFold(pair[0], pair[1]) {
-				return fmt.Errorf("supplied hash differs from T-En record")
+				return fmt.Errorf("supplied hash differs from translation DAT record")
 			}
 		}
 		e.File = output
-		link := sourceLink("T-En DAT", e.DAT.Path, src.sha256, e.DAT.Name, e.Game)
+		sourceName := "Translation DAT"
+		if strings.Contains(strings.ToLower(src.header), "[t-en]") {
+			sourceName = "T-En DAT"
+		}
+		link := sourceLink(sourceName, e.DAT.Path, src.sha256, e.DAT.Name, e.Game)
 		link["role"] = "modified-output"
+		if e.DAT.Member != "" {
+			link["archive_member"] = e.DAT.Member
+		}
 		e.Evidence.Links = append(e.Evidence.Links, link)
 	}
 	return nil
+}
+
+// Language identifiers follow BCP 47 rather than a product-specific vocabulary.
+var translationTagRE = regexp.MustCompile(`(?i)\[T-([a-z0-9,+-]+)(?: by)?(?: ([^\]]*))?\]`)
+
+func translationLanguages(text string) []string {
+	langs := []string{}
+	for _, m := range translationTagRE.FindAllStringSubmatch(text, -1) {
+		parsed := []string{}
+		valid := true
+		for _, raw := range strings.FieldsFunc(m[1], func(r rune) bool { return r == '+' || r == ',' }) {
+			tag, err := language.Parse(raw)
+			if err != nil || tag == language.Und {
+				valid = false
+				break
+			}
+			parsed = appendUnique(parsed, tag.String())
+		}
+		if valid {
+			for _, lang := range parsed {
+				langs = appendUnique(langs, lang)
+			}
+		}
+	}
+	return langs
+}
+func translationHeader(header string) (platform, prefix string, langs []string, err error) {
+	loc := translationTagRE.FindStringSubmatchIndex(header)
+	if loc == nil || loc[0] == 0 {
+		return "", "", nil, fmt.Errorf("expected a translation XML DAT header with a [T-language] label")
+	}
+	prefix = strings.TrimSpace(header[:loc[0]])
+	platform = strings.TrimSpace(strings.TrimSuffix(prefix, "[GA]"))
+	label := header[loc[0]:loc[1]]
+	// A collection label declares language only, not a per-patch author credit.
+	if strings.Contains(label, " ") {
+		return "", "", nil, fmt.Errorf("collection header needs a plain [T-language] label")
+	}
+	langs = translationLanguages(label)
+	if len(langs) == 0 || !safeName(platform) || !safeName(prefix) {
+		return "", "", nil, fmt.Errorf("invalid translation DAT platform or language")
+	}
+	return
+}
+func readDATBytes(path, member string) ([]byte, string, error) {
+	if member == "" {
+		b, err := metadataBytes(path)
+		return b, digest(b), err
+	}
+	if !safeRelative(member) {
+		return nil, "", fmt.Errorf("unsafe DAT archive member")
+	}
+	z, err := zip.OpenReader(path)
+	if err != nil {
+		return nil, "", err
+	}
+	defer z.Close()
+	var found *zip.File
+	for _, f := range z.File {
+		if f.Name == member {
+			if found != nil {
+				return nil, "", fmt.Errorf("duplicate DAT archive member")
+			}
+			found = f
+		}
+	}
+	if found == nil || found.FileInfo().IsDir() || found.Mode()&os.ModeSymlink != 0 || found.UncompressedSize64 > 32<<20 {
+		return nil, "", fmt.Errorf("missing, oversized or unsupported DAT member")
+	}
+	r, err := found.Open()
+	if err != nil {
+		return nil, "", err
+	}
+	b, err := io.ReadAll(io.LimitReader(r, (32<<20)+1))
+	closeErr := r.Close()
+	if err != nil {
+		return nil, "", err
+	}
+	if closeErr != nil {
+		return nil, "", closeErr
+	}
+	if len(b) > 32<<20 {
+		return nil, "", fmt.Errorf("translation DAT exceeds 32 MiB")
+	}
+	// Pin the complete source container, as with other local source snapshots.
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err = io.Copy(h, f); err != nil {
+		return nil, "", err
+	}
+	return b, fmt.Sprintf("%x", h.Sum(nil)), nil
 }

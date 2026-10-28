@@ -71,6 +71,9 @@ func loadGA(o options, file string, set *sourceSet) error {
 	if err != nil {
 		return err
 	}
+	return parseGA(raw, file, digest(raw), "", set)
+}
+func parseGA(raw []byte, file, hash, member string, set *sourceSet) error {
 	type rom struct {
 		Name string `xml:"name,attr"`
 		Size int64  `xml:"size,attr"`
@@ -89,7 +92,7 @@ func loadGA(o options, file string, set *sourceSet) error {
 		} `xml:"header"`
 		Machines []machine `xml:"machine"`
 	}
-	if err = xml.Unmarshal(raw, &dat); err != nil {
+	if err := xml.Unmarshal(raw, &dat); err != nil {
 		return err
 	}
 	if len(dat.Machines) == 0 || !strings.Contains(strings.ToLower(dat.Header.Name), "famicom") {
@@ -134,7 +137,10 @@ func loadGA(o options, file string, set *sourceSet) error {
 			rejectSource(set, file, m.Name, problem)
 		}
 		group, version := translationCredit(m.Name)
-		link := sourceLink("Gaming Alexandria", file, digest(raw), m.Name, parent)
+		link := sourceLink("Gaming Alexandria", file, hash, m.Name, parent)
+		if member != "" {
+			link["archive_member"] = member
+		}
 		link["parent_convention"] = "full machine name before the first well-formed T-En label"
 		set.Records = append(set.Records, sourceRecord{Platform: "Nintendo - Nintendo Entertainment System", Parent: parent, Name: m.Name, Kind: "translation", Languages: []string{"en"}, Group: group, Version: version, Output: f, Link: link, Problem: problem})
 	}
@@ -142,7 +148,7 @@ func loadGA(o options, file string, set *sourceSet) error {
 }
 
 func loadRHA(o options, dir string, set *sourceSet) error {
-	if !safeRelative(dir) {
+	if dir != "." && !safeRelative(dir) {
 		return fmt.Errorf("unsafe RHA root")
 	}
 	base := filepath.Join(o.Sources, filepath.FromSlash(dir), "database")
@@ -327,4 +333,29 @@ func appendUnique(values []string, value string) []string {
 }
 func sortSources(set *sourceSet) {
 	sort.Slice(set.Snapshots, func(i, j int) bool { return set.Snapshots[i].Path < set.Snapshots[j].Path })
+}
+
+func loadGAReference(o options, ref datReference, set *sourceSet) error {
+	if ref.Member == "" {
+		return loadGA(o, ref.Path, set)
+	}
+	// The general DAT reader binds archive members and pins the container.
+	m := &manifest{Snapshots: set.Snapshots}
+	src, err := readTranslationDAT(o, ref, m)
+	if err != nil {
+		return err
+	}
+	set.Snapshots = m.Snapshots
+	name, err := regularInput(o.Sources, ref.Path)
+	if err != nil {
+		return err
+	}
+	raw, hash, err := readDATBytes(name, ref.Member)
+	if err != nil {
+		return err
+	}
+	if hash != src.sha256 {
+		return fmt.Errorf("GA source archive changed")
+	}
+	return parseGA(raw, ref.Path, hash, ref.Member, set)
 }

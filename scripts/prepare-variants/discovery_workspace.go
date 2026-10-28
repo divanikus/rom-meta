@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 
 	"rommeta/internal/atomicfile"
 )
@@ -75,7 +76,7 @@ func loadSession(root string) (*discoverySession, error) {
 	if err = strictJSON(b, s); err != nil {
 		return nil, err
 	}
-	if s.SchemaVersion != 1 || s.Catalog == "" || s.Sources == "" || len(s.SourcesConfig.TEN) == 0 {
+	if s.SchemaVersion != 1 || s.Catalog == "" || s.Sources == "" {
 		return nil, fmt.Errorf("invalid discovery workspace")
 	}
 	if err = validateWorkspace(root, s); err != nil {
@@ -204,8 +205,8 @@ func initializeDiscovery(root string, o options, d discoveryOptions) (*discovery
 				return nil, fmt.Errorf("workspace sources differ; use a new workspace")
 			}
 		}
-		if len(d.TEN) > 0 || d.GA != "" || d.RHA != "" || d.HackHash != "" {
-			if !reflect.DeepEqual(d, s.SourcesConfig) {
+		if len(d.DAT) > 0 || len(d.TEN) > 0 || d.GA != "" || d.RHA != "" || d.HackHash != "" {
+			if !sameSourceSelection(d, s.SourcesConfig) {
 				return nil, fmt.Errorf("source selection differs; use a new workspace")
 			}
 		}
@@ -213,8 +214,8 @@ func initializeDiscovery(root string, o options, d discoveryOptions) (*discovery
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
-	if o.Catalog == "" || o.Sources == "" || len(d.TEN) == 0 {
-		return nil, fmt.Errorf("new discovery needs --catalog, --sources and --ten")
+	if o.Catalog == "" || o.Sources == "" {
+		return nil, fmt.Errorf("new discovery needs --catalog and --sources; translation DATs are found automatically")
 	}
 	cat, err := resolved(o.Catalog)
 	if err != nil {
@@ -287,6 +288,9 @@ func discoveryCLI(root string, o options, d discoveryOptions, review bool, in io
 		return err
 	}
 	fmt.Fprintf(out, "Discovery: %d ready, %d review, %d already owned, %d unsupported, %d excluded\nWorkspace: %s\n", r.Counts["ready"], r.Counts["review"], r.Counts["already-owned"], r.Counts["unsupported"], r.Counts["excluded"], root)
+	if r.Counts["skipped-platform"] > 0 {
+		fmt.Fprintf(out, "Skipped %d DATs whose platforms are absent from the catalog; details: report.json\n", r.Counts["skipped-platform"])
+	}
 	return nil
 }
 func workspaceOptions(root string, o options) (options, error) {
@@ -338,4 +342,22 @@ func workspaceOptions(root string, o options) (options, error) {
 		}
 	}
 	return o, nil
+}
+
+func sameSourceSelection(a, b discoveryOptions) bool {
+	normalize := func(d discoveryOptions) discoveryOptions {
+		files := append(append([]string{}, d.DAT...), d.TEN...)
+		d.DAT = []string{}
+		d.TEN = nil
+		for _, file := range files {
+			if file == "." {
+				d.DAT = []string{}
+				return d
+			}
+			d.DAT = appendUnique(d.DAT, file)
+		}
+		sort.Strings(d.DAT)
+		return d
+	}
+	return reflect.DeepEqual(normalize(a), normalize(b))
 }

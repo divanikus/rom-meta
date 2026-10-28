@@ -22,6 +22,7 @@ func reviewRows(root string, o options, r *discoveryReport, c *discoveryCatalog,
 		}
 		choices := row.Candidates
 		fmt.Fprintf(out, "\n%s / %s\n%s\n", row.Platform, row.Name, row.Reason)
+		fmt.Fprintf(out, "Languages: %s\n", strings.Join(row.Languages, ", "))
 		fmt.Fprintf(out, "Published output: %s SHA1=%s size=%d\n", row.File.Kind, row.File.SHA1, row.File.Size)
 		for _, link := range row.Links {
 			fmt.Fprintf(out, "Source: %v; entry: %v; parent: %v\n", link["source"], link["entry"], link["parent"])

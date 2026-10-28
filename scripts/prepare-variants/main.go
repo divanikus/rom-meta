@@ -26,13 +26,14 @@ func (s *repeatedStrings) Set(v string) error { *s = append(*s, v); return nil }
 func main() {
 	var o options
 	var c collectOptions
-	var ten repeatedStrings
+	var ten, dat repeatedStrings
 	var discovery, review, workspace string
 	flag.BoolVar(&o.ReviewAll, "review-all", false, "Include automatically ready links in terminal review")
 	flag.StringVar(&discovery, "discover", "", "Create or refresh a source-first discovery workspace")
 	flag.StringVar(&review, "review", "", "Review unresolved game links in an existing workspace")
 	flag.StringVar(&workspace, "workspace", "", "Stage ready links from a discovery workspace")
-	flag.Var(&ten, "ten", "Local T-En XML DAT relative to --sources (repeatable)")
+	flag.Var(&dat, "dat", "Optional translation DAT file, ZIP or directory relative to --sources (repeatable; default: discover from sources)")
+	flag.Var(&ten, "ten", "Deprecated alias for explicit --dat selection; languages come from source labels")
 	flag.StringVar(&o.Catalog, "catalog", "", "Read-only source catalog root")
 	flag.StringVar(&o.ROMRoot, "rom-root", "", "Optional read-only root for local input paths")
 	flag.StringVar(&o.Sources, "sources", "", "Read-only root for pinned source snapshots")
@@ -68,7 +69,7 @@ func main() {
 		if review != "" {
 			root = review
 		}
-		d := discoveryOptions{TEN: ten, GA: c.GA, RHA: c.RHA, HackHash: c.HackHash}
+		d := discoveryOptions{DAT: dat, TEN: ten, GA: c.GA, RHA: c.RHA, HackHash: c.HackHash}
 		if c.Platforms != "" {
 			fmt.Fprintln(os.Stderr, "discovery platforms come from the DAT headers")
 			os.Exit(1)
@@ -79,8 +80,8 @@ func main() {
 		}
 		return
 	}
-	if len(ten) > 0 {
-		fmt.Fprintln(os.Stderr, "--ten requires --discover")
+	if len(ten) > 0 || len(dat) > 0 {
+		fmt.Fprintln(os.Stderr, "--dat requires --discover")
 		os.Exit(1)
 	}
 	if workspace != "" {

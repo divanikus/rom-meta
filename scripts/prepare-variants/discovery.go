@@ -2,13 +2,15 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 )
 
 type discoveryOptions struct {
-	TEN      []string `json:"ten"`
+	DAT      []string `json:"dat,omitempty"`
+	TEN      []string `json:"ten,omitempty"`
 	GA       string   `json:"ga,omitempty"`
 	RHA      string   `json:"rha,omitempty"`
 	HackHash string   `json:"hackhash,omitempty"`
@@ -25,6 +27,8 @@ type discoveryRow struct {
 	SourcePlatform string           `json:"source_platform"`
 	Source         string           `json:"source"`
 	Name           string           `json:"name"`
+	Member         string           `json:"member,omitempty"`
+	Languages      []string         `json:"languages,omitempty"`
 	File           fingerprint      `json:"file"`
 	Status         string           `json:"status"`
 	Reason         string           `json:"reason"`
@@ -34,10 +38,12 @@ type discoveryRow struct {
 	Links          []map[string]any `json:"relationship_evidence,omitempty"`
 }
 type discoveryReport struct {
-	SchemaVersion int              `json:"schema_version"`
-	Counts        map[string]int   `json:"counts"`
-	Rows          []*discoveryRow  `json:"rows"`
-	SourceHolds   []map[string]any `json:"source_holds,omitempty"`
+	SchemaVersion int                `json:"schema_version"`
+	Counts        map[string]int     `json:"counts"`
+	Rows          []*discoveryRow    `json:"rows"`
+	SourceHolds   []map[string]any   `json:"source_holds,omitempty"`
+	Sources       []discoveredSource `json:"sources,omitempty"`
+	IgnoredFiles  int                `json:"ignored_metadata_files"`
 }
 
 func decisionID(p string, f fingerprint) string {
@@ -56,10 +62,11 @@ func outputAgrees(a, b fingerprint) bool {
 }
 func outputParent(s string) string {
 	s = stripROMExtension(s)
-	i := strings.Index(s, " [T-En")
-	if i < 1 {
+	loc := translationTagRE.FindStringSubmatchIndex(s)
+	if loc == nil || loc[0] < 1 {
 		return ""
 	}
+	i := loc[0]
 	p := strings.TrimSpace(s[:i])
 	if strings.ContainsAny(p, "[]") {
 		return ""
@@ -112,8 +119,9 @@ func sourceBaseTargets(c *discoveryCatalog, p string, s sourceRecord) ([]*gameCh
 	return out, ""
 }
 func discover(o options, d discoveryOptions, decisions map[string]reviewDecision) (*manifest, *discoveryReport, *discoveryCatalog, error) {
-	if len(d.TEN) == 0 {
-		return nil, nil, nil, fmt.Errorf("at least one --ten DAT required")
+	inventory, err := inspectDiscoverySources(o, d)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 	c, err := openDiscoveryCatalog(o)
 	if err != nil {
@@ -122,24 +130,25 @@ func discover(o options, d discoveryOptions, decisions map[string]reviewDecision
 	m := &manifest{SchemaVersion: 1, Entries: []entry{}}
 	report := &discoveryReport{SchemaVersion: 1, Counts: map[string]int{}, Rows: []*discoveryRow{}}
 	set := &sourceSet{}
-	if d.GA != "" {
-		err = loadGA(o, d.GA, set)
-		if err != nil {
+	for _, ref := range inventory.GA {
+		if err = loadGAReference(o, ref, set); err != nil {
 			return nil, nil, nil, err
 		}
 	}
-	if d.RHA != "" {
-		err = loadRHA(o, d.RHA, set)
-		if err != nil {
+	for _, dir := range inventory.RHA {
+		if err = loadRHA(o, dir, set); err != nil {
 			return nil, nil, nil, err
 		}
 	}
-	if d.HackHash != "" {
-		err = loadHackHash(o, d.HackHash, set, &c.registry)
-		if err != nil {
+	for _, file := range inventory.HackHash {
+		if err = loadHackHash(o, file, set, &c.registry); err != nil {
 			return nil, nil, nil, err
 		}
 	}
+	report.Sources = inventory.Inputs
+	report.IgnoredFiles = inventory.Ignored
+	progress(o, "Sources: %d translation DATs, %d Gaming Alexandria, %d Romhack Archive, %d HackHash; %d metadata files ignored", len(inventory.DAT), len(inventory.GA), len(inventory.RHA), len(inventory.HackHash), inventory.Ignored)
+
 	m.Snapshots = append(m.Snapshots, set.Snapshots...)
 	report.SourceHolds = set.Holds
 	records := map[string][]sourceRecord{}
@@ -151,19 +160,27 @@ func discover(o options, d discoveryOptions, decisions map[string]reviewDecision
 		records[identityKey(p, s.Output)] = append(records[identityKey(p, s.Output)], s)
 	}
 	seen := map[string]*discoveryRow{}
-	for _, path := range d.TEN {
-		src, err := readTEn(o, path, m)
+	for _, ref := range inventory.DAT {
+		path := ref.Path
+		src, err := readTranslationDAT(o, ref, m)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		i := strings.Index(strings.ToLower(src.header), " [t-en]")
-		if i < 1 {
-			return nil, nil, nil, fmt.Errorf("T-En header needs a platform prefix: %s", path)
-		}
-		sourcePlatform := src.header[:i]
-		p, err := c.platform(sourcePlatform)
+		sourcePlatform := src.prefix
+		p, err := c.platform(src.platform)
 		if err != nil {
-			return nil, nil, nil, err
+			if !errors.Is(err, errCatalogPlatformMissing) {
+				return nil, nil, nil, err
+			}
+			report.Counts["skipped-platform"]++
+			for i := range report.Sources {
+				input := &report.Sources[i]
+				if input.Path == ref.Path && input.Member == ref.Member && input.Type == "translation-dat" {
+					input.Status = "skipped"
+					input.Reason = "platform is absent from the catalog"
+				}
+			}
+			continue
 		}
 		if err = c.load(p); err != nil {
 			return nil, nil, nil, err
@@ -189,12 +206,22 @@ func discover(o options, d discoveryOptions, decisions map[string]reviewDecision
 				if !ok {
 					continue
 				}
-				row := &discoveryRow{ID: decisionID(p, f), Platform: p, SourcePlatform: sourcePlatform, Source: path, Name: raw.Name, File: f, Status: "review", Reason: "no unique original-game match", Parent: outputParent(raw.Name)}
+				row := &discoveryRow{ID: decisionID(p, f), Platform: p, SourcePlatform: sourcePlatform, Source: path, Name: raw.Name, Member: ref.Member, Languages: src.languages, File: f, Status: "review", Reason: "no unique original-game match", Parent: outputParent(raw.Name)}
+				langs := translationLanguages(raw.Name)
+				if len(langs) == 0 {
+					langs = translationLanguages(machine.Name)
+				}
+				if len(langs) > 0 {
+					row.Languages = langs
+				}
 				if row.Parent == "" {
 					row.Parent = outputParent(machine.Name)
 				}
 				if old := seen[row.ID]; old != nil {
-					if old.Name != row.Name {
+					for _, lang := range row.Languages {
+						old.Languages = appendUnique(old.Languages, lang)
+					}
+					if old.Name != row.Name && !(old.Status == "ready" && old.Reason == "published output-to-parent relationship") {
 						old.Status = "review"
 						old.Reason = "same output has different source labels; choose its original explicitly"
 					}
@@ -232,11 +259,11 @@ func discover(o options, d discoveryOptions, decisions map[string]reviewDecision
 					if row.Parent == "" {
 						row.Candidates = nil
 					}
-					row.Links = []map[string]any{sourceLink("T-En name convention", path, src.sha256, row.Name, row.Parent)}
+					row.Links = []map[string]any{sourceLink("Translation DAT name convention", path, src.sha256, row.Name, row.Parent)}
 					if parent := outputParent(machine.Name); parent != "" && parent != row.Parent {
 						gs, _ := c.match(p, parent)
 						row.Candidates = append(row.Candidates, gs...)
-						row.Links = append(row.Links, sourceLink("T-En container name convention", path, src.sha256, machine.Name, parent))
+						row.Links = append(row.Links, sourceLink("Translation DAT container name convention", path, src.sha256, machine.Name, parent))
 					}
 				}
 				row.Candidates = uniqueGames(row.Candidates)
@@ -309,7 +336,7 @@ func discover(o options, d discoveryOptions, decisions map[string]reviewDecision
 		g := row.Target
 		key := safeTitleKey(stripROMExtension(row.Name))
 		if len(key) > 140 {
-			key = "T-En output"
+			key = "Translation output"
 		}
 		key += " [" + row.ID[:12] + "]"
 		group, version := translationCredit(row.Name)
@@ -318,7 +345,7 @@ func discover(o options, d discoveryOptions, decisions map[string]reviewDecision
 				link["parent"] = gameID(g.Platform, g.Game)
 			}
 		}
-		e := entry{Platform: g.Platform, Game: g.Game, NewGame: g.NewGame, Variant: variant{Key: key, Title: stripROMExtension(row.Name), Kind: "translation", Languages: []string{"en"}, Group: group, Version: version}, File: row.File, DAT: &datReference{Path: row.Source, Name: row.Name, SourcePlatform: row.SourcePlatform}, Evidence: evidence{Relationship: "reviewed", Links: row.Links, Normalization: []string{row.Reason}}, Expected: g.expected}
+		e := entry{Platform: g.Platform, Game: g.Game, NewGame: g.NewGame, Variant: variant{Key: key, Title: stripROMExtension(row.Name), Kind: "translation", Languages: row.Languages, Group: group, Version: version}, File: row.File, DAT: &datReference{Path: row.Source, Member: row.Member, Name: row.Name, SourcePlatform: row.SourcePlatform}, Evidence: evidence{Relationship: "reviewed", Links: row.Links, Normalization: []string{row.Reason}}, Expected: g.expected}
 		if err := validateEntry(e); err != nil {
 			return nil, nil, nil, err
 		}

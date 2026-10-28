@@ -15,20 +15,112 @@ Variants can link only to their containing game: omit `based_on` and use a
 reviewed original-game association. Exact release/variant parents remain optional.
 See [game-only catalog records](catalog-variants.md#catalog-records).
 
+## Download the source metadata
+
+Start with a prepared catalog of original games, including their descriptions and
+artwork if you want those during export. Normal No-Intro/Redump imports describe
+original releases; the additional translation DATs below describe modified outputs.
+Keep downloaded metadata in one dedicated `--sources` folder, separate from ROMs,
+the catalog and the review/staging folders.
+
+For English translations, open [Omni-Games DAT files / OmniScope](https://omni-games.info/datfiles.php),
+filter the Group or DAT name for `[T-En] Collection`, and choose your systems:
+
+| Your system | Collection to select | Browse the collection |
+| --- | --- | --- |
+| NES / Famicom | Nintendo - Famicom [T-En] Collection | [NES](https://omni-games.info/omnidat_details.php?datid=DAT-C86E4ED2) |
+| PS1 | Sony - PlayStation [T-En] Collection | [PS1](https://omni-games.info/omnidat_details.php?datid=DAT-87068337) |
+| PS2 | Sony - PlayStation 2 [T-En] Collection | [PS2](https://omni-games.info/omnidat_details.php?datid=DAT-3DCF30C6) |
+| Saturn | Sega - Saturn [T-En] Collection | [Saturn](https://omni-games.info/omnidat_details.php?datid=DAT-A81D3E21) |
+
+Other systems use the same collection group. Open the selected collection in
+OmniScope and generate/download its full XML DAT, keeping the original collection
+structure when offered. Do not prune to one translation per game or apply region
+filters when building a general variant library. Keep optical `disk` identities
+in their original representation. Save the resulting `.dat`/`.xml` file, or a ZIP
+containing those files, anywhere under `--sources`. ZIP DATs are read without
+extraction. Export dates do not establish patch release dates. DATVault is an
+alternative for users who already have it; it is not required for the public path.
+
+`T-En` means this publisher's English translation collection, not a universal
+name for translations. The helper reads compatible XML collections labelled
+`[T-Ru]`, `[T-Fr]`, `[T-Pt-BR]`, etc. as well. These labels use language codes;
+the language is not guessed from the downloaded filename. For another language,
+use a publisher's compatible translation DAT with a declared language. This does
+not imply a maintained public equivalent of every T-En collection in every
+language. Ordinary retail DATs and other unidentified layouts are not silently
+treated as English translations.
+
+### Optional sources that help identify originals
+
+These supplement the output DATs. Place them in the same sources tree; normal
+discovery detects them without adapter flags. Nothing is downloaded automatically.
+
+| Source | What to obtain | How it is connected |
+| --- | --- | --- |
+| [Gaming Alexandria Frontend Project](https://www.gamingalexandria.com/wp/frontend-project/) | Under NES, **Nintendo - Famicom [GA] [T-En] Collection**, choose **Download DAT**. Use the full collection; the 1G1R version removes alternatives. | Its complete original names help with renamed English outputs. XML DATs and ZIP DATs are recognized by their header. It can also supply the output list itself. |
+| [Romhack Archive](https://github.com/videogame-archive/romhack-archive) | The repository's `database/**/romhack.json` metadata, retaining the `database/platform/base-ROM/output-ROM/romhack.json` hierarchy. The CSV export is not this adapter's input. | The original-game relationship comes from the hierarchy and matching modified-output hashes. Patches are not read. |
+| [HackHash](https://hackhash.darkblood.uk/) | The [detailed JSON export](https://hackhash.darkblood.uk/api/entries/export?format=detailed), using `format=detailed`. Standard XML/minimal JSON exports lack the detailed `baseRom` relation. See the [publisher's export implementation](https://github.com/darkblood159/HackHash/blob/main/src/app/api/entries/export/route.ts). | Detailed `machines[].details.baseRom` relationships and output fingerprints are recognized from JSON contents, regardless of filename. |
+| Romhack Plaza | No compatible source-first snapshot adapter in this helper yet. | An API key alone does not connect Plaza; acquisition needs a separate adapter. Do not put credentials in the sources tree. |
+
+For Romhack Archive, downloading/extracting the repository ZIP is sufficient if
+you retain the hierarchy. With Git, the following downloads only its metadata
+working tree and enables long paths on Windows:
+
+```shell
+git clone --depth 1 --filter=blob:none --no-checkout https://github.com/videogame-archive/romhack-archive.git "/snapshots/romhack-archive"
+git -C "/snapshots/romhack-archive" config core.longpaths true
+git -C "/snapshots/romhack-archive" sparse-checkout set --no-cone "/database/**/romhack.json"
+git -C "/snapshots/romhack-archive" checkout
+```
+
+Only the extracted Romhack Archive metadata tree is consumed; a repository ZIP
+is not automatically expanded. You can save the HackHash export in a browser or
+use this public metadata request (use `curl.exe` in Windows PowerShell if `curl`
+is an alias). A direct request can receive HTTP 403 from the service; use the
+publisher's browser export interface in that case, or omit this optional source:
+
+```shell
+curl --fail --location "https://hackhash.darkblood.uk/api/entries/export?format=detailed" --output "/snapshots/hackhash-detailed.json"
+```
+
+For example, this entire tree connects through one `--sources /snapshots`:
+
+```text
+snapshots/
+  translations/       # downloaded XML DATs or ZIPs of DATs; filenames are arbitrary
+  gaming-alexandria/  # optional full GA translation DAT
+  romhack-archive/    # optional extracted metadata checkout
+    database/...
+  hackhash-detailed.json  # optional detailed export
+```
+
+Metadata files/XML members are bounded to 32 MiB and ZIP containers to 256 MiB
+for automatic inspection. Oversized automatic inputs are reported and skipped;
+an explicitly selected oversized input fails clearly.
+
+Sources improve only outputs with matching published identities. Installing an
+additional source does not guarantee a relationship for every translation or
+add missing descriptions/artwork to original cards.
+
 ## Discover and review a source library without ROMs
 
 Start with a read-only catalog snapshot containing original games and locally
-obtained T-En XML DAT files. No ROM directory, API key or exact patch version is
+obtained translation XML DAT files (see downloads above). No ROM directory, API key or exact patch version is
 required. Run from the source checkout:
 
 ```shell
-go run ./scripts/prepare-variants --catalog "/catalog-snapshot" --sources "/snapshots" --ten "ps1-ten.xml" --ten "saturn-ten.xml" --discover "/work/translation-review"
+go run ./scripts/prepare-variants --catalog "/catalog-snapshot" --sources "/snapshots" --discover "/work/translation-review"
 go run ./scripts/prepare-variants --review "/work/translation-review"
 go run ./scripts/prepare-variants --workspace "/work/translation-review" --out "/work/variant-catalog" --media artwork
 ```
 
-Repeat `--ten` for additional platforms. Discovery writes analysis JSON in a new,
-empty workspace; it does not write catalog YAML. The last command previews only
+Discovery searches `--sources` recursively for supported XML DATs and ZIP
+members, identifies systems/languages, and connects known optional sources.
+New files in this folder are picked up on refresh without further questions.
+Missing catalog platforms are skipped with an explanation in `report.json`;
+ambiguities remain explicit. Discovery writes analysis JSON in a new, empty
+workspace; it does not write catalog YAML. The last command previews only
 ready links. Repeat it with `--apply` to create the separate sparse catalog.
 Unresolved rows remain in the workspace and in the manifest's `holds`; they do
 not block ready links. An empty ready set reports an explicit error. Publication,
@@ -36,27 +128,30 @@ metadata fetching and frontend/RomM import remain separate normal workflows.
 
 Discovery follows these rules:
 
-- A T-En output supplies its own published raw size/SHA1 or typed CHD combined
+- A translation DAT output supplies its own published raw size/SHA1 or typed CHD combined
   SHA1. Original/base hashes never become modified-output hashes.
-- Optional `--ga`, `--rha` and `--hackhash` use the same local adapters described
-  below. An exact modified-output match supplies an explicit parent assertion;
+- Optional Gaming Alexandria, Romhack Archive and HackHash metadata are detected
+  automatically. `--ga`, `--rha` and `--hackhash` remain explicit overrides.
+  An exact modified-output match supplies an explicit parent assertion;
   published strong base hashes can select its original game. Conflicting or
   unresolved explicit relationships remain for review.
-- Otherwise, complete names before a T-En label in the output/container are
+- Otherwise, complete names before a translation label in the output/container are
   compared with catalog release names, game titles and aliases. Provider aliases
   require a matching stored platform. Multiple releases of one game collapse to
   that game. Multiple games, conflicting labels and unmatched names require review.
   Normalization preserves word/number boundaries; there is no fuzzy auto-selection.
-- The platform registry plus a small T-En platform-label adapter handles names
-  such as Famicom/NES and Super Famicom/SNES. Missing or ambiguous catalog platforms
-  fail explicitly; `config/platforms.yaml` can supply local aliases.
+- The platform registry plus a small publisher platform-label adapter handles names
+  such as Famicom/NES and Super Famicom/SNES. Missing catalog platforms are
+  reported and skipped; ambiguous identities fail explicitly.
+  `config/platforms.yaml` can supply local aliases.
 - Existing output ownership is reported, not duplicated. Ownership conflicts
   remain for review and staging also checks untouched games on selected platforms.
 - Whole multi-payload ROM groups remain `unsupported`. No member is promoted to
   a full-set fingerprint. Documentation, BIOS and nodump rows are skipped.
   Each published optical `disk` remains an independent typed CHD identity.
 
-The report distinguishes `ready`, `review`, `already-owned`, `unsupported` and
+The report lists detected sources, languages, skipped platforms and ignored
+metadata, and distinguishes `ready`, `review`, `already-owned`, `unsupported` and
 `excluded`. It records source names, relationship evidence, candidates and the
 selected original. Name-based automatic links are catalog/source assertions;
 use `--review-all` with `--review` to inspect or correct automatic choices too.
@@ -89,7 +184,12 @@ The workspace contains `decisions.json`, `report.json`, `links.json` and
 `.variant-discovery.json`. Keep `decisions.json` as reusable data; no per-game code
 or document SHA256 editing is needed. Run `--discover /work/translation-review`
 again to refresh analysis with the same configured sources/catalog. Source paths
-and catalog root are workstation settings; changing the selection/roots needs a
+and catalog root are workstation settings. Default folder discovery includes new
+metadata files on refresh. To narrow output DATs explicitly, repeat `--dat` with
+a relative XML/ZIP file or directory, for example `--dat translations/ps1.dat`.
+Other source adapters are still found automatically. The old `--ten` flag and
+existing workspaces remain supported for compatibility; new commands use
+`--dat` or automatic selection. Changing the explicit selection/roots needs a
 new workspace, to which you can copy `decisions.json` before discovery resumes.
 Generated links/report edits are detected and preserved rather than overwritten.
 
@@ -104,9 +204,9 @@ its decisions before refreshing. Local ROM observation, remote downloads/Plaza,
 automatic metadata enrichment, whole-set adapters and RomM writes are outside this
 source-first increment. The existing local collection mode remains available.
 
-## Prepare published T-En fingerprints without local ROMs
+## Advanced: prepare explicit published-DAT relationships
 
-A local T-En XML DAT supplies published output identities; your reviewed map
+A local translation XML DAT supplies published output identities; your reviewed map
 supplies the original game. The DAT alone does not identify that game. Add `dat`
 to an ordinary relationship entry, naming the exact `rom` or `disk` output:
 
@@ -139,7 +239,8 @@ Replace placeholder names/digests with the reviewed bundle and current document
 SHA256 values. Variant keys are arbitrary identifiers; no translation-name
 vocabulary is required. `dat.path` is relative to `--sources`. The DAT header must
 match the entry's platform, or an explicit `dat.source_platform` publisher label
-when the reviewed target uses another platform name. Its content is pinned by SHA256 automatically; an
+when the reviewed target uses another platform name. Optional `dat.member` names
+a safe relative XML member inside a ZIP; the whole ZIP is pinned by SHA256. Its content is pinned by SHA256 automatically; an
 existing snapshot pin must agree. The exact output name supplies `file`; supplied
 file constraints must agree with that output. Keep a separate original-game
 source link: an output hash does not itself prove a parent.
@@ -158,7 +259,7 @@ claim. Game-only relationships use `reviewed`; release-name/base-hash evidence
 still requires an exact `based_on`. Ordinary offline export recognizes a prepared
 variant by its own fingerprint, even after the file is renamed.
 
-## Collect relationships from local source metadata
+## Advanced: collect relationships from local ROMs
 
 Source collection is an optional external mode of the same helper. Supply one or
 more local metadata sources; the command scans only the selected platforms'

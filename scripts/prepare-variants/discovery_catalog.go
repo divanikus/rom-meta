@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -101,6 +102,8 @@ var tenPlatforms = map[string][]string{
 	"Sega - SG-1000":                           {"sg1000"},
 }
 
+var errCatalogPlatformMissing = errors.New("catalog platform not found")
+
 func (c *discoveryCatalog) platform(s string) (string, error) {
 	for _, p := range c.platforms {
 		if strings.EqualFold(p, s) {
@@ -110,12 +113,16 @@ func (c *discoveryCatalog) platform(s string) (string, error) {
 	names := append([]string{s}, tenPlatforms[s]...)
 	found := []string{}
 	for _, p := range c.platforms {
-		for _, name := range names {
-			if c.registry.ResolveCLI(p) == c.registry.ResolveCLI(name) {
-				found = appendUnique(found, p)
-				break
+		for _, candidate := range append([]string{p}, tenPlatforms[p]...) {
+			for _, name := range names {
+				if c.registry.ResolveCLI(candidate) == c.registry.ResolveCLI(name) {
+					found = appendUnique(found, p)
+				}
 			}
 		}
+	}
+	if len(found) == 0 {
+		return "", fmt.Errorf("%w: %s", errCatalogPlatformMissing, s)
 	}
 	if len(found) != 1 {
 		return "", fmt.Errorf("catalog platform not found or ambiguous: %s; import its platform or configure config/platforms.yaml", s)

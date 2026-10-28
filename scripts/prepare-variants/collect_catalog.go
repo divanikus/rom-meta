@@ -24,7 +24,7 @@ import (
 	"rommeta/internal/zipnames"
 )
 
-var creditRE = regexp.MustCompile(`\[T-En(?: by)? ([^\]]+)\]`)
+var creditRE = regexp.MustCompile(`(?i)\[T-[a-z0-9,+-]+(?: by)? ([^\]]+)\]`)
 var versionRE = regexp.MustCompile(`\s+v([0-9].*)$`)
 var tokenRE = regexp.MustCompile(`[\p{L}\p{N}]+`)
 
