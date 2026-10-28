@@ -17,6 +17,7 @@ import (
 	"sync"
 
 	"rommeta/internal/catalogfs"
+	"rommeta/internal/fetchstate"
 	"rommeta/internal/platformnames"
 	"rommeta/internal/store"
 	"rommeta/internal/taskprogress"
@@ -39,6 +40,9 @@ type ArtworkOptions struct {
 
 // ArtworkResult describes a dry-run or applied EmuMovies artwork package fetch.
 type ArtworkResult struct {
+	StopReason                 string
+	ManifestPath               string
+	ManifestItemCount          int
 	SkippedPlatforms           map[string]string
 	DataRoot                   string
 	FTPHost                    string
@@ -119,7 +123,7 @@ const artworkParentDirectory = "Official/Artwork"
 
 // FetchArtwork plans or downloads EmuMovies artwork package archives and
 // materializes matched artwork files into the catalog.
-func FetchArtwork(options ArtworkOptions) (ArtworkResult, error) {
+func FetchArtwork(options ArtworkOptions) (result ArtworkResult, returnErr error) {
 	dataRoot := strings.TrimSpace(options.DataRoot)
 	if dataRoot == "" {
 		dataRoot = "."
@@ -145,12 +149,17 @@ func FetchArtwork(options ArtworkOptions) (ArtworkResult, error) {
 		return ArtworkResult{}, err
 	}
 
+	transfers := taskprogress.NewTransfers(options.Progress)
 	progress := options.Progress
+	if options.Apply {
+		defer transfers.Done()
+		progress = taskprogress.Func(transfers.Progress)
+	}
 	gameSet, err := readCatalogGameSet(dataRoot, options.Platform, progress)
 	if err != nil {
 		return ArtworkResult{}, err
 	}
-	result := ArtworkResult{
+	result = ArtworkResult{
 		DataRoot:         dataRoot,
 		FTPHost:          settings.FTPHost,
 		ArchiveExtractor: extractor.Display(),
@@ -160,6 +169,12 @@ func FetchArtwork(options ArtworkOptions) (ArtworkResult, error) {
 		Limit:            options.Limit,
 	}
 
+	defer func() {
+		if returnErr != nil {
+			result.StopReason = returnErr.Error()
+		}
+	}()
+
 	client := options.FTPClient
 	if client == nil {
 		client = NewFTPClient(settings.FTPHost, settings.Username, settings.Password, settings.ExplicitTLS)
@@ -168,7 +183,7 @@ func FetchArtwork(options ArtworkOptions) (ArtworkResult, error) {
 	result.SkippedPlatforms = map[string]string{}
 	packages, firstDirectory, entryCount, candidateCount, needsExtractorCount, needsExtractorByType, err := artworkPackagesWithRegistry(client, settings, extractor, dataRoot, gameSet.ByPlatform, options.PlatformRegistry, result.SkippedPlatforms, progress)
 	if err != nil {
-		return ArtworkResult{}, err
+		return result, err
 	}
 	result.FTPDirectory = firstDirectory
 	result.DirectoryEntryCount = entryCount
@@ -179,7 +194,28 @@ func FetchArtwork(options ArtworkOptions) (ArtworkResult, error) {
 	mediaTypeFilter := normalizeArtworkMediaTypeFilters(options.MediaTypes)
 	packages = filterArtworkPackages(packages, mediaTypeFilter)
 	result.MediaTypes = mediaTypeFilterList(mediaTypeFilter)
+
 	result.SelectedPackageCount = len(packages)
+	recorder, err := newDownloadRecorder(dataRoot, "artwork-package", options.Apply, client, transfers)
+	if err != nil {
+		return result, err
+	}
+	for _, pkg := range packages {
+		for _, part := range pkg.Parts {
+			recorder.add(part.SourcePath, part.Target, fetchstate.Row{"platform": pkg.Platform, "media_type": pkg.MediaType, "url": part.URL})
+		}
+	}
+	client = recorder
+	defer func() {
+		returnErr = errors.Join(returnErr, recorder.report.Close())
+		if recorder.report != nil {
+			result.ManifestPath = recorder.report.Path
+			result.ManifestItemCount = recorder.report.Count
+		}
+		if returnErr == nil {
+			returnErr = fetchstate.Incomplete(result.FailedDownloadCount + result.InvalidArtworkFileCount)
+		}
+	}()
 
 	var planItems []artworkPackage
 	sourcePolicyNeeded := false
@@ -191,10 +227,16 @@ func FetchArtwork(options ArtworkOptions) (ArtworkResult, error) {
 		progress.Update(stage, index+1, len(packages), pkg.Name)
 		missingParts, err := missingPackageParts(pkg)
 		if err != nil {
-			return ArtworkResult{}, err
+			return result, err
 		}
 		if len(missingParts) == 0 {
 			result.ExistingPackageCount++
+			for _, part := range pkg.Parts {
+				transfers.Record("existing")
+				if err := recorder.record(part.SourcePath, part.Target, "existing", nil); err != nil {
+					return result, err
+				}
+			}
 			if options.Apply {
 				sourcePolicyNeeded = true
 			}
@@ -206,6 +248,12 @@ func FetchArtwork(options ArtworkOptions) (ArtworkResult, error) {
 			continue
 		}
 		result.PlannedPackageCount++
+
+		if options.Apply {
+			for range missingParts {
+				transfers.Record("queued")
+			}
+		}
 		planItems = append(planItems, packageWithParts(pkg, missingParts))
 	}
 
@@ -223,7 +271,7 @@ func FetchArtwork(options ArtworkOptions) (ArtworkResult, error) {
 		progress.Update("writing plan", 0, 0, filepath.Base(options.PlanPath))
 		planPath, err := writeArtworkPlan(options.PlanPath, options.PlanFormat, dataRoot, planItems)
 		if err != nil {
-			return ArtworkResult{}, err
+			return result, err
 		}
 		result.PlanPath = planPath
 		result.PlanFormat = normalizedPlanFormat(options.PlanPath, options.PlanFormat)
@@ -231,16 +279,27 @@ func FetchArtwork(options ArtworkOptions) (ArtworkResult, error) {
 	}
 
 	if options.Apply {
+		complete := packages[:0]
+		for _, pkg := range packages {
+			missing, err := missingPackageParts(pkg)
+			if err != nil {
+				return result, err
+			}
+			if len(missing) == 0 {
+				complete = append(complete, pkg)
+			}
+		}
+		packages = complete
 		extractedPackages, extractedFiles, err := extractArtworkPackages(dataRoot, packages, extractor, progress)
 		if err != nil {
-			return ArtworkResult{}, err
+			return result, err
 		}
 		result.ExtractedPackageCount = extractedPackages
 		result.ExtractedFileCount = extractedFiles
 
 		fileCandidates, indexedFiles, unmatchedFiles, unmatchedManifestPath, err := indexArtworkFiles(dataRoot, packages, gameSet.ByPlatform, progress)
 		if err != nil {
-			return ArtworkResult{}, err
+			return result, err
 		}
 		result.IndexedArtworkFileCount = indexedFiles
 		result.UnmatchedManifestPath = unmatchedManifestPath
@@ -250,7 +309,7 @@ func FetchArtwork(options ArtworkOptions) (ArtworkResult, error) {
 
 		materialized, err := materializeArtworkFiles(fileCandidates, progress)
 		if err != nil {
-			return ArtworkResult{}, err
+			return result, err
 		}
 		result.ExistingArtworkFileCount = materialized.existing
 		result.WrittenArtworkFileCount = materialized.written
@@ -264,7 +323,7 @@ func FetchArtwork(options ArtworkOptions) (ArtworkResult, error) {
 	if sourcePolicyNeeded {
 		progress.Update("writing policy", 0, 0, sourceName)
 		if _, err := store.EnsureSourcePolicy(dataRoot, sourceName, defaultPolicyScope, defaultPolicyNote); err != nil {
-			return ArtworkResult{}, err
+			return result, err
 		}
 	}
 	return result, nil

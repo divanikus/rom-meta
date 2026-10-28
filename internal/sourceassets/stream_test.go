@@ -68,9 +68,15 @@ sources:
 `, server.URL+"/front.jpg"))
 	writeGame(t, root, "Platform", "Z Broken", "title: [broken\n")
 
-	_, err := Fetch(Options{DataRoot: root, Source: "igdb", Apply: true, Concurrency: 1})
+	result, err := Fetch(Options{DataRoot: root, Source: "igdb", Apply: true, Concurrency: 1})
 	if err == nil || !strings.Contains(err.Error(), "Z Broken") {
 		t.Fatalf("expected later catalog parse error, got %v", err)
+	}
+	if result.DownloadedFileCount != 1 || result.ManifestItemCount != 1 || result.StopReason == "" {
+		t.Fatalf("lost partial outcome: %#v", result)
+	}
+	if _, err := os.Stat(result.ManifestPath); err != nil {
+		t.Fatalf("lost partial report: %v", err)
 	}
 	if requests.Load() != 1 {
 		t.Fatalf("earlier download did not start before the catalog error: %d requests", requests.Load())

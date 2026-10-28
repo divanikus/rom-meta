@@ -85,6 +85,32 @@ Partial fetch appends matches only for successful new downloads, preserving prio
 matches, custom fields and recovery evidence. Failed/zero downloads add no match;
 existing files resume by presence. These rules do not retroactively verify old media.
 
+## Progress, partial results and resume
+
+Catalog discovery and file transfers have separate counters. Applied media fetch
+shows downloaded, existing, failed and pending files, transferred bytes, average
+rate and elapsed time. Pending counts discovered work; the final catalog size is
+not a download percentage. Logs receive throttled totals and a final update.
+
+Individual download or metadata lookup errors produce an `incomplete` result and
+a nonzero exit status. Independent source jobs continue; the final summary counts
+completed, incomplete, failed and skipped jobs. A normal `not found` is not an error.
+Successful files and source matches remain saved. EmuMovies extracts complete
+packages even when another package failed; incomplete multipart archives wait.
+
+To resume, **run the same command with `--apply` again**. Existing files are
+skipped; failed and unstarted downloads are attempted. This uses the normal
+catalog/provider discovery pass. No retry-specific flag is needed, and existing
+files are not revalidated or overwritten. Provider quotas may require waiting.
+
+Applied media fetch writes a separate JSONL outcome report per pass under
+`.rommeta/runs/`, with catalog-relative targets and credential-free source URLs.
+HTTP artwork records existing, duplicate, limit-skipped, downloaded and failed
+candidates; EmuMovies records existing and attempted video/archive files, including
+individual archive parts. Reports retain all recorded failures even when console
+details are shortened. A later pass keeps earlier reports. Reports describe
+processed candidates, not unseen work after a quota stop or forced termination.
+
 ## Primary spellings and saved negative results
 
 LaunchBox tries exact primary names, then one compatible word-boundary variant

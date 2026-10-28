@@ -4,6 +4,7 @@ import "io"
 
 // Snapshot describes progress for a long-running task stage.
 type Snapshot struct {
+	Transfers    *TransferSnapshot
 	Stage        string
 	Current      int
 	Total        int

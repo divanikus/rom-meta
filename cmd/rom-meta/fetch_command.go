@@ -12,6 +12,7 @@ import (
 
 	"rommeta/internal/catalogfs"
 	"rommeta/internal/emumovies"
+	"rommeta/internal/fetchstate"
 	"rommeta/internal/hasheous"
 	"rommeta/internal/igdb"
 	"rommeta/internal/launchbox"
@@ -245,16 +246,19 @@ func (failures fetchJobFailures) Error() string {
 
 func runFetchJobs(out io.Writer, jobs []fetchJob, options fetchOptions, config store.SourcesConfig, runner fetchJobRunner) error {
 	var failures fetchJobFailures
+	completed, skipped, incomplete, failed := 0, 0, 0, 0
 	quotaExceeded := map[string]bool{}
 	for index, job := range jobs {
 		fmt.Fprintln(out)
 		fmt.Fprintf(out, "[%d/%d] %s\n", index+1, len(jobs), fetchJobName(job))
 		if job.SkipReason != "" {
 			fmt.Fprintf(out, "Result: skipped; %s\n", job.SkipReason)
+			skipped++
 			continue
 		}
 		if quotaExceeded[job.Source] {
 			fmt.Fprintln(out, "Result: skipped; ScreenScraper daily quota was already exceeded in this run")
+			skipped++
 			continue
 		}
 		scoped := options
@@ -264,6 +268,7 @@ func runFetchJobs(out io.Writer, jobs []fetchJob, options fetchOptions, config s
 		reason, err := automaticFetchEvidenceReason(out, job, scoped)
 		if err == nil && reason != "" {
 			fmt.Fprintf(out, "Result: skipped; %s\n", reason)
+			skipped++
 			continue
 		}
 		if err == nil {
@@ -274,10 +279,19 @@ func runFetchJobs(out io.Writer, jobs []fetchJob, options fetchOptions, config s
 				quotaExceeded[job.Source] = true
 			}
 			failures = append(failures, fetchJobFailure{Job: job, Err: err})
-			fmt.Fprintf(out, "Result: failed; error: %v\n", err)
+			var partial *fetchstate.PartialError
+			if errors.As(err, &partial) || errors.Is(err, screenscraper.ErrDailyQuota) {
+				incomplete++
+				fmt.Fprintf(out, "Result: incomplete; %v\n", err)
+			} else {
+				failed++
+				fmt.Fprintf(out, "Result: failed; error: %v\n", err)
+			}
 			continue
 		}
+		completed++
 	}
+	fmt.Fprintf(out, "\nFetch summary: %d completed, %d incomplete, %d failed, %d skipped jobs\n", completed, incomplete, failed, skipped)
 	if len(failures) > 0 {
 		return failures
 	}
@@ -474,11 +488,10 @@ func runFetchJob(job fetchJob, options fetchOptions, config store.SourcesConfig)
 			Progress:         progressFunc,
 		})
 		progress.Done()
-		if err != nil {
-			return err
+		if result.DataRoot != "" {
+			printSourceAssetResult(result)
 		}
-		printSourceAssetResult(result)
-		return nil
+		return err
 	case job.Source == "launchbox" && job.Type == "metadata":
 		progress, progressFunc := newFetchTaskProgress(job)
 		result, err := runFetchLaunchBox(fetchOptions{
@@ -513,11 +526,10 @@ func runFetchJob(job fetchJob, options fetchOptions, config store.SourcesConfig)
 			Progress:         progressFunc,
 		})
 		progress.Done()
-		if err != nil {
-			return err
+		if result.DataRoot != "" {
+			printSourceAssetResult(result)
 		}
-		printSourceAssetResult(result)
-		return nil
+		return err
 	case job.Source == "igdb" && job.Type == "metadata":
 		progress := newTerminalProgress(os.Stdout)
 		result, err := igdb.Import(igdb.ImportOptions{
@@ -535,10 +547,13 @@ func runFetchJob(job fetchJob, options fetchOptions, config store.SourcesConfig)
 		})
 		progress.Done()
 		if err != nil {
+			if result.Apply && result.DataRoot != "" {
+				printIGDBResult(result, err)
+			}
 			return err
 		}
 		printIGDBResult(result)
-		return nil
+		return fetchstate.Incomplete(result.FailedSearchCount)
 	case job.Source == "hasheous" && job.Type == "metadata":
 		progress := newTerminalProgress(os.Stdout)
 		result, err := hasheous.Import(hasheous.ImportOptions{
@@ -556,12 +571,12 @@ func runFetchJob(job fetchJob, options fetchOptions, config store.SourcesConfig)
 		progress.Done()
 		if err != nil {
 			if result.Apply {
-				printHasheousResult(result)
+				printHasheousResult(result, err)
 			}
 			return err
 		}
 		printHasheousResult(result)
-		return nil
+		return fetchstate.Incomplete(result.FailedLookupCount)
 	case job.Source == "igdb" && job.Type == "artwork":
 		progress, progressFunc := newFetchTaskProgress(job)
 		result, err := sourceassets.Fetch(sourceassets.Options{
@@ -579,11 +594,10 @@ func runFetchJob(job fetchJob, options fetchOptions, config store.SourcesConfig)
 			Progress:         progressFunc,
 		})
 		progress.Done()
-		if err != nil {
-			return err
+		if result.DataRoot != "" {
+			printSourceAssetResult(result)
 		}
-		printSourceAssetResult(result)
-		return nil
+		return err
 	case job.Source == "screenscraper" && job.Type == "metadata":
 		progress := newTerminalProgress(os.Stdout)
 		result, err := screenscraper.Import(screenscraper.ImportOptions{
@@ -599,10 +613,13 @@ func runFetchJob(job fetchJob, options fetchOptions, config store.SourcesConfig)
 		})
 		progress.Done()
 		if err != nil {
+			if result.Apply && result.DataRoot != "" {
+				printScreenScraperResult(result, err)
+			}
 			return err
 		}
 		printScreenScraperResult(result)
-		return nil
+		return fetchstate.Incomplete(result.FailedSearchCount)
 	case job.Source == "screenscraper" && job.Type == "artwork":
 		progress, progressFunc := newFetchTaskProgress(job)
 		result, err := sourceassets.Fetch(sourceassets.Options{
@@ -620,14 +637,10 @@ func runFetchJob(job fetchJob, options fetchOptions, config store.SourcesConfig)
 			Progress:         progressFunc,
 		})
 		progress.Done()
-		if errors.Is(err, screenscraper.ErrDailyQuota) {
+		if result.DataRoot != "" {
 			printSourceAssetResult(result)
 		}
-		if err != nil {
-			return err
-		}
-		printSourceAssetResult(result)
-		return nil
+		return err
 	case job.Source == "emumovies" && job.Type == "video":
 		progress, progressFunc := newFetchTaskProgress(job)
 		result, err := emumovies.FetchVideo(emumovies.VideoOptions{
@@ -642,11 +655,10 @@ func runFetchJob(job fetchJob, options fetchOptions, config store.SourcesConfig)
 			Progress:         progressFunc,
 		})
 		progress.Done()
-		if err != nil {
-			return err
+		if result.DataRoot != "" {
+			printEmuMoviesVideoResult(result)
 		}
-		printEmuMoviesVideoResult(result)
-		return nil
+		return err
 	case job.Source == "emumovies" && job.Type == "artwork":
 		progress, progressFunc := newFetchTaskProgress(job)
 		result, err := emumovies.FetchArtwork(emumovies.ArtworkOptions{
@@ -662,11 +674,10 @@ func runFetchJob(job fetchJob, options fetchOptions, config store.SourcesConfig)
 			Progress:         progressFunc,
 		})
 		progress.Done()
-		if err != nil {
-			return err
+		if result.DataRoot != "" {
+			printEmuMoviesArtworkResult(result)
 		}
-		printEmuMoviesArtworkResult(result)
-		return nil
+		return err
 	default:
 		return fmt.Errorf("fetch source %q does not support type %q yet", job.Source, job.Type)
 	}
@@ -715,6 +726,15 @@ func newFetchTaskProgress(job fetchJob) (*terminalProgress, taskprogress.Func) {
 	progress := newTerminalProgress(os.Stdout)
 	progress.compactTask = true
 	return progress, func(snapshot taskprogress.Snapshot) {
+		if snapshot.Transfers != nil {
+			progress.UpdateTransfers(job.Source+"/"+job.Type, *snapshot.Transfers)
+			if snapshot.Stage == "files" {
+				return
+			}
+			if snapshot.Worker > 0 && !progress.interactive {
+				return
+			}
+		}
 		if snapshot.Worker > 0 {
 			if snapshot.BytesCurrent != 0 || snapshot.BytesTotal != 0 {
 				progress.UpdateWorkerBytes(job.Source+"/"+job.Type, snapshot.Stage, snapshot.Worker, snapshot.Workers, snapshot.BytesCurrent, snapshot.BytesTotal, snapshot.Item)
@@ -947,7 +967,7 @@ func printOpenVGDBAssetResult(result openvgdb.AssetResult) {
 		for _, failure := range result.Failures {
 			fmt.Printf("  failed: %s -> %s: %s\n", failure.URL, failure.Target, failure.Error)
 		}
-		fmt.Println("Result: applied")
+		printFetchApplied(result.FailedDownloadCount)
 		return
 	}
 	fmt.Println("Result: dry run; add --apply to download source media")
@@ -989,13 +1009,13 @@ func printLaunchBoxAssetResult(result launchbox.AssetResult) {
 		for _, failure := range result.Failures {
 			fmt.Printf("  failed: %s -> %s: %s\n", failure.URL, failure.Target, failure.Error)
 		}
-		fmt.Println("Result: applied")
+		printFetchApplied(result.FailedDownloadCount)
 		return
 	}
 	fmt.Println("Result: dry run; add --apply to download source media")
 }
 
-func printHasheousResult(result hasheous.ImportResult) {
+func printHasheousResult(result hasheous.ImportResult, causes ...error) {
 	fmt.Println("Hasheous metadata summary")
 	fmt.Printf("API: %s\n", result.APIBaseURL)
 	fmt.Printf("Workers: %d; request limit: %d/s (shared)\n", result.Concurrency, result.RateLimitPerSecond)
@@ -1013,6 +1033,10 @@ func printHasheousResult(result hasheous.ImportResult) {
 		fmt.Printf("Limit: %d; skipped by limit: %d\n", result.Limit, result.SkippedByLimitCount)
 	}
 	if result.Apply {
+		if len(causes) > 0 && causes[0] != nil {
+			fmt.Printf("Result: incomplete; %v\n", causes[0])
+			return
+		}
 		fmt.Printf("Lookups: %d planned, %d executed\n", result.PlannedLookupCount, result.QueriedLookupCount)
 	} else {
 		fmt.Printf("Lookups: %d planned\n", result.PlannedLookupCount)
@@ -1025,13 +1049,17 @@ func printHasheousResult(result hasheous.ImportResult) {
 		printOmittedFailures(result.FailedLookupCount, len(result.Failures))
 	}
 	if result.Apply {
-		fmt.Printf("Result: applied; written files: %d\n", result.WrittenFileCount)
+		if result.FailedLookupCount > 0 {
+			printFetchApplied(result.FailedLookupCount)
+		} else {
+			fmt.Printf("Result: applied; written files: %d\n", result.WrittenFileCount)
+		}
 		return
 	}
 	fmt.Println("Result: dry run; add --apply to query Hasheous and write source metadata")
 }
 
-func printIGDBResult(result igdb.ImportResult) {
+func printIGDBResult(result igdb.ImportResult, causes ...error) {
 	for _, row := range result.LinkRows {
 		fmt.Println(row)
 	}
@@ -1054,6 +1082,10 @@ func printIGDBResult(result igdb.ImportResult) {
 		fmt.Printf("Limit: %d; skipped by limit: %d\n", result.Limit, result.SkippedByLimitCount)
 	}
 	if result.Apply {
+		if len(causes) > 0 && causes[0] != nil {
+			fmt.Printf("Result: incomplete; %v\n", causes[0])
+			return
+		}
 		fmt.Printf("Queries: %d planned, %d network, %d cached\n", result.PlannedSearchCount, result.QueriedSearchCount, result.CachedSearchCount)
 		if result.UsedCachedPlatforms {
 			fmt.Println("Platforms: kept cached IGDB list")
@@ -1069,13 +1101,17 @@ func printIGDBResult(result igdb.ImportResult) {
 		printOmittedFailures(result.FailedSearchCount, len(result.Failures))
 	}
 	if result.Apply {
-		fmt.Printf("Result: applied; written files: %d\n", result.WrittenFileCount)
+		if result.FailedSearchCount > 0 {
+			printFetchApplied(result.FailedSearchCount)
+		} else {
+			fmt.Printf("Result: applied; written files: %d\n", result.WrittenFileCount)
+		}
 		return
 	}
 	fmt.Println("Result: dry run; add --apply to search IGDB and write source metadata")
 }
 
-func printScreenScraperResult(result screenscraper.ImportResult) {
+func printScreenScraperResult(result screenscraper.ImportResult, causes ...error) {
 	fmt.Println("ScreenScraper metadata summary")
 	fmt.Printf("API: %s\n", result.APIBaseURL)
 	if result.PlatformListCount > 0 {
@@ -1091,6 +1127,10 @@ func printScreenScraperResult(result screenscraper.ImportResult) {
 		fmt.Printf("Limit: %d; skipped by limit: %d\n", result.Limit, result.SkippedByLimitCount)
 	}
 	if result.Apply {
+		if len(causes) > 0 && causes[0] != nil {
+			fmt.Printf("Result: incomplete; %v\n", causes[0])
+			return
+		}
 		fmt.Printf("Queries: %d planned, %d executed\n", result.PlannedSearchCount, result.QueriedSearchCount)
 	} else {
 		fmt.Printf("Queries: %d planned\n", result.PlannedSearchCount)
@@ -1114,7 +1154,11 @@ func printScreenScraperResult(result screenscraper.ImportResult) {
 		printOmittedFailures(result.FailedSearchCount, len(result.Failures))
 	}
 	if result.Apply {
-		fmt.Printf("Result: applied; written files: %d\n", result.WrittenFileCount)
+		if result.FailedSearchCount > 0 {
+			printFetchApplied(result.FailedSearchCount)
+		} else {
+			fmt.Printf("Result: applied; written files: %d\n", result.WrittenFileCount)
+		}
 		return
 	}
 	fmt.Println("Result: dry run; add --apply to search ScreenScraper and write source metadata")
@@ -1148,9 +1192,7 @@ func printSourceAssetResult(result sourceassets.Result) {
 	if result.PlanPath != "" {
 		fmt.Printf("Plan: %s (%s, %d items)\n", result.PlanPath, result.PlanFormat, result.PlanItemCount)
 	}
-	if result.ManifestPath != "" {
-		fmt.Printf("Manifest: %s (jsonl, %d items)\n", result.ManifestPath, result.ManifestItemCount)
-	}
+	printDownloadReport(result.ManifestPath, result.ManifestItemCount, result.FailedDownloadCount)
 	if result.Apply {
 		fmt.Printf("Downloads: %d completed, %d failed\n", result.DownloadedFileCount, result.FailedDownloadCount)
 		for _, failure := range result.Failures {
@@ -1179,12 +1221,17 @@ func printEmuMoviesVideoResult(result emumovies.VideoResult) {
 	if result.PlanPath != "" {
 		fmt.Printf("Plan: %s (%s, %d items)\n", result.PlanPath, result.PlanFormat, result.PlanItemCount)
 	}
+	printDownloadReport(result.ManifestPath, result.ManifestItemCount, result.FailedDownloadCount)
 	if result.Apply {
 		fmt.Printf("Downloads: %d completed, %d failed\n", result.DownloadedFileCount, result.FailedDownloadCount)
 		for _, failure := range result.Failures {
 			fmt.Printf("  failed: %s -> %s: %s\n", failure.SourcePath, failure.Target, failure.Error)
 		}
-		fmt.Println("Result: applied")
+		if result.StopReason != "" {
+			fmt.Printf("Result: incomplete; %s\n", result.StopReason)
+		} else {
+			printFetchApplied(result.FailedDownloadCount)
+		}
 		return
 	}
 	fmt.Println("Result: dry run; add --apply to download EmuMovies videos")
@@ -1209,6 +1256,7 @@ func printEmuMoviesArtworkResult(result emumovies.ArtworkResult) {
 	if result.PlanPath != "" {
 		fmt.Printf("Plan: %s (%s, %d items)\n", result.PlanPath, result.PlanFormat, result.PlanItemCount)
 	}
+	printDownloadReport(result.ManifestPath, result.ManifestItemCount, result.FailedDownloadCount)
 	if result.Apply {
 		fmt.Printf("Downloads: %d packages completed, %d failed\n", result.DownloadedPackageCount, result.FailedDownloadCount)
 		for _, failure := range result.Failures {
@@ -1225,7 +1273,11 @@ func printEmuMoviesArtworkResult(result emumovies.ArtworkResult) {
 		if result.UnmatchedManifestPath != "" {
 			fmt.Printf("Unmatched report: %s\n", result.UnmatchedManifestPath)
 		}
-		fmt.Println("Result: applied")
+		if result.StopReason != "" {
+			fmt.Printf("Result: incomplete; %s\n", result.StopReason)
+		} else {
+			printFetchApplied(result.FailedDownloadCount + result.InvalidArtworkFileCount)
+		}
 		return
 	}
 	fmt.Println("Result: dry run; add --apply to download and extract EmuMovies artwork packages")
@@ -1283,5 +1335,22 @@ func printEmuMoviesSkippedPlatforms(skipped map[string]string) {
 	fmt.Printf("Skipped platforms without a media directory: %d\n", len(names))
 	for _, name := range names {
 		fmt.Printf("  %s\n", name)
+	}
+}
+
+func printFetchApplied(failed int) {
+	if failed > 0 {
+		fmt.Printf("Result: incomplete; %d operations failed; successful results retained\n", failed)
+	} else {
+		fmt.Println("Result: applied")
+	}
+}
+func printDownloadReport(path string, count, failed int) {
+	if path == "" {
+		return
+	}
+	fmt.Printf("Download report: %s (jsonl, %d items)\n", path, count)
+	if failed > 0 {
+		fmt.Println("Retry: rerun the same fetch command; existing files are skipped")
 	}
 }

@@ -9,19 +9,22 @@ import (
 	"time"
 
 	"rommeta/internal/catalog"
+	"rommeta/internal/taskprogress"
 )
 
 type terminalProgress struct {
-	out           *os.File
-	interactive   bool
-	color         bool
-	lastLineCount int
-	lastWidths    []int
-	byteItems     map[string]byteProgressItem
-	lastByteReads map[string]int64
-	taskLine      string
-	compactTask   bool
-	mu            sync.Mutex
+	transferLine       string
+	lastTransferReport time.Time
+	out                *os.File
+	interactive        bool
+	color              bool
+	lastLineCount      int
+	lastWidths         []int
+	byteItems          map[string]byteProgressItem
+	lastByteReads      map[string]int64
+	taskLine           string
+	compactTask        bool
+	mu                 sync.Mutex
 }
 
 type byteProgressItem struct {
@@ -198,6 +201,9 @@ func (p *terminalProgress) UpdateWorkerBytes(task, stage string, worker, workers
 
 func (p *terminalProgress) progressLines() []string {
 	byteLines := p.byteProgressLines()
+	if p.transferLine != "" {
+		byteLines = append([]string{p.transferLine}, byteLines...)
+	}
 	if p.taskLine == "" {
 		return byteLines
 	}
@@ -689,3 +695,31 @@ const (
 	ansiRed    = "\x1b[31m"
 	ansiYellow = "\x1b[33m"
 )
+
+func (p *terminalProgress) UpdateTransfers(task string, state taskprogress.TransferSnapshot) {
+	if p == nil || p.out == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	now := time.Now()
+	if !state.Done && !p.lastTransferReport.IsZero() && now.Sub(p.lastTransferReport) < time.Second {
+		return
+	}
+	p.lastTransferReport = now
+	rate := int64(0)
+	if state.Elapsed > 0 {
+		rate = int64(float64(state.Bytes) / state.Elapsed.Seconds())
+	}
+	pending := state.Queued - state.Downloaded - state.Failed
+	if pending < 0 {
+		pending = 0
+	}
+	line := fmt.Sprintf("%s files: %d downloaded, %d existing, %d failed, %d pending | %s transferred | %s/s | elapsed %s", task, state.Downloaded, state.Existing, state.Failed, pending, formatBytes(state.Bytes), formatBytes(rate), state.Elapsed.Round(time.Second))
+	p.transferLine = line
+	if p.interactive {
+		p.renderLines(p.progressLines())
+	} else {
+		fmt.Fprintln(p.out, "progress: "+line)
+	}
+}

@@ -20,6 +20,7 @@ import (
 
 	"rommeta/internal/catalogcache"
 	"rommeta/internal/catalogfs"
+	"rommeta/internal/fetchstate"
 	"rommeta/internal/medianames"
 	"rommeta/internal/platformnames"
 	"rommeta/internal/regions"
@@ -117,7 +118,7 @@ type mediaURLRecord struct {
 }
 
 // Fetch downloads or plans source-specific media from a source's media stanzas.
-func Fetch(options Options) (Result, error) {
+func Fetch(options Options) (result Result, returnErr error) {
 	source := strings.TrimSpace(options.Source)
 	if source == "" {
 		return Result{}, fmt.Errorf("source is required")
@@ -131,25 +132,35 @@ func Fetch(options Options) (Result, error) {
 		return Result{}, err
 	}
 
+	transfers := taskprogress.NewTransfers(options.Progress)
 	progress := options.Progress
+	if options.Apply {
+		defer transfers.Done()
+		progress = taskprogress.Func(transfers.Progress)
+	}
 
-	result := Result{
+	result = Result{
 		DataRoot: dataRoot,
 		Source:   source,
 		Apply:    options.Apply,
 		Limit:    options.Limit,
 	}
 
+	defer func() {
+		if returnErr != nil {
+			result.StopReason = returnErr.Error()
+		}
+	}()
 	planWriter, err := openAssetPlanWriter(options.PlanPath, options.PlanFormat, dataRoot, source)
 	if err != nil {
-		return Result{}, err
+		return result, err
 	}
 	if planWriter != nil {
 		defer planWriter.Abort()
 	}
 	manifestWriter, err := openAssetManifestWriter(dataRoot, source, options.Apply)
 	if err != nil {
-		return Result{}, err
+		return result, err
 	}
 	if manifestWriter != nil {
 		defer manifestWriter.Abort()
@@ -157,15 +168,31 @@ func Fetch(options Options) (Result, error) {
 
 	urlSigner, err := sourceMediaURLSigner(dataRoot, source, options.Apply)
 	if err != nil {
-		return Result{}, err
+		return result, err
+	}
+	if manifestWriter != nil {
+		manifestWriter.transfers = transfers
 	}
 	var downloader *candidateDownloader
 	if options.Apply {
 		downloader = startCandidateDownloader(source, options.Concurrency, progress, manifestWriter)
-		// Drain started downloads on every return, including a later catalog read error.
-		defer downloader.CloseAndWait()
 	}
-
+	defer func() {
+		if downloader != nil {
+			result.DownloadedFileCount, result.FailedDownloadCount, result.Failures, err = downloader.CloseAndWait()
+			returnErr = errors.Join(returnErr, err)
+		}
+		if manifestWriter != nil {
+			result.ManifestPath, result.ManifestItemCount, err = manifestWriter.Close()
+			returnErr = errors.Join(returnErr, err)
+		}
+		if returnErr == nil {
+			returnErr = fetchstate.Incomplete(result.FailedDownloadCount)
+		}
+		if returnErr != nil {
+			result.StopReason = returnErr.Error()
+		}
+	}()
 	sourcePolicyNeeded := false
 	scanStage := "planning downloads"
 	if options.Apply {
@@ -194,6 +221,7 @@ func Fetch(options Options) (Result, error) {
 			dedupeKey := assetDedupeKey(source, candidate)
 			if _, err := catalogfs.Stat(candidate.Target); err == nil {
 				result.ExistingFileCount++
+				transfers.Record("existing")
 				if dedupeKey != "" {
 					seenDownloads[dedupeKey] = candidate.Target
 				}
@@ -239,24 +267,24 @@ func Fetch(options Options) (Result, error) {
 				if err := downloader.Enqueue(candidate); err != nil {
 					return err
 				}
+				transfers.Record("queued")
 			}
 		}
 		return nil
 	})
-	if err != nil && !errors.Is(err, screenscraper.ErrDailyQuota) {
-		return Result{}, err
-	}
-	stopErr := err
-	if stopErr != nil {
-		// The generic catalog scanner returns zero totals on callback errors.
+	if err != nil {
 		result.PlatformCount = len(scannedPlatforms)
 		result.GameBundleCount = scannedGames
 	}
+	if err != nil && !errors.Is(err, screenscraper.ErrDailyQuota) {
+		return result, err
+	}
+	stopErr := err
 
 	if downloader != nil {
 		downloaded, failed, failures, err := downloader.CloseAndWait()
 		if err != nil {
-			return Result{}, err
+			return result, err
 		}
 		stopErr = downloader.Err()
 		result.DownloadedFileCount = downloaded
@@ -278,30 +306,18 @@ func Fetch(options Options) (Result, error) {
 			note = fmt.Sprintf("Imported from %s media URLs; verify rights before sharing.", source)
 		}
 		if _, err := store.EnsureSourcePolicy(dataRoot, source, scope, note); err != nil {
-			return Result{}, err
+			return result, err
 		}
 	}
 	if strings.TrimSpace(options.PlanPath) != "" {
 		progress.Update("writing plan", 0, 0, filepath.Base(options.PlanPath))
 		planPath, planFormat, planItemCount, err := planWriter.Close()
 		if err != nil {
-			return Result{}, err
+			return result, err
 		}
 		result.PlanPath = planPath
 		result.PlanFormat = planFormat
 		result.PlanItemCount = planItemCount
-	}
-	if manifestWriter != nil {
-		progress.Update("writing manifest", 0, 0, filepath.Base(manifestWriter.path))
-		manifestPath, manifestItemCount, err := manifestWriter.Close()
-		if err != nil {
-			return Result{}, err
-		}
-		result.ManifestPath = manifestPath
-		result.ManifestItemCount = manifestItemCount
-	}
-	if stopErr != nil {
-		result.StopReason = stopErr.Error()
 	}
 	return result, stopErr
 }
@@ -436,6 +452,14 @@ func (downloader *candidateDownloader) CloseAndWait() (downloaded, failed int, f
 }
 
 func (downloader *candidateDownloader) record(result downloadResult) {
+	if downloader.manifest != nil && downloader.manifest.transfers != nil {
+		status := "downloaded"
+		if result.err != nil {
+			status = "failed"
+		}
+		downloader.manifest.transfers.Record(status)
+	}
+
 	downloader.mu.Lock()
 	defer downloader.mu.Unlock()
 	if result.err != nil {
@@ -583,16 +607,17 @@ func (plan *assetPlanWriter) Abort() {
 }
 
 type assetManifestWriter struct {
-	path     string
-	tmpPath  string
-	dataRoot string
-	source   string
-	file     *os.File
-	writer   *bufio.Writer
-	encoder  *json.Encoder
-	mu       sync.Mutex
-	count    int
-	closed   bool
+	transfers *taskprogress.Transfers
+	path      string
+	tmpPath   string
+	dataRoot  string
+	source    string
+	file      *os.File
+	writer    *bufio.Writer
+	encoder   *json.Encoder
+	mu        sync.Mutex
+	count     int
+	closed    bool
 }
 
 func openAssetManifestWriter(dataRoot, source string, apply bool) (*assetManifestWriter, error) {
@@ -603,15 +628,16 @@ func openAssetManifestWriter(dataRoot, source string, apply bool) (*assetManifes
 	if fileName == "" {
 		fileName = "source"
 	}
-	absPath := filepath.Join(dataRoot, ".rommeta", "runs", fileName+"-artwork-apply-manifest.jsonl")
-	if err := catalogfs.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
+	dir := filepath.Join(dataRoot, ".rommeta", "runs")
+	if err := catalogfs.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	tmpPath := absPath + ".tmp"
-	file, err := os.Create(tmpPath)
+	file, err := os.CreateTemp(dir, fileName+"-artwork-*.jsonl.tmp")
 	if err != nil {
 		return nil, err
 	}
+	tmpPath := file.Name()
+	absPath := strings.TrimSuffix(tmpPath, ".tmp")
 	writer := bufio.NewWriter(file)
 	return &assetManifestWriter{
 		path:     absPath,
@@ -643,7 +669,7 @@ func (manifest *assetManifestWriter) Write(item assetCandidate, status, duplicat
 		return err
 	}
 	manifest.count++
-	return nil
+	return manifest.writer.Flush()
 }
 
 func (manifest *assetManifestWriter) Close() (path string, count int, err error) {

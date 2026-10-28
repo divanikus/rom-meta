@@ -59,10 +59,7 @@ func FetchAssets(options AssetOptions) (AssetResult, error) {
 		PolicyNote:  "Imported from OpenVGDB media URLs; verify rights before sharing.",
 		Progress:    options.Progress,
 	})
-	if err != nil {
-		return AssetResult{}, err
-	}
-	return assetResult(result), nil
+	return assetResult(result), err
 }
 
 func assetResult(result sourceassets.Result) AssetResult {

@@ -23,6 +23,7 @@ import (
 
 	"rommeta/internal/catalogcache"
 	"rommeta/internal/catalogfs"
+	"rommeta/internal/fetchstate"
 	"rommeta/internal/platformnames"
 	"rommeta/internal/regions"
 	"rommeta/internal/sourceyaml"
@@ -46,6 +47,9 @@ type VideoOptions struct {
 
 // VideoResult describes a dry-run or applied EmuMovies video fetch.
 type VideoResult struct {
+	StopReason           string
+	ManifestPath         string
+	ManifestItemCount    int
 	SkippedPlatforms     map[string]string
 	DataRoot             string
 	FTPHost              string
@@ -167,7 +171,7 @@ var videoQualityPreference = []videoQuality{
 }
 
 // FetchVideo plans or downloads EmuMovies video snaps for catalog games.
-func FetchVideo(options VideoOptions) (VideoResult, error) {
+func FetchVideo(options VideoOptions) (result VideoResult, returnErr error) {
 	dataRoot := strings.TrimSpace(options.DataRoot)
 	if dataRoot == "" {
 		dataRoot = "."
@@ -189,12 +193,17 @@ func FetchVideo(options VideoOptions) (VideoResult, error) {
 		return VideoResult{}, err
 	}
 
+	transfers := taskprogress.NewTransfers(options.Progress)
 	progress := options.Progress
+	if options.Apply {
+		defer transfers.Done()
+		progress = taskprogress.Func(transfers.Progress)
+	}
 	gameSet, err := readCatalogGameSet(dataRoot, options.Platform, progress)
 	if err != nil {
 		return VideoResult{}, err
 	}
-	result := VideoResult{
+	result = VideoResult{
 		DataRoot:        dataRoot,
 		FTPHost:         settings.FTPHost,
 		PlatformCount:   gameSet.PlatformCount,
@@ -202,6 +211,12 @@ func FetchVideo(options VideoOptions) (VideoResult, error) {
 		Apply:           options.Apply,
 		Limit:           options.Limit,
 	}
+
+	defer func() {
+		if returnErr != nil {
+			result.StopReason = returnErr.Error()
+		}
+	}()
 
 	client := options.FTPClient
 	if client == nil {
@@ -211,7 +226,7 @@ func FetchVideo(options VideoOptions) (VideoResult, error) {
 	result.SkippedPlatforms = map[string]string{}
 	candidates, directory, quality, entryCount, videoCount, err := videoCandidates(client, settings, gameSet.ByPlatform, options.PlatformRegistry, result.SkippedPlatforms, progress)
 	if err != nil {
-		return VideoResult{}, err
+		return result, err
 	}
 	result.FTPDirectory = directory
 	result.VideoQuality = quality
@@ -224,9 +239,27 @@ func FetchVideo(options VideoOptions) (VideoResult, error) {
 		return candidates[i].Target < candidates[j].Target
 	})
 
+	recorder, err := newDownloadRecorder(dataRoot, "video", options.Apply, client, transfers)
+	if err != nil {
+		return result, err
+	}
+	for _, candidate := range candidates {
+		recorder.add(candidate.SourcePath, candidate.Target, fetchstate.Row{"platform": candidate.Platform, "game": candidate.Game, "release": candidate.Release, "url": candidate.URL, "quality": candidate.Quality})
+	}
+	client = recorder
+	defer func() {
+		returnErr = errors.Join(returnErr, recorder.report.Close())
+		if recorder.report != nil {
+			result.ManifestPath = recorder.report.Path
+			result.ManifestItemCount = recorder.report.Count
+		}
+		if returnErr == nil {
+			returnErr = fetchstate.Incomplete(result.FailedDownloadCount)
+		}
+	}()
 	planWriter, err := openVideoPlanWriter(options.PlanPath, options.PlanFormat, dataRoot)
 	if err != nil {
-		return VideoResult{}, err
+		return result, err
 	}
 	if planWriter != nil {
 		defer planWriter.Abort()
@@ -235,10 +268,19 @@ func FetchVideo(options VideoOptions) (VideoResult, error) {
 	var downloader *videoDownloader
 	if options.Apply {
 		downloader = startVideoDownloader(client, options.Concurrency, progress)
+		defer func() {
+			result.DownloadedFileCount, result.FailedDownloadCount, result.Failures = downloader.CloseAndWait()
+			items := downloader.successfulCandidates()
+			if len(items) > 0 {
+				returnErr = errors.Join(returnErr, writeSourceStanzas(groupCandidatesByGame(items)))
+			}
+			if len(items) > 0 || result.ExistingFileCount > 0 {
+				_, err := store.EnsureSourcePolicy(dataRoot, sourceName, defaultPolicyScope, defaultPolicyNote)
+				returnErr = errors.Join(returnErr, err)
+			}
+		}()
 	}
 
-	var metadataItems []videoCandidate
-	sourcePolicyNeeded := false
 	scanStage := "planning downloads"
 	if options.Apply {
 		scanStage = "scanning"
@@ -247,12 +289,13 @@ func FetchVideo(options VideoOptions) (VideoResult, error) {
 		progress.Update(scanStage, index+1, len(candidates), candidate.Platform+" / "+candidate.Game)
 		if _, err := catalogfs.Stat(candidate.Target); err == nil {
 			result.ExistingFileCount++
-			if options.Apply {
-				sourcePolicyNeeded = true
+			transfers.Record("existing")
+			if err := recorder.record(candidate.SourcePath, candidate.Target, "existing", nil); err != nil {
+				return result, err
 			}
 			continue
 		} else if err != nil && !os.IsNotExist(err) {
-			return VideoResult{}, err
+			return result, err
 		}
 
 		if options.Limit > 0 && result.PlannedDownloadCount >= options.Limit {
@@ -260,12 +303,15 @@ func FetchVideo(options VideoOptions) (VideoResult, error) {
 			continue
 		}
 		result.PlannedDownloadCount++
+		if options.Apply {
+			transfers.Record("queued")
+		}
 		if planWriter != nil {
 			if err := planWriter.Write(candidate); err != nil {
 				if downloader != nil {
 					downloader.CloseAndWait()
 				}
-				return VideoResult{}, err
+				return result, err
 			}
 		}
 		if downloader != nil {
@@ -278,29 +324,13 @@ func FetchVideo(options VideoOptions) (VideoResult, error) {
 		result.DownloadedFileCount = downloaded
 		result.FailedDownloadCount = failed
 		result.Failures = failures
-		metadataItems = downloader.successfulCandidates()
-		if downloaded > 0 {
-			sourcePolicyNeeded = true
-		}
 	}
 
-	if options.Apply {
-		progress.Update("writing metadata", 0, 0, sourceName)
-		if err := writeSourceStanzas(groupCandidatesByGame(metadataItems)); err != nil {
-			return VideoResult{}, err
-		}
-	}
-	if sourcePolicyNeeded {
-		progress.Update("writing policy", 0, 0, sourceName)
-		if _, err := store.EnsureSourcePolicy(dataRoot, sourceName, defaultPolicyScope, defaultPolicyNote); err != nil {
-			return VideoResult{}, err
-		}
-	}
 	if strings.TrimSpace(options.PlanPath) != "" {
 		progress.Update("writing plan", 0, 0, filepath.Base(options.PlanPath))
 		planPath, planFormat, planItemCount, err := planWriter.Close()
 		if err != nil {
-			return VideoResult{}, err
+			return result, err
 		}
 		result.PlanPath = planPath
 		result.PlanFormat = planFormat

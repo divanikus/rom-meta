@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"rommeta/internal/catalogyaml"
+	"rommeta/internal/fetchstate"
 )
 
 func identityGame(name, release string) catalogGame {
@@ -116,16 +117,31 @@ func TestFetchVideoResumePreservesHistoryAndOmitsFailedDownloads(t *testing.T) {
 	ftp.lists[directory] = append(ftp.lists[directory], FTPEntry{Name: "007 - GoldenEye (Europe).mp4", Size: 123})
 	failing := &failingVideoFTP{fakeFTP: ftp, failure: secondPath}
 	failed, err := FetchVideo(VideoOptions{DataRoot: root, FTPClient: failing, Apply: true})
-	if err != nil || failed.FailedDownloadCount != 1 {
+	var partial *fetchstate.PartialError
+	if !errors.As(err, &partial) || failed.FailedDownloadCount != 1 {
 		t.Fatalf("failed %#v %v", failed, err)
 	}
 	after, err := os.ReadFile(metadata)
 	if err != nil || string(after) != string(before) {
 		t.Fatal("failed batch replaced source history")
 	}
+	if failed.ManifestItemCount != 2 || failed.ManifestPath == "" {
+		t.Fatalf("missing video report: %#v", failed)
+	}
+	report, err := os.ReadFile(failed.ManifestPath)
+	if err != nil || !strings.Contains(string(report), `"status":"failed"`) {
+		t.Fatalf("missing failed transfer: %s %v", report, err)
+	}
+	calls := len(ftp.downloads)
 	resumed, err := FetchVideo(VideoOptions{DataRoot: root, FTPClient: ftp, Apply: true})
 	if err != nil || resumed.DownloadedFileCount != 1 {
 		t.Fatalf("resume %#v %v", resumed, err)
+	}
+	if len(ftp.downloads) != calls+1 || ftp.downloads[len(ftp.downloads)-1] != secondPath {
+		t.Fatal("resume downloaded a successful video again")
+	}
+	if resumed.ManifestPath == failed.ManifestPath {
+		t.Fatal("resume overwrote failed report")
 	}
 	after, err = os.ReadFile(metadata)
 	if err != nil {
