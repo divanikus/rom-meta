@@ -125,7 +125,7 @@ func (resolver *LookupResolver) bindCatalog(input ObservedInput, allowGame bool)
 		name = strings.TrimSuffix(name, filepath.Ext(name))
 	}
 	// Match complete authority/release names including qualifiers. A name is not a hash.
-	candidates := resolver.index.ByName[nameKey(name)]
+	candidates := resolver.index.nameCandidates(name)
 	unique := map[string]fingerprint{}
 	for _, candidate := range candidates {
 		// MAME short names are identifiers. Generic payload aliases and punctuation
@@ -183,7 +183,7 @@ func (resolver *LookupResolver) bindCatalog(input ObservedInput, allowGame bool)
 				sameEdition = false
 				break
 			}
-			choices := resolver.index.ByName[nameKey(catalogMemberName(file.Name))]
+			choices := resolver.index.nameCandidates(catalogMemberName(file.Name))
 			if len(choices) == 0 {
 				sameEdition = false
 				break

@@ -29,6 +29,9 @@ type lookupFingerprint struct {
 	SHA1, SHA256, MD5, CRC string
 }
 type lookupEntry struct {
+	CompleteGameNames             []string
+	CompleteReleaseNames          map[string][]string
+	CompleteVariantNames          map[string][]string
 	SchemaVersion                 int
 	VariantNames                  map[string][]string
 	Title                         string
@@ -100,7 +103,7 @@ func openLookupDisk(dir, root, platform string) *lookupDisk {
 		}
 		digest := sha256.Sum256(payload)
 		var entry lookupEntry
-		if hex.EncodeToString(digest[:]) != checksum || json.Unmarshal(payload, &entry) != nil || entry.SchemaVersion != 2 {
+		if hex.EncodeToString(digest[:]) != checksum || json.Unmarshal(payload, &entry) != nil || entry.SchemaVersion != 3 {
 			continue
 		}
 		c.rows[folder] = lookupRow{stamp, entry}
@@ -238,7 +241,7 @@ func lookupDocument(root, name string) (*yaml.Node, string, error) {
 	return doc.Root(), hex.EncodeToString(sum[:]), nil
 }
 func readLookupEntry(root, path string) (lookupEntry, error) {
-	entry := lookupEntry{SchemaVersion: 2, ReleaseNames: map[string][]string{}, VariantNames: map[string][]string{}}
+	entry := lookupEntry{SchemaVersion: 3, CompleteReleaseNames: map[string][]string{}, CompleteVariantNames: map[string][]string{}, ReleaseNames: map[string][]string{}, VariantNames: map[string][]string{}}
 	doc, digest, err := lookupDocument(root, filepath.Join(path, "game.yaml"))
 	if os.IsNotExist(err) {
 		return entry, nil
@@ -272,12 +275,26 @@ func readLookupEntry(root, path string) (lookupEntry, error) {
 			entry.GameNames = append(entry.GameNames, key)
 		}
 	}
+	for key, games := range index.ByCompleteGameName {
+		for range games {
+			entry.CompleteGameNames = append(entry.CompleteGameNames, key)
+		}
+	}
 	for key, fps := range index.ByName {
 		for _, fp := range fps {
 			if fp.variant != "" {
 				entry.VariantNames[key] = append(entry.VariantNames[key], fp.variant)
 			} else {
 				entry.ReleaseNames[key] = append(entry.ReleaseNames[key], fp.release)
+			}
+		}
+	}
+	for key, fps := range index.ByCompleteName {
+		for _, fp := range fps {
+			if fp.variant != "" {
+				entry.CompleteVariantNames[key] = append(entry.CompleteVariantNames[key], fp.variant)
+			} else {
+				entry.CompleteReleaseNames[key] = append(entry.CompleteReleaseNames[key], fp.release)
 			}
 		}
 	}
@@ -304,6 +321,9 @@ func (e lookupEntry) add(index *catalogIndex, path string) *game {
 	for _, key := range e.GameNames {
 		index.GamesByName[key] = append(index.GamesByName[key], g)
 	}
+	for _, name := range e.CompleteGameNames {
+		index.addCompleteGameName(name, g)
+	}
 	for key, releases := range e.ReleaseNames {
 		for _, release := range releases {
 			index.ByName[key] = append(index.ByName[key], fingerprint{game: g, release: release})
@@ -312,6 +332,16 @@ func (e lookupEntry) add(index *catalogIndex, path string) *game {
 	for name, variants := range e.VariantNames {
 		for _, variant := range variants {
 			index.ByName[name] = append(index.ByName[name], fingerprint{game: g, variant: variant})
+		}
+	}
+	for name, releases := range e.CompleteReleaseNames {
+		for _, release := range releases {
+			index.addCompleteName(name, fingerprint{game: g, release: release})
+		}
+	}
+	for name, variants := range e.CompleteVariantNames {
+		for _, variant := range variants {
+			index.addCompleteName(name, fingerprint{game: g, variant: variant})
 		}
 	}
 	for _, fp := range e.Fingerprints {

@@ -12,10 +12,12 @@ import (
 )
 
 type catalogIndex struct {
-	BySize      map[int64][]fingerprint
-	ByCHD       map[string][]fingerprint
-	ByName      map[string][]fingerprint
-	GamesByName map[string][]*game
+	ByCompleteName     map[string][]fingerprint
+	ByCompleteGameName map[string][]*game
+	BySize             map[int64][]fingerprint
+	ByCHD              map[string][]fingerprint
+	ByName             map[string][]fingerprint
+	GamesByName        map[string][]*game
 }
 
 func nameKey(name string) string {
@@ -33,14 +35,56 @@ func nameKey(name string) string {
 	}
 	return b.String()
 }
+
+// Complete names keep punctuation and word boundaries significant. The compact
+// index remains a fallback only when no complete spelling exists.
+func completeNameKey(name string) string {
+	name = filepath.Base(name)
+	if nameExtension(strings.ToLower(filepath.Ext(name))) {
+		name = strings.TrimSuffix(name, filepath.Ext(name))
+	}
+	return strings.ToLower(strings.Join(strings.Fields(name), " "))
+}
+func (index *catalogIndex) nameCandidates(name string) []fingerprint {
+	if candidates := index.ByCompleteName[completeNameKey(name)]; len(candidates) > 0 {
+		return candidates
+	}
+	return index.ByName[nameKey(name)]
+}
+func (index *catalogIndex) gameCandidates(name string) []*game {
+	if games := index.ByCompleteGameName[completeNameKey(name)]; len(games) > 0 {
+		return games
+	}
+	return index.GamesByName[nameKey(name)]
+}
+func (index *catalogIndex) addCompleteGameName(name string, g *game) {
+	if index.ByCompleteGameName == nil {
+		index.ByCompleteGameName = map[string][]*game{}
+	}
+	if key := completeNameKey(name); key != "" {
+		index.ByCompleteGameName[key] = append(index.ByCompleteGameName[key], g)
+	}
+}
+func (index *catalogIndex) addCompleteName(name string, fp fingerprint) {
+	key := completeNameKey(name)
+	if key == "" {
+		return
+	}
+	if index.ByCompleteName == nil {
+		index.ByCompleteName = map[string][]fingerprint{}
+	}
+	index.ByCompleteName[key] = append(index.ByCompleteName[key], fp)
+}
 func addReleaseName(index *catalogIndex, name string, g *game, release string) {
 	if key := nameKey(name); key != "" {
 		index.ByName[key] = append(index.ByName[key], fingerprint{game: g, release: release})
+		index.addCompleteName(name, fingerprint{game: g, release: release})
 	}
 }
 func addVariantName(index *catalogIndex, name string, g *game, variant string) {
 	if key := nameKey(name); key != "" {
 		index.ByName[key] = append(index.ByName[key], fingerprint{game: g, variant: variant})
+		index.addCompleteName(name, fingerprint{game: g, variant: variant})
 	}
 }
 func indexNames(index *catalogIndex, g *game) {
@@ -55,6 +99,7 @@ func indexNames(index *catalogIndex, g *game) {
 	for _, name := range names {
 		if key := nameKey(name); key != "" {
 			index.GamesByName[key] = append(index.GamesByName[key], g)
+			index.addCompleteGameName(name, g)
 		}
 	}
 	_ = catalogyaml.Mapping(catalogyaml.Value(g.root, "releases"), func(release string, node *yaml.Node) error {
@@ -76,7 +121,7 @@ func nameFallback(root string, index *catalogIndex, record *Record, profile Prof
 	var games []*game
 	gameSeen := map[string]bool{}
 	for _, name := range names {
-		for _, g := range index.GamesByName[nameKey(name)] {
+		for _, g := range index.gameCandidates(name) {
 			if !gameSeen[g.path] {
 				gameSeen[g.path] = true
 				games = append(games, g)
@@ -86,7 +131,7 @@ func nameFallback(root string, index *catalogIndex, record *Record, profile Prof
 	var matches []fingerprint
 	seen := map[string]bool{}
 	for _, name := range names {
-		for _, candidate := range index.ByName[nameKey(name)] {
+		for _, candidate := range index.nameCandidates(name) {
 			if candidate.variant != "" {
 				continue
 			}

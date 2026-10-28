@@ -82,6 +82,15 @@ These metadata observations do not add an ES-DE launch/export reader. The
 current builds of the server and native importer when a new observation system
 is introduced.
 
+## Complete-name precedence
+
+Complete catalog release names and aliases are compared first, preserving word
+boundaries and punctuation (apart from case and repeated whitespace). Thus
+`Ys I & II` cannot collapse into `Ys III`. Compact spelling remains a fallback
+when there is no complete-name match; compact collisions remain ambiguous.
+This applies to CHD metadata, catalog names and local/network export name binding.
+It changes recognition priority, not the verification strength of a name match.
+
 ## Catalog names for other formats
 
 With `game_binding: true`, a `catalog` observation accepts any regular file or

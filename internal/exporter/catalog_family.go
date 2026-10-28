@@ -74,6 +74,18 @@ func mergeCatalogIndex(dst, src *catalogIndex) {
 	for k, v := range src.ByName {
 		dst.ByName[k] = append(dst.ByName[k], v...)
 	}
+	if len(src.ByCompleteName) > 0 && dst.ByCompleteName == nil {
+		dst.ByCompleteName = map[string][]fingerprint{}
+	}
+	for k, v := range src.ByCompleteName {
+		dst.ByCompleteName[k] = append(dst.ByCompleteName[k], v...)
+	}
+	if len(src.ByCompleteGameName) > 0 && dst.ByCompleteGameName == nil {
+		dst.ByCompleteGameName = map[string][]*game{}
+	}
+	for k, v := range src.ByCompleteGameName {
+		dst.ByCompleteGameName[k] = append(dst.ByCompleteGameName[k], v...)
+	}
 	for k, v := range src.GamesByName {
 		dst.GamesByName[k] = append(dst.GamesByName[k], v...)
 	}

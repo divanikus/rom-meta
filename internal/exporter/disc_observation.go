@@ -284,7 +284,7 @@ func (resolver *LookupResolver) bindUMDHeader(record *Record) (bool, error) {
 // a metadata basis, never a verified raw-disc release from a CHD container.
 func (resolver *LookupResolver) bindDiscName(record *Record) error {
 	exact := map[string]fingerprint{}
-	for _, fp := range resolver.index.ByName[nameKey(record.ROM)] {
+	for _, fp := range resolver.index.nameCandidates(record.ROM) {
 		if fp.variant == "" {
 			exact[fp.targetKey()] = fp
 		}
