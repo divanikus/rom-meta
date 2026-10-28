@@ -134,6 +134,7 @@ type catalogGame struct {
 }
 
 type releaseMetadata struct {
+	ReleaseType     string
 	DatabaseID      string
 	Title           string
 	Platform        string
@@ -618,6 +619,10 @@ func parenthesizedTokens(value string) []string {
 }
 
 func metadataHasUnofficialMarker(metadata releaseMetadata) bool {
+	switch strings.ToLower(strings.TrimSpace(metadata.ReleaseType)) {
+	case "homebrew", "unlicensed":
+		return true
+	}
 	if catalogrules.HasUnofficialTag(catalogrules.UnofficialTagsFromName(metadata.Title)) {
 		return true
 	}
@@ -812,7 +817,7 @@ func newLaunchBoxSnapshotCache(dataRoot, zipPath string) (launchBoxSnapshotCache
 		return launchBoxSnapshotCache{}, err
 	}
 	return launchBoxSnapshotCache{
-		SchemaVersion:      5,
+		SchemaVersion:      6,
 		ZipPath:            relativePath,
 		ZipSize:            info.Size(),
 		ZipModTimeUnixNano: info.ModTime().UnixNano(),
@@ -949,6 +954,7 @@ CREATE TABLE IF NOT EXISTS launchbox_games (
 	database_id TEXT PRIMARY KEY,
 	platform TEXT NOT NULL,
 	title TEXT NOT NULL,
+ release_type TEXT NOT NULL DEFAULT '',
 	release_date TEXT,
 	developer TEXT,
 	publisher TEXT,
@@ -991,15 +997,18 @@ CREATE INDEX IF NOT EXISTS idx_launchbox_alternate_ids_database_id ON launchbox_
 }
 
 func ensureLaunchBoxSnapshotCacheColumns(db *sql.DB) error {
-	exists, err := launchBoxColumnExists(db, "title_candidates_json")
-	if err != nil {
-		return err
+	for column, definition := range map[string]string{"title_candidates_json": "TEXT NOT NULL DEFAULT '[]'", "release_type": "TEXT NOT NULL DEFAULT ''"} {
+		exists, err := launchBoxColumnExists(db, column)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			if _, err := db.Exec("ALTER TABLE launchbox_games ADD COLUMN " + column + " " + definition); err != nil {
+				return err
+			}
+		}
 	}
-	if exists {
-		return nil
-	}
-	_, err = db.Exec(`ALTER TABLE launchbox_games ADD COLUMN title_candidates_json TEXT NOT NULL DEFAULT '[]'`)
-	return err
+	return nil
 }
 
 func launchBoxColumnExists(db *sql.DB, column string) (bool, error) {
@@ -1088,7 +1097,7 @@ WHERE id = 1`)
 func loadLaunchBoxSnapshotIndex(db *sql.DB, cache *launchBoxSnapshotCache) error {
 	cache.ByID = map[string]releaseMetadata{}
 	rows, err := db.Query(`
-SELECT database_id, platform, title, release_date, developer, publisher, genres_json,
+SELECT database_id, platform, title, release_type, release_date, developer, publisher, genres_json,
        max_players, community_rating, description, alternate_titles_json, title_candidates_json, media_urls_json
 FROM launchbox_games`)
 	if err != nil {
@@ -1102,6 +1111,7 @@ FROM launchbox_games`)
 			&metadata.DatabaseID,
 			&metadata.Platform,
 			&metadata.Title,
+			&metadata.ReleaseType,
 			&metadata.ReleaseDate,
 			&metadata.Developer,
 			&metadata.Publisher,
@@ -1278,9 +1288,9 @@ func clearLaunchBoxSnapshotIndexTx(tx *sql.Tx) error {
 func insertLaunchBoxGamesTx(tx *sql.Tx, games map[string]releaseMetadata) error {
 	statement, err := tx.Prepare(`
 INSERT INTO launchbox_games (
-	database_id, platform, title, release_date, developer, publisher, genres_json,
+	database_id, platform, title, release_type, release_date, developer, publisher, genres_json,
 	max_players, community_rating, description, alternate_titles_json, title_candidates_json, media_urls_json
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
@@ -1306,6 +1316,7 @@ INSERT INTO launchbox_games (
 			metadata.DatabaseID,
 			metadata.Platform,
 			metadata.Title,
+			metadata.ReleaseType,
 			metadata.ReleaseDate,
 			metadata.Developer,
 			metadata.Publisher,
@@ -1428,6 +1439,7 @@ func parseMetadataXML(source io.Reader, platforms map[string]bool, index *snapsh
 			}
 			metadata := releaseMetadata{
 				DatabaseID:      id,
+				ReleaseType:     strings.TrimSpace(fields["ReleaseType"]),
 				Title:           title,
 				Platform:        platform,
 				Region:          strings.TrimSpace(fields["Region"]),
@@ -1648,6 +1660,10 @@ func renderReleaseMetadata(b *bytes.Buffer, indent string, m releaseMetadata) {
 	if m.Region != "" {
 		fmt.Fprintf(b, "%sregion: %s\n", indent, yamlString(m.Region))
 	}
+	if m.ReleaseType != "" {
+		fmt.Fprintf(b, "%srelease_type: %s\n", indent, yamlString(m.ReleaseType))
+	}
+
 	if m.ReleaseDate != "" {
 		fmt.Fprintf(b, "%srelease_date: %s\n", indent, yamlString(m.ReleaseDate))
 	}

@@ -156,3 +156,8 @@ force. Server profile limits can differ; see [Hasheous rate limiting](https://gi
 ScreenScraper's daily quota and its HTTP 431 return-tomorrow response stop that
 provider's run. Incomplete searches remain resumable instead of becoming saved
 negative matches. Other HTTP 431 errors retain their normal error handling.
+
+LaunchBox's explicit `ReleaseType: Homebrew` or `Unlicensed` also supplies
+unofficial classification when its title has no tag. The value is retained in
+source metadata and the snapshot cache. A plain released/unreleased record does
+not establish an unofficial match; edition and ambiguity checks still apply.
