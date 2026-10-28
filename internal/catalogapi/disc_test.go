@@ -47,6 +47,17 @@ func TestLookupDiscObservationTransportAndUnverifiedProjection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The shared title of a demo must not override an exact retail release name.
+	demo := filepath.Join(platform, "Demo")
+	if err := os.MkdirAll(demo, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(demo, "game.yaml"), []byte("title: Example\ndefault_release: Example (USA) (Demo)\nreleases:\n  Example (USA) (Demo): {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(demo, "fingerprints.yaml"), []byte("items: []\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	s, err := NewLookup(Options{Token: strings.Repeat("s", 32), Export: exporter.Options{DataRoot: data}})
 	if err != nil {
 		t.Fatal(err)

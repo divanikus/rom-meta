@@ -183,7 +183,9 @@ unsupported inputs are skipped. Prepared standalone translated CHDs can use an
 explicit variant combined-SHA1 fingerprint; these return `variant-chd-header`
 with inherited base metadata, separate from payload/Redump verification. Other bindings
 are always `game-name`, without a proven release/dump. Profile/provenance still
-controls metadata/media selection.
+controls metadata/media selection. Complete release names take precedence over
+shared game-title aliases; they select an unverified metadata basis and keep
+`release` empty. A conflicting complete name remains ambiguous.
 
 Before apply, the importer rechecks native paths, headers, sizes and mtimes without
 hashing/decompressing entire CHDs. This detects ordinary library drift, **not

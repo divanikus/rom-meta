@@ -193,3 +193,45 @@ func TestPSPMetadataUsesDeclaredUMDHeaderWithoutLaunchReader(t *testing.T) {
 		t.Fatal(plan, err)
 	}
 }
+
+func TestCHDCompleteReleaseNamePrecedesSharedGameTitle(t *testing.T) {
+	options, _, _ := fixture(t)
+	platform := "Sony - PlayStation 2"
+	familyCard(t, options.DataRoot, platform, "Adventure", "Adventure (USA)")
+	familyCard(t, options.DataRoot, platform, "Adventure (Demo)", "Adventure (USA) (Demo)")
+	put(t, filepath.Join(options.ROMRoot, "Adventure (USA).chd"), syntheticCHD())
+	observed, err := ObserveInput(options.ROMRoot, "ps2", "Adventure (USA).chd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := NewLookupCatalog(options.DataRoot, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver, err := catalog.Open(platform)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := resolver.ResolveBindings([]ObservedInput{observed}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := plan.Records[0]
+	if record.Status != "matched" || record.Release != "" || record.MetadataRelease != "Adventure (USA)" || record.MatchedBy != "game-name" || record.Payload != nil || record.SHA1 != "" {
+		t.Fatalf("complete release lost to shared title: %+v", record)
+	}
+	// A duplicate complete release cannot select either card.
+	familyCard(t, options.DataRoot, platform, "Conflict", "Adventure (USA)")
+	catalog, err = NewLookupCatalog(options.DataRoot, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver, err = catalog.Open(platform)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err = resolver.ResolveBindings([]ObservedInput{observed}, true)
+	if err != nil || plan.Records[0].Status != "ambiguous" {
+		t.Fatalf("complete-name collision: %+v %v", plan, err)
+	}
+}

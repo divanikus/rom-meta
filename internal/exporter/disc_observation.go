@@ -199,11 +199,12 @@ func (resolver *LookupResolver) bindDisc(input ObservedInput, allowGame bool) (R
 	var first *Record
 	for _, file := range input.Disc.Files {
 		part := Record{ROM: file.Name, Status: "unmatched", Fields: map[string]Value{}, Media: map[string]Media{}}
-		if err := resolver.bindGame(&part); err != nil {
+		if err := resolver.bindDiscName(&part); err != nil {
 			return record, err
 		}
 		if part.Status != "matched" {
-			record.Status, record.Reason = "unmatched", "CHD member lacks one unique catalog game: "+file.Name
+			record.Status, record.Reason = part.Status, "CHD member lacks one unique catalog game: "+file.Name
+			record.Candidates = part.Candidates
 			return record, nil
 		}
 		if first == nil {
@@ -277,4 +278,29 @@ func (resolver *LookupResolver) bindUMDHeader(record *Record) (bool, error) {
 		record.Warnings = append(record.Warnings, "Declared CHD header identity only; no decompression, payload integrity or Redump verification")
 	}
 	return true, nil
+}
+
+// A complete release name is considered before broad title aliases. It selects
+// a metadata basis, never a verified raw-disc release from a CHD container.
+func (resolver *LookupResolver) bindDiscName(record *Record) error {
+	exact := map[string]fingerprint{}
+	for _, fp := range resolver.index.ByName[nameKey(record.ROM)] {
+		if fp.variant == "" {
+			exact[fp.targetKey()] = fp
+		}
+	}
+	if len(exact) > 1 {
+		record.Status, record.Reason = "ambiguous", "complete CHD name identifies multiple catalog releases"
+		return nil
+	}
+	for _, fp := range exact {
+		record.Status, record.MatchedBy, record.Reason = "matched", "game-name", "complete CHD release name selects a metadata basis; dump remains unverified"
+		if err := attachRecord(resolver.Catalog.Root, fp.game, fp.release, record, resolver.Catalog.Profile, resolver.Platform.System); err != nil {
+			return err
+		}
+		record.Release = ""
+		record.Warnings = append(record.Warnings, "Complete filename selects metadata only; no raw-disc or Redump verification")
+		return nil
+	}
+	return resolver.bindGame(record)
 }
