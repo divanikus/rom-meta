@@ -170,3 +170,43 @@ func TestPSPUMDHeaderLookupAndNativeProjectionRemainUnverified(t *testing.T) {
 		t.Fatal(evidence, form, err)
 	}
 }
+
+func TestDeclaredReleaseAliasWorksThroughCatalogAPI(t *testing.T) {
+	_, game, files := fixture(t)
+	path := filepath.Join(game, "game.yaml")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw = []byte(strings.Replace(string(raw), "  Example (USA):\n", "  Example (USA):\n    aliases: ['Local Example (USA)']\n", 1))
+	if err = os.WriteFile(path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	name := "Local Example (USA).zip"
+	if err = os.WriteFile(filepath.Join(files, name), []byte("unverified bytes"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	obs, err := exporter.ObserveCatalogInput(files, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := strings.Repeat("s", 32)
+	s, err := NewLookup(Options{Token: token, Export: exporter.Options{DataRoot: filepath.Dir(filepath.Dir(filepath.Dir(game)))}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := lookupRequest(s, "POST", "/v1/lookup", token, LookupRequest{Platform: "Sega - Game Gear", Inputs: []exporter.ObservedInput{obs}, GameBinding: true, Media: "none"})
+	var result Selection
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &result) != nil || result.Coverage.Included != 1 {
+		t.Fatal(w.Body.String())
+	}
+	item := result.Inputs[0]
+	if item.Record.Release != "Example (USA)" || item.Record.MatchedBy != "catalog-name" || item.Outer.SHA256 != "" {
+		t.Fatal(item)
+	}
+	card := result.Cards[item.Record.Game]
+	ev, form, err := romm.ProjectSnapshot(item.Record, []byte(card.Game.YAML), []byte(card.Fingerprints.YAML), romm.VerificationProof{}, nil)
+	if err != nil || form["igdb_id"] != "123" || ev.Verification.SHA1 != "" || ev.Verification.Authority != "" {
+		t.Fatal(ev, form, err)
+	}
+}

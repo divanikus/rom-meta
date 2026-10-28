@@ -117,7 +117,9 @@ invent missing precision such as January 1 for a year-only source.
 A game bundle represents one folded library item: the thing a user should usually see as one game card.
 
 A release represents a regional, language, title, build or revision-level form of
-one library game. Confirmed demos/betas/prototypes stay with their game.
+one library game. Explicit release `aliases` can record reviewed complete local
+filenames without changing DAT keys, authority or fingerprints. They provide
+name binding only; [collisions stay unresolved](catalog-api.md#explicit-release-names). Confirmed demos/betas/prototypes stay with their game.
 Reviewed same-game expanded editions may also share the card while retaining
 their own provider identities and media (ADR 0100). Independent games, separate
 supplements and compilations with different contents remain separate. Grouping

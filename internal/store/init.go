@@ -182,7 +182,7 @@ sources:
   hasheous:
     api:
       base_url: https://hasheous.org/api/v1
-      rate_limit_per_second: 8
+      rate_limit_per_second: 1
 
   openvgdb:
     snapshot:

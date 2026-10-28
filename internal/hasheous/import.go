@@ -179,7 +179,7 @@ type fingerprintCandidate struct {
 
 const (
 	defaultAPIBaseURL   = "https://hasheous.org/api/v1"
-	defaultRateLimitRPS = 8
+	defaultRateLimitRPS = 1
 	maxReleaseLookups   = 8
 )
 
@@ -932,6 +932,18 @@ func newRateLimiter(rps int) *rateLimiter {
 func (limiter *rateLimiter) pause(delay time.Duration) {
 	limiter.mu.Lock()
 	defer limiter.mu.Unlock()
+	if until := time.Now().Add(delay); until.After(limiter.notBefore) {
+		limiter.notBefore = until
+	}
+}
+
+// backoff lowers the shared dispatch rate as well as delaying retries. Keeping
+// the slower pace after recovery prevents workers from immediately re-exhausting
+// the same server window.
+func (limiter *rateLimiter) backoff(delay time.Duration) {
+	limiter.mu.Lock()
+	defer limiter.mu.Unlock()
+	limiter.delay = min(time.Minute, max(time.Second, limiter.delay*2))
 	if until := time.Now().Add(delay); until.After(limiter.notBefore) {
 		limiter.notBefore = until
 	}

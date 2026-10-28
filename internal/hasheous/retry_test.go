@@ -166,6 +166,9 @@ func TestRateLimitDelayHonorsHeaderBodyAndBackoff(t *testing.T) {
 		{"", `{"retry_after":"45"}`, 0, 45 * time.Second},
 		{"invalid", `{"retry_after":-1}`, 0, 30 * time.Second},
 		{"8", `{"retry_after":30}`, 1, 60 * time.Second},
+		{"1", `{"retryAfterSeconds":120}`, 0, 120 * time.Second},
+		{"", `{"retryAfterSeconds":"90"}`, 0, 90 * time.Second},
+		{"1", `{"retryAfterSeconds":3600}`, 0, maxRateLimitWait + time.Second},
 	} {
 		if got := rateLimitDelay(httpStatusError{RetryAfter: tc.header, Body: tc.body}, tc.attempt, now); got != tc.want {
 			t.Errorf("header=%q body=%q attempt=%d: delay=%s want=%s", tc.header, tc.body, tc.attempt, got, tc.want)
@@ -184,6 +187,49 @@ func TestLookupStopsInsteadOfRetryingBeforeLongServerPause(t *testing.T) {
 		_, err := lookupHashes(context.Background(), client, newRateLimiter(8), sourceSettings{APIBaseURL: "https://example.test"}, nil, nil)
 		if !isRateLimitStop(err) || count != 1 {
 			t.Fatalf("must stop for a long cooldown: count=%d error=%v", count, err)
+		}
+	})
+}
+
+func TestRecoveredRateLimitSlowsFollowingRequests(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var starts []time.Time
+		client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			r.Body.Close()
+			starts = append(starts, time.Now())
+			if len(starts) == 1 {
+				return rateResponse(429, `{"retryAfterSeconds":1}`, "1"), nil
+			}
+			return rateResponse(200, `{"id":42}`, ""), nil
+		})}
+		limiter := newRateLimiter(8)
+		for range 3 {
+			if _, err := lookupHashes(context.Background(), client, limiter, sourceSettings{APIBaseURL: "https://example.test"}, nil, nil); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if len(starts) != 4 {
+			t.Fatalf("unexpected attempts: %v", starts)
+		}
+		for i := 2; i < len(starts); i++ {
+			if gap := starts[i].Sub(starts[i-1]); gap < time.Second {
+				t.Fatalf("recovered client resumed aggressive pacing: %v", gap)
+			}
+		}
+	})
+}
+
+func TestDefaultHasheousRequestPacingIsConservative(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		limiter := newRateLimiter(0)
+		start := time.Now()
+		for range 2 {
+			if err := limiter.wait(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if elapsed := time.Since(start); elapsed < time.Second {
+			t.Fatalf("default pacing starts too quickly: %v", elapsed)
 		}
 	})
 }

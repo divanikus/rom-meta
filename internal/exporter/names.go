@@ -60,6 +60,9 @@ func indexNames(index *catalogIndex, g *game) {
 	_ = catalogyaml.Mapping(catalogyaml.Value(g.root, "releases"), func(release string, node *yaml.Node) error {
 		addReleaseName(index, release, g, release)
 		addReleaseName(index, field(catalogyaml.Value(node, "authority"), "entry_name"), g, release)
+		for _, alias := range catalogyaml.Strings(catalogyaml.Value(node, "aliases")) {
+			addReleaseName(index, alias, g, release)
+		}
 		return nil
 	})
 }

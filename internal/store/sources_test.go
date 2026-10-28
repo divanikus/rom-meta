@@ -78,7 +78,7 @@ func TestLoadSourcesReadsGeneratedConfig(t *testing.T) {
 	if hasheous.APIBaseURL != "https://hasheous.org/api/v1" {
 		t.Fatalf("unexpected hasheous API base URL: %q", hasheous.APIBaseURL)
 	}
-	if hasheous.RateLimitPerSecond != 8 {
+	if hasheous.RateLimitPerSecond != 1 {
 		t.Fatalf("unexpected hasheous rate limit: %d", hasheous.RateLimitPerSecond)
 	}
 	if len(hasheous.CredentialSecrets) != 0 || len(hasheous.CredentialEnvVars) != 0 {

@@ -51,19 +51,21 @@ func lookupHashes(ctx context.Context, client *http.Client, limiter *rateLimiter
 		if delay > maxRateLimitWait {
 			return nil, &rateLimitStopError{cause: err, reason: "server requests a pause longer than 5 minutes"}
 		}
-		limiter.pause(delay)
+		limiter.backoff(delay)
 	}
 }
 
 func rateLimitDelay(status httpStatusError, attempt int, now time.Time) time.Duration {
 	delay := 30 * time.Second * time.Duration(1<<attempt)
 	delay = max(delay, retryAfterDelay(status.RetryAfter, now))
-	// Cloudflare may provide a longer pause in JSON than in Retry-After.
+	// Honor both Hasheous and Cloudflare JSON, including a pause longer than the header.
 	var body struct {
-		RetryAfter json.Number `json:"retry_after"`
+		RetryAfter        json.Number `json:"retry_after"`
+		RetryAfterSeconds json.Number `json:"retryAfterSeconds"`
 	}
 	if json.Unmarshal([]byte(status.Body), &body) == nil {
 		delay = max(delay, retryAfterDelay(body.RetryAfter.String(), now))
+		delay = max(delay, retryAfterDelay(body.RetryAfterSeconds.String(), now))
 	}
 	return delay
 }

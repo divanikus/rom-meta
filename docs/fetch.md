@@ -121,6 +121,12 @@ IGDB uses the exact provider names `Wii` and `Wii U`; local source overrides
 should use those names too.
 Explicit catalog/CLI aliases take precedence over shared provider platform names.
 
+Hasheous defaults to one request per second, shared by its workers. On HTTP 429
+it honors `Retry-After`, Hasheous `retryAfterSeconds` and legacy `retry_after`,
+keeps a slower request pace after recovery, and stops resumably if retries fail.
+Existing local `sources.hasheous.api.rate_limit_per_second` overrides remain in
+force. Server profile limits can differ; see [Hasheous rate limiting](https://github.com/gaseous-project/hasheous/wiki/Rate-Limiting).
+
 ScreenScraper's daily quota and its HTTP 431 return-tomorrow response stop that
 provider's run. Incomplete searches remain resumable instead of becoming saved
 negative matches. Other HTTP 431 errors retain their normal error handling.

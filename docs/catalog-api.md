@@ -311,3 +311,17 @@ Prepared CHD variants can enter `/v1/lookup` with explicit `game_binding: true`.
 The response retains `variant-chd-header` and its bounded observation; it does
 not assert raw payload integrity or original-release verification. Matching
 native consumers keep derivative provenance separate from original provider data.
+
+## Explicit release names
+
+A release can declare `aliases: ["Alternative complete filename"]` for a reviewed
+local spelling. Lookup uses these exact normalized names and retains the original
+release key and DAT authority. Aliases identify an edition by name, not by hash;
+`game_binding` remains required for catalog name/stat inputs. Colliding aliases
+remain ambiguous, and other regions/revisions are not inferred. For example:
+
+```yaml
+releases:
+  "Example (USA, Canada) (v02.00)":
+    aliases: ["Example (USA) (v02.00)"]
+```
