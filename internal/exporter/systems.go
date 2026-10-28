@@ -41,7 +41,19 @@ var systems = map[string]systemSpec{
 // Metadata-only payload readers share the bounded raw/ZIP proof path without
 // advertising a new ES-DE launch/export system.
 var metadataCartridges = map[string]systemSpec{
-	"sega32x": {"Sega - 32X", []string{".32x", ".bin", ".md", ".gen"}, false, false},
+	"satellaview":     {"Nintendo - Satellaview", []string{".bs"}, false, false},
+	"atari2600":       {"Atari - Atari 2600", []string{".a26"}, false, false},
+	"atari5200":       {"Atari - Atari 5200", []string{".a52"}, false, false},
+	"atarijaguar":     {"Atari - Atari Jaguar (J64)", []string{".j64"}, false, false},
+	"atarilynx":       {"Atari - Atari Lynx (LYX)", []string{".lyx"}, false, false},
+	"wonderswancolor": {"Bandai - WonderSwan Color", []string{".wsc"}, false, false},
+	"msx":             {"Microsoft - MSX", []string{".rom"}, false, false},
+	"msx2":            {"Microsoft - MSX2", []string{".rom"}, false, false},
+	"pcengine":        {"NEC - PC Engine - TurboGrafx-16", []string{".pce"}, false, false},
+	"nds":             {"Nintendo - Nintendo DS", []string{".nds"}, false, false},
+	"virtualboy":      {"Nintendo - Virtual Boy", []string{".vb"}, false, false},
+	"beena":           {"Sega - Beena", []string{".bin"}, false, false},
+	"sega32x":         {"Sega - 32X", []string{".32x", ".bin", ".md", ".gen"}, false, false},
 }
 
 func SupportedSystems() []string {

@@ -54,10 +54,25 @@ fail planning rather than becoming unsupported-platform skips.
 
 ## Metadata-only cartridge hashes
 
-Sega 32X advertises `system: sega32x` for raw `.32x`, `.bin`, `.md`, `.gen` files
-and ZIP cartridge payloads. Matching uses catalog size and hashes, so renamed or
-dated beta filenames can select the exact DAT release. Payload bytes are hashed
-as stored, without header stripping, byte swapping or interleaving conversion.
+These systems use bounded raw/ZIP payload observations independently of launch
+readers. The raw formats listed below are hashed as stored, without header
+stripping, byte swapping or interleaving conversion.
+
+| Catalog platform | `system` | Raw payload extensions |
+| --- | --- | --- |
+| Nintendo Satellaview | `satellaview` | `.bs` |
+| Atari 2600 / 5200 | `atari2600` / `atari5200` | `.a26` / `.a52` |
+| Atari Jaguar (J64) / Lynx (LYX) | `atarijaguar` / `atarilynx` | `.j64` / `.lyx` |
+| WonderSwan Color | `wonderswancolor` | `.wsc` |
+| MSX / MSX2 | `msx` / `msx2` | `.rom` |
+| PC Engine / TurboGrafx-16 | `pcengine` | `.pce` |
+| Nintendo DS | `nds` | `.nds` |
+| Virtual Boy | `virtualboy` | `.vb` |
+| Sega Beena | `beena` | `.bin` |
+| Sega 32X | `sega32x` | `.32x`, `.bin`, `.md`, `.gen` |
+
+Matching uses catalog size and hashes, so renamed or dated filenames can select
+the exact DAT release. ZIP payloads use the same extension rules.
 An unmatched payload remains unmatched even with `game_binding: true`; it is not
 replaced with a title-only guess. Unsupported formats may still use the existing
 explicit complete-name observation path.
