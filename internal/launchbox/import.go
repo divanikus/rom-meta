@@ -128,6 +128,7 @@ type catalogGame struct {
 	Folder         string
 	Path           string
 	Title          string
+	Aliases        []string
 	Releases       []catalogRelease
 	Sources        []string
 }
@@ -278,7 +279,7 @@ func Import(options ImportOptions) (ImportResult, error) {
 			if release.MAMESet != "" {
 				metadata, ok = matchArcadeMetadata(index.byPlatformTitle, game, release, mameNames)
 			} else {
-				metadata, ok = matchMetadata(platformIndex, release, game.Title)
+				metadata, ok = matchMetadata(platformIndex, release, game.Title, game.Aliases...)
 			}
 			if !ok {
 				continue
@@ -322,7 +323,7 @@ func Import(options ImportOptions) (ImportResult, error) {
 	return result, nil
 }
 
-func matchMetadata(platformIndex map[string][]releaseMetadata, release catalogRelease, gameTitle string) (releaseMetadata, bool) {
+func matchMetadata(platformIndex map[string][]releaseMetadata, release catalogRelease, gameTitle string, aliases ...string) (releaseMetadata, bool) {
 	if release.MAMESet != "" {
 		keys := titleMatchKeys(release.Title)
 		if release.MAMETitle != "" {
@@ -338,6 +339,9 @@ func matchMetadata(platformIndex map[string][]releaseMetadata, release catalogRe
 
 	keys := append(titleMatchKeys(release.Name), titleMatchKeys(release.Title)...)
 	keys = append(keys, titleMatchKeys(gameTitle)...)
+	for _, alias := range aliases {
+		keys = append(keys, titleMatchKeys(alias)...)
+	}
 	return bestLaunchBoxMetadata(platformIndex, keys, release, false)
 }
 
@@ -1925,6 +1929,7 @@ func catalogGameFromCached(cached catalogcache.Game) catalogGame {
 		Folder:         cached.Folder,
 		Path:           cached.Path,
 		Title:          cached.Title,
+		Aliases:        cached.Aliases,
 		Releases:       releases,
 		Sources:        cached.Sources,
 	}

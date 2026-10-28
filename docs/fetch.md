@@ -103,3 +103,12 @@ rom-meta fetch --data-root "/path/to/catalog" --platform nes --source launchbox 
 Review before apply. This replaces selected-provider results, including negatives;
 other providers and explicit overrides remain. Headered/headerless hashes still
 represent different bytes.
+
+LaunchBox matching includes explicit catalog `aliases` within the selected
+platform. Conflicting aliases and unofficial-release guards still apply.
+ScreenScraper responses naming a different system are rejected even if its API
+returns them for the requested system. A declared child system remains eligible.
+
+WiiWare video matching can omit the catalog's `(WiiWare)` label only inside the
+provider's exact Nintendo WiiWare directory. Wii disc videos cannot use this
+fallback; regions, edition qualifiers and ambiguous owners remain checked.

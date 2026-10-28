@@ -216,3 +216,36 @@ func TestPSPMinisCatalogLabelMatchesUntaggedMedia(t *testing.T) {
 		t.Fatal("explicit source label lost its owner", c, ok)
 	}
 }
+
+func TestWiiWareLabelFallbackRequiresItsOwnVideoDirectory(t *testing.T) {
+	for _, tc := range []struct {
+		name, platform, directory, release, video string
+		want                                      bool
+	}{
+		{"digital folder", "Nintendo - Wii", "Nintendo WiiWare", "Example (Europe) (WiiWare)", "Example (Europe).mp4", true},
+		{"retail folder", "Nintendo - Wii", "Nintendo Wii", "Example (Europe) (WiiWare)", "Example (Europe).mp4", false},
+		{"different hardware", "Nintendo - Wii U", "Nintendo WiiWare", "Example (Europe) (WiiWare)", "Example (Europe).mp4", false},
+		{"different region", "Nintendo - Wii", "Nintendo WiiWare", "Example (Europe) (WiiWare)", "Example (USA).mp4", false},
+		{"edition retained", "Nintendo - Wii", "Nintendo WiiWare", "Example (Europe) (Demo) (WiiWare)", "Example (Europe).mp4", false},
+		{"source label retained", "Nintendo - Wii", "Nintendo WiiWare", "Example (Europe)", "Example (Europe) (WiiWare).mp4", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			game := identityGame("example", tc.release)
+			game.Platform = tc.platform
+			dir := "Official/Video Snaps (HQ)/" + tc.directory + " (Video Snaps)(HQ)(EM 1.0)"
+			got, ok := matchVideoEntry(tc.platform, dir, "HQ", "ftps", "example.test", FTPEntry{Name: tc.video}, []catalogGame{game})
+			if ok != tc.want {
+				t.Fatalf("matched %v; want %v", ok, tc.want)
+			}
+			if ok && got.Release != tc.release {
+				t.Fatal("rewrote release key")
+			}
+			index := newMediaGameIndex([]catalogGame{game}, videoDirectorySystemName(filepath.Base(dir)))
+			_, indexed := matchVideoEntry(tc.platform, dir, "HQ", "ftps", "example.test", FTPEntry{Name: tc.video}, index.candidates(tc.video))
+			if indexed != ok {
+				t.Fatal("index differs from full scan")
+			}
+
+		})
+	}
+}

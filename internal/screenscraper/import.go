@@ -903,6 +903,11 @@ func queryGameWithFingerprint(client *http.Client, settings sourceSettings, syst
 		return gameMetadata{}, false, nil
 	}
 	metadata := metadataFromGame(jeu)
+	// The API can return a global name match despite systemeid. An explicit
+	// different system cannot establish this platform's game or ROM identity.
+	if metadata.SystemID != "" && metadata.SystemID != systemID && metadata.SystemParentID != systemID {
+		return gameMetadata{}, false, nil
+	}
 	if metadata.ID == "" && metadata.Title == "" {
 		return gameMetadata{}, false, nil
 	}

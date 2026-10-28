@@ -76,13 +76,25 @@ func mediaIdentityKey(value string) string {
 var mediaAttributePattern = regexp.MustCompile(`(?i)^(?:(?:disc|disk|cd|side|track)\s*(?:[0-9]+|[a-z]|[ivxlcdm]+)(?:\s+of\s+[0-9]+)?|rev(?:ision)?\s+(?:[a-z]|[0-9]+(?:\.[0-9a-z]+)*)|v(?:ersion)?\s*[0-9]+(?:\.[0-9a-z]+)*|[0-9]{4}-[0-9]{2}-[0-9]{2})$`)
 
 var pspMinisLabel = regexp.MustCompile(`(?i)\(\s*minis\s*\)`)
+var wiiWareLabel = regexp.MustCompile(`(?i)\(\s*wiiware\s*\)`)
 
-// No-Intro's PSP collection label is absent from some provider media names.
-// Permit that catalog-side fallback only on PSP. Explicit source labels,
-// other qualifiers, regions and ambiguous owners retain the usual guards.
-func catalogMediaName(platform, sourceName, catalogName string) string {
-	if !pspMinisLabel.MatchString(catalogName) || pspMinisLabel.MatchString(sourceName) || platformnames.ForSource(platform, platformnames.SourceEmuMovies) != "Sony PSP" {
+// Collection-label fallbacks are catalog-side only. WiiWare additionally needs
+// its explicit provider video directory; ordinary Wii disc media cannot qualify.
+func catalogMediaName(platform, sourceName, catalogName string, providerSystem ...string) string {
+	var label *regexp.Regexp
+	switch platformnames.ForSource(platform, platformnames.SourceEmuMovies) {
+	case "Sony PSP":
+		label = pspMinisLabel
+	case "Nintendo Wii":
+		if len(providerSystem) == 0 || !strings.EqualFold(strings.TrimSpace(providerSystem[0]), "Nintendo WiiWare") {
+			return catalogName
+		}
+		label = wiiWareLabel
+	default:
 		return catalogName
 	}
-	return strings.TrimSpace(pspMinisLabel.ReplaceAllString(catalogName, " "))
+	if !label.MatchString(catalogName) || label.MatchString(sourceName) {
+		return catalogName
+	}
+	return strings.TrimSpace(label.ReplaceAllString(catalogName, " "))
 }

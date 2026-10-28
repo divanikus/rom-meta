@@ -538,7 +538,7 @@ func videoCandidates(client FTPClient, settings sourceSettings, platformGames ma
 			return nil, "", "", 0, 0, err
 		}
 		totalEntries += len(entries)
-		gameIndex := newMediaGameIndex(platformGames[platform])
+		gameIndex := newMediaGameIndex(platformGames[platform], videoDirectorySystemName(pathpkg.Base(directory)))
 		for _, entry := range entries {
 			if entry.IsDir || !isVideoFile(entry.Name) {
 				continue
@@ -670,7 +670,7 @@ func matchVideoEntry(platform, directory, quality, scheme, host string, entry FT
 	var best videoCandidate
 	ambiguous := false
 	for _, game := range games {
-		release, score, keys := scoreVideoAgainstGame(stem, game)
+		release, score, keys := scoreVideoAgainstGame(stem, game, videoDirectorySystemName(pathpkg.Base(directory)))
 		if score < minimumMatchScore {
 			continue
 		}
@@ -703,7 +703,7 @@ func matchVideoEntry(platform, directory, quality, scheme, host string, entry FT
 	return best, true
 }
 
-func scoreVideoAgainstGame(stem string, game catalogGame) (string, int, []string) {
+func scoreVideoAgainstGame(stem string, game catalogGame, providerSystem ...string) (string, int, []string) {
 	mame := false
 	for _, release := range game.Releases {
 		if release.MAMESet == "" {
@@ -728,7 +728,7 @@ func scoreVideoAgainstGame(stem string, game catalogGame) (string, int, []string
 	bestRelease, bestScore := "", 0
 	var bestKeys []string
 	for _, release := range releases {
-		matchName := catalogMediaName(game.Platform, stem, release.Name)
+		matchName := catalogMediaName(game.Platform, stem, release.Name, providerSystem...)
 		if !mediaIdentityCompatible(stem, matchName) {
 			continue
 		}
@@ -749,13 +749,13 @@ func scoreVideoAgainstGame(stem string, game catalogGame) (string, int, []string
 			title, key string
 			score      int
 		}{{release.Title, "release_title", 118}, {release.Name, "release_name", 112}, {game.Title, "title", 110}} {
-			if intersects(fileBaseKeys, titleMatchKeys(catalogMediaName(game.Platform, stem, candidate.title))) && candidate.score > score {
+			if intersects(fileBaseKeys, titleMatchKeys(catalogMediaName(game.Platform, stem, candidate.title, providerSystem...))) && candidate.score > score {
 				score = candidate.score
 				matched = []string{candidate.key}
 			}
 		}
 		for _, alias := range game.Aliases {
-			if intersects(fileBaseKeys, titleMatchKeys(catalogMediaName(game.Platform, stem, alias))) && 122 > score {
+			if intersects(fileBaseKeys, titleMatchKeys(catalogMediaName(game.Platform, stem, alias, providerSystem...))) && 122 > score {
 				score = 122
 				matched = []string{"alias"}
 			}
@@ -765,7 +765,11 @@ func scoreVideoAgainstGame(stem string, game catalogGame) (string, int, []string
 			matched = appendUnique(matched, "region")
 		}
 		if score > 0 && matchName != release.Name {
-			matched = appendUnique(matched, "psp_minis_label")
+			key := "psp_minis_label"
+			if wiiWareLabel.MatchString(release.Name) && !wiiWareLabel.MatchString(matchName) {
+				key = "wiiware_label"
+			}
+			matched = appendUnique(matched, key)
 		}
 		if score > bestScore || (score > 0 && score == bestScore && release.Name == game.DefaultRelease) {
 			bestRelease, bestScore, bestKeys = release.Name, score, matched

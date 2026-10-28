@@ -13,7 +13,7 @@ type mediaGameIndex struct {
 	exact, base map[string][]int
 }
 
-func newMediaGameIndex(games []catalogGame) mediaGameIndex {
+func newMediaGameIndex(games []catalogGame, providerSystem ...string) mediaGameIndex {
 	index := mediaGameIndex{games: games, exact: map[string][]int{}, base: map[string][]int{}}
 	add := func(target map[string][]int, keys []string, game int) {
 		for _, key := range keys {
@@ -26,7 +26,7 @@ func newMediaGameIndex(games []catalogGame) mediaGameIndex {
 	for i, game := range games {
 		addBase := func(name string) {
 			add(index.base, titleMatchKeys(name), i)
-			add(index.base, titleMatchKeys(catalogMediaName(game.Platform, "", name)), i)
+			add(index.base, titleMatchKeys(catalogMediaName(game.Platform, "", name, providerSystem...)), i)
 		}
 		addBase(game.Title)
 		for _, alias := range game.Aliases {
