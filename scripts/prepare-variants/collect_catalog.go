@@ -42,7 +42,7 @@ func translationCredit(s string) (string, string) {
 }
 func stripROMExtension(s string) string {
 	switch strings.ToLower(filepath.Ext(s)) {
-	case ".nes", ".sfc", ".smc", ".ngc", ".ngp", ".gb", ".gbc", ".gba", ".nds", ".z64", ".v64", ".n64", ".gg", ".sms", ".md", ".gen", ".bin", ".iso", ".img", ".zip":
+	case ".rom", ".ws", ".wsc", ".vb", ".pce", ".sg", ".fds", ".dsk", ".chd", ".rvz", ".nes", ".sfc", ".smc", ".ngc", ".ngp", ".gb", ".gbc", ".gba", ".nds", ".z64", ".v64", ".n64", ".gg", ".sms", ".md", ".gen", ".bin", ".iso", ".img", ".zip":
 		return strings.TrimSuffix(s, filepath.Ext(s))
 	}
 	return s

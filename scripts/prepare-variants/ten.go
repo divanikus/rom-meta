@@ -29,9 +29,10 @@ type tenDocument struct {
 	Games    []tenMachine `xml:"game"`
 }
 type tenSource struct {
-	header  string
-	outputs map[string]fingerprint
-	sha256  string
+	header   string
+	outputs  map[string]fingerprint
+	sha256   string
+	machines []tenMachine
 }
 
 // readTEn reads a local published output list. No original game is inferred from
@@ -82,7 +83,7 @@ func readTEn(o options, name string, m *manifest) (*tenSource, error) {
 	if !strings.Contains(strings.ToLower(d.Header.Name), "[t-en]") {
 		return nil, fmt.Errorf("expected a T-En XML DAT header")
 	}
-	result := &tenSource{header: d.Header.Name, outputs: map[string]fingerprint{}, sha256: hash}
+	result := &tenSource{header: d.Header.Name, outputs: map[string]fingerprint{}, sha256: hash, machines: append(d.Machines, d.Games...)}
 	add := func(row tenOutput, kind string) error {
 		if row.Status == "nodump" {
 			return nil
@@ -100,7 +101,7 @@ func readTEn(o options, name string, m *manifest) (*tenSource, error) {
 	for _, machine := range append(d.Machines, d.Games...) {
 		// Documentation/BIOS are not translated playable outputs. A multi-payload
 		// ROM group needs its own set adapter, rather than importing one member.
-		if strings.HasPrefix(machine.Name, "_") {
+		if (strings.HasPrefix(machine.Name, "_") || strings.HasPrefix(strings.ToUpper(machine.Name), "[BIOS]")) || len(machine.ROMs) > 1 || (len(machine.ROMs) > 0 && len(machine.Disks) > 0) {
 			continue
 		}
 		for _, disk := range machine.Disks {
@@ -140,7 +141,14 @@ func resolveTEn(m *manifest, o options) error {
 			}
 			loaded[e.DAT.Path] = src
 		}
-		if !strings.HasPrefix(strings.ToLower(src.header), strings.ToLower(e.Platform+" [T-En]")) {
+		sourcePlatform := e.Platform
+		if e.DAT.SourcePlatform != "" {
+			sourcePlatform = e.DAT.SourcePlatform
+		}
+		if !safeName(sourcePlatform) {
+			return fmt.Errorf("unsafe T-En source platform")
+		}
+		if !strings.HasPrefix(strings.ToLower(src.header), strings.ToLower(sourcePlatform+" [T-En]")) {
 			return fmt.Errorf("T-En platform differs from selected game: %s", e.Platform)
 		}
 		output, ok := src.outputs[e.DAT.Name]

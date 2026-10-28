@@ -1,18 +1,108 @@
-# Stage prepared variant links
+# Prepare translations and hacks
 
 The separate `scripts/prepare-variants` helper converts explicit relationships
 into ordinary [variant and fingerprint YAML](catalog-variants.md). It runs from a
 source checkout with the Go toolchain in `go.mod`; normal offline exports do not
 need it. No additional dependency or core CLI command is installed.
 
-Optional external adapters can resolve published parent relationships into exact
-game/base keys, or a reviewer can supply them. Staging checks actual modified
-payloads and catalog preconditions. The helper does not download sources, guess
-parents from title similarity or independently establish source accuracy.
+Source-first discovery resolves published relationships and unique catalog names
+into game links, with a terminal review queue for uncertain cases. The older
+collection mode can also prepare exact game/base keys. Staging checks modified
+output identities and catalog preconditions. The helper uses local metadata
+snapshots; it does not download sources or select fuzzy title matches.
 
 Variants can link only to their containing game: omit `based_on` and use a
 reviewed original-game association. Exact release/variant parents remain optional.
 See [game-only catalog records](catalog-variants.md#catalog-records).
+
+## Discover and review a source library without ROMs
+
+Start with a read-only catalog snapshot containing original games and locally
+obtained T-En XML DAT files. No ROM directory, API key or exact patch version is
+required. Run from the source checkout:
+
+```shell
+go run ./scripts/prepare-variants --catalog "/catalog-snapshot" --sources "/snapshots" --ten "ps1-ten.xml" --ten "saturn-ten.xml" --discover "/work/translation-review"
+go run ./scripts/prepare-variants --review "/work/translation-review"
+go run ./scripts/prepare-variants --workspace "/work/translation-review" --out "/work/variant-catalog" --media artwork
+```
+
+Repeat `--ten` for additional platforms. Discovery writes analysis JSON in a new,
+empty workspace; it does not write catalog YAML. The last command previews only
+ready links. Repeat it with `--apply` to create the separate sparse catalog.
+Unresolved rows remain in the workspace and in the manifest's `holds`; they do
+not block ready links. An empty ready set reports an explicit error. Publication,
+metadata fetching and frontend/RomM import remain separate normal workflows.
+
+Discovery follows these rules:
+
+- A T-En output supplies its own published raw size/SHA1 or typed CHD combined
+  SHA1. Original/base hashes never become modified-output hashes.
+- Optional `--ga`, `--rha` and `--hackhash` use the same local adapters described
+  below. An exact modified-output match supplies an explicit parent assertion;
+  published strong base hashes can select its original game. Conflicting or
+  unresolved explicit relationships remain for review.
+- Otherwise, complete names before a T-En label in the output/container are
+  compared with catalog release names, game titles and aliases. Provider aliases
+  require a matching stored platform. Multiple releases of one game collapse to
+  that game. Multiple games, conflicting labels and unmatched names require review.
+  Normalization preserves word/number boundaries; there is no fuzzy auto-selection.
+- The platform registry plus a small T-En platform-label adapter handles names
+  such as Famicom/NES and Super Famicom/SNES. Missing or ambiguous catalog platforms
+  fail explicitly; `config/platforms.yaml` can supply local aliases.
+- Existing output ownership is reported, not duplicated. Ownership conflicts
+  remain for review and staging also checks untouched games on selected platforms.
+- Whole multi-payload ROM groups remain `unsupported`. No member is promoted to
+  a full-set fingerprint. Documentation, BIOS and nodump rows are skipped.
+  Each published optical `disk` remains an independent typed CHD identity.
+
+The report distinguishes `ready`, `review`, `already-owned`, `unsupported` and
+`excluded`. It records source names, relationship evidence, candidates and the
+selected original. Name-based automatic links are catalog/source assertions;
+use `--review-all` with `--review` to inspect or correct automatic choices too.
+This does not assert an exact input pressing, patch revision or set completeness.
+
+The terminal accepts:
+
+| Input | Action |
+| --- | --- |
+| A candidate number | Select that existing game |
+| `f text` | Search names within the source platform; results still need selection |
+| `b Game folder` | Select an existing exact catalog game key |
+| `b psx/Game folder` | Explicitly select a game on another catalog platform |
+| `n Original title` | Prepare a new original metadata anchor, with an unspecified edition |
+| `n psx/Original title` | Prepare that anchor on another existing platform |
+| `s` | Leave this row for later |
+| `x` | Persistently exclude the output |
+| `a` | Clear its saved decision and return to automatic discovery |
+| `q` or end of input | Save progress and finish |
+
+Decisions are written after each selection and reused by output fingerprint,
+independent of filenames and DAT content revisions. Changed output identities
+need a new decision. `--review-all` also lets you reconsider excluded rows.
+A new original card contains only the supplied title, an explicitly unspecified
+metadata anchor and provenance; it invents no retail fingerprint, region, serial,
+description or artwork. Enrich it through normal catalog preparation before
+expecting those fields during export.
+
+The workspace contains `decisions.json`, `report.json`, `links.json` and
+`.variant-discovery.json`. Keep `decisions.json` as reusable data; no per-game code
+or document SHA256 editing is needed. Run `--discover /work/translation-review`
+again to refresh analysis with the same configured sources/catalog. Source paths
+and catalog root are workstation settings; changing the selection/roots needs a
+new workspace, to which you can copy `decisions.json` before discovery resumes.
+Generated links/report edits are detected and preserved rather than overwritten.
+
+Staging checks pinned DAT/source bytes and selected catalog document hashes;
+after changing sources, decisions or original cards, refresh discovery and use a
+new staging destination. An identical stage repeats unchanged. Avoid concurrent
+writers against a workspace or source snapshot. An interrupted review retains its
+last saved choices; if a process was terminated, remove `.discovery-lock` only
+after checking no helper is running. If interruption or manual edits leave the
+generated files inconsistent, retain the old workspace, create a new one and copy
+its decisions before refreshing. Local ROM observation, remote downloads/Plaza,
+automatic metadata enrichment, whole-set adapters and RomM writes are outside this
+source-first increment. The existing local collection mode remains available.
 
 ## Prepare published T-En fingerprints without local ROMs
 
@@ -48,7 +138,8 @@ to an ordinary relationship entry, naming the exact `rom` or `disk` output:
 Replace placeholder names/digests with the reviewed bundle and current document
 SHA256 values. Variant keys are arbitrary identifiers; no translation-name
 vocabulary is required. `dat.path` is relative to `--sources`. The DAT header must
-match the entry's platform. Its content is pinned by SHA256 automatically; an
+match the entry's platform, or an explicit `dat.source_platform` publisher label
+when the reviewed target uses another platform name. Its content is pinned by SHA256 automatically; an
 existing snapshot pin must agree. The exact output name supplies `file`; supplied
 file constraints must agree with that output. Keep a separate original-game
 source link: an output hash does not itself prove a parent.
@@ -241,7 +332,7 @@ Allowed relationship evidence:
   decision's reference in its source link. Omit `based_on` for a game-only link.
 
 Unknown top-level/entry fields and duplicate JSON keys fail. Names, parents,
-strong hashes, input changes, conflicting ownership across selected bundles,
+strong hashes, input changes, conflicting ownership across selected platforms,
 variant graphs and final catalog contents are checked. Source-specific extraction
 and approval of relationships remain the adapter/reviewer's responsibility.
 

@@ -26,15 +26,17 @@ type copyFile struct {
 	source       string
 	info         os.FileInfo
 	data         []byte
+	generated    bool
 }
 type checkedInput struct {
 	path string
 	info os.FileInfo
 }
 type bundle struct {
-	game, fp *catalogyaml.Document
-	files    map[string]*copyFile
-	entries  []entry
+	game, fp    *catalogyaml.Document
+	files       map[string]*copyFile
+	entries     []entry
+	newOriginal *newGame
 }
 type report struct {
 	SchemaVersion  int               `json:"schema_version"`
@@ -113,8 +115,23 @@ func run(o options) (result *report, failure error) {
 		key := filepath.Join("platforms", e.Platform, e.Game)
 		b := bundles[key]
 		if b == nil {
-			b = &bundle{files: map[string]*copyFile{}}
+			b = &bundle{files: map[string]*copyFile{}, newOriginal: e.NewGame}
+			if e.NewGame != nil {
+				if err := checkNewGame(o, e); err != nil {
+					fail(err)
+					continue
+				}
+				var err error
+				b.game, b.fp, b.files, err = newGameFiles(key, e)
+				if err != nil {
+					fail(err)
+					continue
+				}
+			}
 			for _, name := range []string{"game.yaml", "fingerprints.yaml"} {
+				if e.NewGame != nil {
+					continue
+				}
 				rel := filepath.Join(key, name)
 				cf, err := planFile(o.Catalog, rel, true)
 				if err != nil {
@@ -141,6 +158,10 @@ func run(o options) (result *report, failure error) {
 				continue
 			}
 			bundles[key] = b
+		}
+		if (b.newOriginal == nil) != (e.NewGame == nil) || (e.NewGame != nil && b.newOriginal.Title != e.NewGame.Title) {
+			fail(fmt.Errorf("inconsistent new game definitions"))
+			continue
 		}
 		stale := false
 		for name, hash := range e.Expected {
@@ -219,6 +240,9 @@ func run(o options) (result *report, failure error) {
 			files[cf.Path] = cf
 		}
 	}
+	if err := checkPublishedOwnership(o, m.Entries); err != nil {
+		r.Errors = append(r.Errors, err.Error())
+	}
 	if err := checkOwnership(bundles); err != nil {
 		r.Errors = append(r.Errors, err.Error())
 	}
@@ -251,6 +275,9 @@ func run(o options) (result *report, failure error) {
 	for i, key := range keys {
 		if i%50 == 0 {
 			progress(o, "Inventorying selected bundles: %d/%d", i, len(keys))
+		}
+		if bundles[key].newOriginal != nil {
+			continue
 		}
 		err := catalogfs.WalkDir(filepath.Join(o.Catalog, key), func(name string, d fs.DirEntry, err error) error {
 			if err != nil {
@@ -313,6 +340,9 @@ func run(o options) (result *report, failure error) {
 	} else if !os.IsNotExist(err) {
 		return r, err
 	}
+	if err := checkNewGames(o, m.Entries); err != nil {
+		return r, err
+	}
 	if err := checkPreconditions(o, r, inputs); err != nil {
 		return r, err
 	}
@@ -331,10 +361,16 @@ func run(o options) (result *report, failure error) {
 	if err := materialize(o, r, stage); err != nil {
 		return r, fmt.Errorf("%w; unfinished staging retained at %s", err, stage)
 	}
+	if err := checkNewGames(o, m.Entries); err != nil {
+		return r, err
+	}
 	if err := checkPreconditions(o, r, inputs); err != nil {
 		return r, fmt.Errorf("%w; unpublished staging at %s", err, stage)
 	}
 	if err := checkSnapshots(m, o); err != nil {
+		return r, fmt.Errorf("%w; unpublished staging at %s", err, stage)
+	}
+	if err := checkPublishedOwnership(o, m.Entries); err != nil {
 		return r, fmt.Errorf("%w; unpublished staging at %s", err, stage)
 	}
 	r.Validation, err = catalog.Validate(stage)
@@ -427,6 +463,9 @@ func checkPreconditions(o options, r *report, inputs []checkedInput) error {
 		}
 	}
 	for _, cf := range r.Files {
+		if cf.generated {
+			continue
+		}
 		info, err := catalogfs.Stat(cf.source)
 		if err != nil {
 			return err

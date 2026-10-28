@@ -54,13 +54,19 @@ type evidence struct {
 	Normalization []string         `json:"normalization,omitempty"`
 }
 
+type newGame struct {
+	Title string `json:"title"`
+}
+
 // datReference names an exact published output in a pinned local T-En XML DAT.
 // It supplies output identity only; the reviewed game relationship stays separate.
 type datReference struct {
-	Path string `json:"path"`
-	Name string `json:"name"`
+	Path           string `json:"path"`
+	Name           string `json:"name"`
+	SourcePlatform string `json:"source_platform,omitempty"`
 }
 type entry struct {
+	NewGame  *newGame          `json:"new_game,omitempty"`
 	DAT      *datReference     `json:"dat,omitempty"`
 	Platform string            `json:"platform"`
 	Game     string            `json:"game"`
@@ -202,7 +208,12 @@ func validateEntry(e entry) error {
 			return fmt.Errorf("invalid payload digest")
 		}
 	}
-	if len(e.Expected) != 2 || !validHash(e.Expected["game.yaml"], 32) || !validHash(e.Expected["fingerprints.yaml"], 32) {
+	if e.NewGame != nil && (strings.TrimSpace(e.NewGame.Title) == "" || e.Variant.BasedOn != "" || e.Evidence.Relationship != "reviewed") {
+		return fmt.Errorf("new game needs a title and game-only reviewed evidence")
+	}
+	_, hasGame := e.Expected["game.yaml"]
+	_, hasFP := e.Expected["fingerprints.yaml"]
+	if len(e.Expected) != 2 || !hasGame || !hasFP || (e.NewGame == nil && (!validHash(e.Expected["game.yaml"], 32) || !validHash(e.Expected["fingerprints.yaml"], 32))) || (e.NewGame != nil && (e.Expected["game.yaml"] != "" || e.Expected["fingerprints.yaml"] != "")) {
 		return fmt.Errorf("expected SHA256 of both catalog documents required")
 	}
 	switch e.Evidence.Relationship {
