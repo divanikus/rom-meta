@@ -46,8 +46,7 @@ extracted Windows folder, use `.\prepare-variants.exe`; on Linux use
 Standalone helper packages are separate release assets alongside the main CLI
 archives, with both listed in the release checksums. The standard release builder
 produces both sets automatically.
-Existing published 0.1.0 main CLI assets are unchanged. If a helper archive is not
-available with a release, developers can build one from a clean checkout using
+Developers can build helper packages from a clean checkout using
 [the packaging instructions](../CONTRIBUTING.md). To build just a local Windows
 executable with the Go toolchain from `go.mod`:
 

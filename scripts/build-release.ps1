@@ -99,7 +99,7 @@ try {
                 )
                 $buildNotes | Set-Content -LiteralPath (Join-Path $packageRoot 'README.txt') -Encoding utf8
             } else {
-                $buildNotes = @("RomMeta $releaseVersion", "Source revision: $revision", "Platform: $targetOS/$targetArch", 'Linux: after extracting ZIP, run chmod +x ./rom-meta.', 'Run ./rom-meta --version (Windows: .\rom-meta.exe --version).', 'See README.md and docs/releases/0.1.0.md.')
+                $buildNotes = @("RomMeta $releaseVersion", "Source revision: $revision", "Platform: $targetOS/$targetArch", 'Linux: after extracting ZIP, run chmod +x ./rom-meta.', 'Run ./rom-meta --version (Windows: .\rom-meta.exe --version).', 'See README.md and docs/README.md for guides and release notes.')
             }
             $buildNotes | Set-Content -LiteralPath (Join-Path $packageRoot 'BUILD.txt') -Encoding utf8
             $binaryName = if ($targetOS -eq 'windows') { "$currentProgram.exe" } else { $currentProgram }

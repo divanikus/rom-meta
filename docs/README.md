@@ -15,4 +15,4 @@ Start with the [operator walkthrough](cli-workflow.md) and
 | Integrate another program | [Catalog HTTP API](catalog-api.md); running server `/docs` |
 | Import into RomM | [Server example/setup](../examples/romm-importer/README.md), [operator guide](romm-import-guide.md) |
 | Review covers or IGDB links | [Cover selection/refresh](cover-refresh.md), [identity links](igdb-links.md) |
-| Release/build | [0.1.0 notes](releases/0.1.0.md), [contributing](../CONTRIBUTING.md) |
+| Release/build | [0.2.0 notes](releases/0.2.0.md), [contributing](../CONTRIBUTING.md) |

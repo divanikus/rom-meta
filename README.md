@@ -11,7 +11,7 @@ own fingerprints.
 
 ![RomMeta web browser showing a game card with cover artwork, metadata and alternate titles](docs/images/catalog-game-card.png)
 
-**0.1.0 is pre-stable.** Command names and catalog formats may change before 1.0.
+**0.2.0 is pre-stable.** Command names and catalog formats may change before 1.0.
 RomMeta includes no ROMs, BIOS, provider database or downloaded artwork.
 
 ## Catalog inputs
@@ -172,13 +172,13 @@ ES-DE is the only built-in `export --target`.
 - Reports distinguish exact hashes, weaker names and game-only matches. CHD
   observations and MAME set names do not prove dump validity or gameplay.
 - Unsupported formats and ambiguities are reported. ROM conversion/organization,
-  emulator setup and additional frontend templates are outside 0.1.0.
+  emulator setup and additional frontend templates are outside the current scope.
 - Provider terms still govern downloaded metadata/media and generated packages.
 
 ## Documentation and development
 
 - [Documentation index](docs/README.md)
-- [0.1.0 release notes](docs/releases/0.1.0.md)
+- [0.2.0 release notes](docs/releases/0.2.0.md)
 - [Contributing and verification](CONTRIBUTING.md)
 
 RomMeta code is licensed under [MIT](LICENSE). Third-party notices accompany
