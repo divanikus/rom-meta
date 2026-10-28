@@ -38,6 +38,12 @@ var systems = map[string]systemSpec{
 	"mame":         {"Arcade", []string{".zip", ".7z"}, false, true},
 }
 
+// Metadata-only payload readers share the bounded raw/ZIP proof path without
+// advertising a new ES-DE launch/export system.
+var metadataCartridges = map[string]systemSpec{
+	"sega32x": {"Sega - 32X", []string{".32x", ".bin", ".md", ".gen"}, false, false},
+}
+
 func SupportedSystems() []string {
 	var names []string
 	for name := range systems {
@@ -64,7 +70,13 @@ func systemFor(platform, requested string) (string, error) {
 	return "", fmt.Errorf("no ES-DE launch reader for catalog platform %q", platform)
 }
 
-func payloadExtension(system, ext string) bool { return position(systems[system].Extensions, ext) >= 0 }
+func payloadExtension(system, ext string) bool {
+	spec, ok := systems[system]
+	if !ok {
+		spec = metadataCartridges[system]
+	}
+	return position(spec.Extensions, ext) >= 0
+}
 func inputExtension(system, ext string) bool {
 	if payloadExtension(system, ext) || ext == ".zip" || ext == ".7z" || ext == ".rar" {
 		return true
@@ -74,6 +86,11 @@ func inputExtension(system, ext string) bool {
 func nameExtension(ext string) bool {
 	if position([]string{".zip", ".7z", ".chd", ".iso"}, ext) >= 0 {
 		return true
+	}
+	for system := range metadataCartridges {
+		if payloadExtension(system, ext) {
+			return true
+		}
 	}
 	for system := range systems {
 		if payloadExtension(system, ext) {

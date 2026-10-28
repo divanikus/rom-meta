@@ -52,6 +52,21 @@ hashed lazily, so lookups may take minutes; there is no five-minute response
 limit. Memory use follows selected data, not all catalog media. Source/API errors
 fail planning rather than becoming unsupported-platform skips.
 
+## Metadata-only cartridge hashes
+
+Sega 32X advertises `system: sega32x` for raw `.32x`, `.bin`, `.md`, `.gen` files
+and ZIP cartridge payloads. Matching uses catalog size and hashes, so renamed or
+dated beta filenames can select the exact DAT release. Payload bytes are hashed
+as stored, without header stripping, byte swapping or interleaving conversion.
+An unmatched payload remains unmatched even with `game_binding: true`; it is not
+replaced with a title-only guess. Unsupported formats may still use the existing
+explicit complete-name observation path.
+
+These metadata observations do not add an ES-DE launch/export reader. The
+`export_systems` capability remains the separate launch contract. Use matching
+current builds of the server and native importer when a new observation system
+is introduced.
+
 ## Catalog names for other formats
 
 With `game_binding: true`, a `catalog` observation accepts any regular file or

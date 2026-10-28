@@ -58,6 +58,9 @@ type LookupResolver struct {
 }
 
 func LookupSystem(system string) bool {
+	if _, ok := metadataCartridges[system]; ok {
+		return true
+	}
 	// Metadata-only CHD reader; no ES-DE launch support.
 	if system == "psp" {
 		return true
@@ -161,6 +164,13 @@ func NewLookupCatalog(dataRoot, profilePath string) (*LookupCatalog, error) {
 			} else {
 				platform.Supported = true
 				platform.GameBinding = DiscLookupSystem(platform.System)
+			}
+		}
+		if doc != nil {
+			for system, spec := range metadataCartridges {
+				if spec.Platform == catalogFamily(field(doc, "name")) {
+					platform.System, platform.Supported, platform.GameBinding, platform.Reason = system, true, false, ""
+				}
 			}
 		}
 		if doc != nil && field(doc, "name") == "Sony - PlayStation Portable" {
@@ -270,7 +280,8 @@ func (resolver *LookupResolver) ResolveBindings(inputs []ObservedInput, allowGam
 			if err := bindObservedPayload(catalog.Root, resolver.index, &record, catalog.Profile, plan.System, h, ext, false); err != nil {
 				return nil, err
 			}
-			if allowGame && record.Status == "unmatched" && !strings.Contains("/"+strings.ToLower(input.ROM), "/translations/") && !strings.Contains(strings.ToLower(input.ROM), "[t-") {
+			_, metadataOnly := metadataCartridges[plan.System]
+			if allowGame && !metadataOnly && record.Status == "unmatched" && !strings.Contains("/"+strings.ToLower(input.ROM), "/translations/") && !strings.Contains(strings.ToLower(input.ROM), "[t-") {
 				if err := resolver.bindGame(&record); err != nil {
 					return nil, err
 				}
