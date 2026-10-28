@@ -275,3 +275,52 @@ func TestDigitalCatalogMappingsStayDistinctFromDiscs(t *testing.T) {
 		}
 	}
 }
+
+func TestDigitalNintendoIGDBUsesAvailableHardwareNames(t *testing.T) {
+	r := DefaultRegistry()
+	available := []string{"Wii", "Wii U", "PlayStation 3"}
+	for _, tc := range []struct{ alias, want string }{
+		{"wiidigital", "Wii"},
+		{"wiiueshop", "Wii U"},
+	} {
+		t.Run(tc.alias, func(t *testing.T) {
+			if got, ok := r.MatchForSource(tc.alias, SourceIGDB, available); !ok || got != tc.want {
+				t.Fatalf("digital platform = %q, %v; want %q, true", got, ok, tc.want)
+			}
+			if got := r.ForSource(tc.alias, SourceIGDB); got != tc.want {
+				t.Fatalf("source mapping = %q; want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestExplicitAliasOutranksSharedProviderName(t *testing.T) {
+	r, err := ParseRegistryYAML(`
+"Disc Catalog":
+  aliases: [hardware, ambiguous]
+  sources:
+    igdb: "Shared Provider"
+"Digital Catalog":
+  aliases: [digital, ambiguous]
+  sources:
+    igdb: "hardware"
+"Third Catalog":
+  sources:
+    igdb: "ambiguous"
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := r.ResolveCLI("hardware"); got != "Disc Catalog" {
+		t.Fatalf("explicit alias = %q", got)
+	}
+	if got := r.ResolveCLI("digital"); got != "Digital Catalog" {
+		t.Fatalf("digital alias = %q", got)
+	}
+	if got := r.ResolveCLI("ambiguous"); got != "ambiguous" {
+		t.Fatalf("ambiguous explicit alias resolved to %q", got)
+	}
+	if got := r.ResolveCLI("Shared Provider"); got != "Disc Catalog" {
+		t.Fatalf("unique provider name = %q", got)
+	}
+}

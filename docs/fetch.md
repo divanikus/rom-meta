@@ -117,6 +117,9 @@ Digital DATs keep their own catalog platforms: `wiidigital` selects Wii Digital
 CDN, `wiiueshop` selects Wii U Digital CDN, and `ps3psn` selects PS3 PSN Content.
 The `wii`, `wiiu` and `ps3` aliases select disc catalogs. Provider metadata uses
 the corresponding hardware platform; EmuMovies uses WiiWare, Wii U eShop or PSN.
+IGDB uses the exact provider names `Wii` and `Wii U`; local source overrides
+should use those names too.
+Explicit catalog/CLI aliases take precedence over shared provider platform names.
 
 ScreenScraper's daily quota and its HTTP 431 return-tomorrow response stop that
 provider's run. Incomplete searches remain resumable instead of becoming saved

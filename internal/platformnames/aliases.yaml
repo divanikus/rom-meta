@@ -319,7 +319,7 @@ aliases:
     keys: [wiidigital, wiiware]
     display: "Wii (Digital)"
     emumovies: "Nintendo WiiWare"
-    igdb: "Nintendo Wii"
+    igdb: "Wii"
     launchbox: "Nintendo Wii"
     screenscraper_id: 16
   - match: "Nintendo - Wii U"
@@ -333,7 +333,7 @@ aliases:
     keys: [wiiueshop]
     display: "Wii U (Digital)"
     emumovies: "Nintendo Wii U eShop"
-    igdb: "Nintendo Wii U"
+    igdb: "Wii U"
     launchbox: "Nintendo Wii U"
     screenscraper_id: 18
   - match: "Philips - CD-i"

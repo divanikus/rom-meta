@@ -601,44 +601,48 @@ func (r Registry) lookup(name string) (Platform, bool) {
 	if platform, ok := r.platforms[lookupKey]; ok {
 		return clonePlatform(platform), true
 	}
-	var matched Platform
-	found := false
-	for _, platform := range r.platforms {
-		matches := false
-		for _, alias := range platform.Aliases {
-			if key(alias) == lookupKey {
-				matches = true
-				break
-			}
-		}
-		if !matches {
-			for _, ref := range platform.Sources {
-				if key(ref.Name) == lookupKey {
-					matches = true
-					break
-				}
-				for _, name := range ref.Names {
-					if key(name) == lookupKey {
+	// Explicit catalog aliases outrank provider names shared by several datasets.
+	for _, sourceNames := range []bool{false, true} {
+		var matched Platform
+		found := false
+		for _, platform := range r.platforms {
+			matches := false
+			if !sourceNames {
+				for _, alias := range platform.Aliases {
+					if key(alias) == lookupKey {
 						matches = true
 						break
 					}
 				}
-				if matches {
-					break
+			} else {
+				for _, ref := range platform.Sources {
+					if key(ref.Name) == lookupKey {
+						matches = true
+						break
+					}
+					for _, name := range ref.Names {
+						if key(name) == lookupKey {
+							matches = true
+							break
+						}
+					}
+					if matches {
+						break
+					}
 				}
 			}
+			if !matches {
+				continue
+			}
+			if found && key(matched.Name) != key(platform.Name) {
+				return Platform{}, false
+			}
+			matched = platform
+			found = true
 		}
-		if !matches {
-			continue
+		if found {
+			return clonePlatform(matched), true
 		}
-		if found && key(matched.Name) != key(platform.Name) {
-			return Platform{}, false
-		}
-		matched = platform
-		found = true
-	}
-	if found {
-		return clonePlatform(matched), true
 	}
 	return Platform{}, false
 }
