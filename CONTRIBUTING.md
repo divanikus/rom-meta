@@ -42,10 +42,13 @@ This creates a ZIP and SHA256SUMS under
 `bin/releases/prepare-variants/<version>/`, including the executable, quick-start
 text, variant guide and dependency licenses. It needs a clean committed checkout
 and does not create a tag, upload a release or deploy anything. Omit `-Platform`
-to build Windows amd64 and Linux amd64/arm64 helper packages. The main CLI remains
-the default `-Program rom-meta`; `-Platform` can also narrow its target list.
+to build Windows amd64 and Linux amd64/arm64 helper packages. Main CLI-only packaging is
+available with `-Program rom-meta`; `-Platform` can also narrow its target list.
+The default `-Program all` creates separate main CLI and helper ZIP assets for
+each selected platform, listed together in the root `SHA256SUMS`.
 
-The script writes Windows amd64 and Linux amd64/arm64 archives plus SHA256SUMS under ignored
+The default script writes separate main CLI/helper Windows amd64 and Linux
+amd64/arm64 archives plus SHA256SUMS under ignored
 `bin/releases/`, including selected user docs/examples and dependency licenses.
 It does not create a Git tag, upload artifacts or deploy services. Test extracted
 archives and verify embedded version/checksums before publishing. Public file

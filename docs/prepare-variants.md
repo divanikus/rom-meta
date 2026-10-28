@@ -43,7 +43,9 @@ The shell examples below use `prepare-variants` as the command name. In the
 extracted Windows folder, use `.\prepare-variants.exe`; on Linux use
 `./prepare-variants`, or add the executable directory to PATH.
 
-Standalone helper packages are built separately from the main CLI archives.
+Standalone helper packages are separate release assets alongside the main CLI
+archives, with both listed in the release checksums. The standard release builder
+produces both sets automatically.
 Existing published 0.1.0 main CLI assets are unchanged. If a helper archive is not
 available with a release, developers can build one from a clean checkout using
 [the packaging instructions](../CONTRIBUTING.md). To build just a local Windows
