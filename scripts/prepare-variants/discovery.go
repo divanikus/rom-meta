@@ -22,20 +22,25 @@ type reviewDecision struct {
 	Exclude  bool     `json:"exclude,omitempty"`
 }
 type discoveryRow struct {
-	ID             string           `json:"id"`
-	Platform       string           `json:"platform"`
-	SourcePlatform string           `json:"source_platform"`
-	Source         string           `json:"source"`
-	Name           string           `json:"name"`
-	Member         string           `json:"member,omitempty"`
-	Languages      []string         `json:"languages,omitempty"`
-	File           fingerprint      `json:"file"`
-	Status         string           `json:"status"`
-	Reason         string           `json:"reason"`
-	Candidates     []*gameChoice    `json:"candidates,omitempty"`
-	Target         *gameChoice      `json:"target,omitempty"`
-	Parent         string           `json:"source_parent,omitempty"`
-	Links          []map[string]any `json:"relationship_evidence,omitempty"`
+	ID             string              `json:"id"`
+	Platform       string              `json:"platform"`
+	SourcePlatform string              `json:"source_platform"`
+	Source         string              `json:"source"`
+	Name           string              `json:"name"`
+	Member         string              `json:"member,omitempty"`
+	Languages      []string            `json:"languages,omitempty"`
+	File           fingerprint         `json:"file"`
+	Status         string              `json:"status"`
+	Reason         string              `json:"reason"`
+	Candidates     []*gameChoice       `json:"candidates,omitempty"`
+	Target         *gameChoice         `json:"target,omitempty"`
+	Parent         string              `json:"source_parent,omitempty"`
+	Links          []map[string]any    `json:"relationship_evidence,omitempty"`
+	Published      *publishedReference `json:"published,omitempty"`
+	Kind           string              `json:"kind,omitempty"`
+	Title          string              `json:"title,omitempty"`
+	Group          string              `json:"group,omitempty"`
+	Version        string              `json:"version,omitempty"`
 }
 type discoveryReport struct {
 	SchemaVersion int                `json:"schema_version"`
@@ -277,6 +282,11 @@ func discover(o options, d discoveryOptions, decisions map[string]reviewDecision
 			}
 		}
 	}
+	if len(d.DAT) == 0 && len(d.TEN) == 0 {
+		if err := appendPublishedDiscovery(c, set, report); err != nil {
+			return nil, nil, nil, err
+		}
+	}
 	// Finalize after duplicate labels have been seen. A persistent reviewer choice
 	// has precedence over naming/source suggestions, but never over hash ownership.
 	for _, row := range report.Rows {
@@ -337,6 +347,9 @@ func discover(o options, d discoveryOptions, decisions map[string]reviewDecision
 		key := safeTitleKey(stripROMExtension(row.Name))
 		if len(key) > 140 {
 			key = "Translation output"
+			if row.Published != nil {
+				key = "Variant output"
+			}
 		}
 		key += " [" + row.ID[:12] + "]"
 		group, version := translationCredit(row.Name)
@@ -346,6 +359,14 @@ func discover(o options, d discoveryOptions, decisions map[string]reviewDecision
 			}
 		}
 		e := entry{Platform: g.Platform, Game: g.Game, NewGame: g.NewGame, Variant: variant{Key: key, Title: stripROMExtension(row.Name), Kind: "translation", Languages: row.Languages, Group: group, Version: version}, File: row.File, DAT: &datReference{Path: row.Source, Member: row.Member, Name: row.Name, SourcePlatform: row.SourcePlatform}, Evidence: evidence{Relationship: "reviewed", Links: row.Links, Normalization: []string{row.Reason}}, Expected: g.expected}
+		if row.Published != nil {
+			e.DAT = nil
+			e.Published = row.Published
+			e.Variant.Kind = row.Kind
+			e.Variant.Title = row.Title
+			e.Variant.Group = row.Group
+			e.Variant.Version = row.Version
+		}
 		if err := validateEntry(e); err != nil {
 			return nil, nil, nil, err
 		}

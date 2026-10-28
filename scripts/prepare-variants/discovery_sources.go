@@ -319,8 +319,11 @@ func inspectDiscoverySources(o options, d discoveryOptions) (*sourceInventory, e
 	if err != nil {
 		return nil, err
 	}
-	if len(out.DAT) == 0 {
-		return nil, fmt.Errorf("no translation XML DATs found under --sources; see docs/prepare-variants.md for downloads (or use --dat)")
+	if len(out.DAT) == 0 && !autoDAT {
+		return nil, fmt.Errorf("explicit DAT selection contains no translation XML DATs; omit --dat/--ten for standalone RHA or HackHash sources")
+	}
+	if len(out.DAT) == 0 && len(out.RHA) == 0 && len(out.HackHash) == 0 {
+		return nil, fmt.Errorf("no supported published outputs found: provide translation XML DATs, Romhack Archive metadata, or detailed HackHash JSON; see docs/prepare-variants.md")
 	}
 	sort.Slice(out.DAT, func(i, j int) bool {
 		a, b := out.DAT[i], out.DAT[j]

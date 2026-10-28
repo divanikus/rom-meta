@@ -67,15 +67,16 @@ type datReference struct {
 	SourcePlatform string `json:"source_platform,omitempty"`
 }
 type entry struct {
-	NewGame  *newGame          `json:"new_game,omitempty"`
-	DAT      *datReference     `json:"dat,omitempty"`
-	Platform string            `json:"platform"`
-	Game     string            `json:"game"`
-	Variant  variant           `json:"variant"`
-	File     fingerprint       `json:"file"`
-	Evidence evidence          `json:"evidence"`
-	Expected map[string]string `json:"expected_documents"`
-	Inputs   []input           `json:"inputs,omitempty"`
+	NewGame   *newGame            `json:"new_game,omitempty"`
+	DAT       *datReference       `json:"dat,omitempty"`
+	Published *publishedReference `json:"published,omitempty"`
+	Platform  string              `json:"platform"`
+	Game      string              `json:"game"`
+	Variant   variant             `json:"variant"`
+	File      fingerprint         `json:"file"`
+	Evidence  evidence            `json:"evidence"`
+	Expected  map[string]string   `json:"expected_documents"`
+	Inputs    []input             `json:"inputs,omitempty"`
 }
 
 func checkJSONKeys(raw []byte) error {
@@ -232,8 +233,16 @@ func validateEntry(e entry) error {
 			}
 		}
 	}
-	if len(e.Inputs) == 0 && e.DAT == nil {
-		return fmt.Errorf("actual input or an exact published translation DAT output required")
+	if e.DAT != nil && e.Published != nil {
+		return fmt.Errorf("choose one published output reference: DAT or structured source")
+	}
+	if e.Published != nil {
+		if err := validatePublishedReference(*e.Published); err != nil {
+			return err
+		}
+	}
+	if len(e.Inputs) == 0 && e.DAT == nil && e.Published == nil {
+		return fmt.Errorf("actual input or an exact published output reference required")
 	}
 	for _, in := range e.Inputs {
 		if !safeRelative(in.Path) || (in.Member != "" && !safeRelative(in.Member)) || in.Size < 0 || in.MTimeNS < 0 {

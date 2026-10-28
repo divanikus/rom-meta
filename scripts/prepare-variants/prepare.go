@@ -90,6 +90,9 @@ func run(o options) (result *report, failure error) {
 	if err := resolveTEn(m, o); err != nil {
 		return r, err
 	}
+	if err := resolvePublished(m, o); err != nil {
+		return r, err
+	}
 	if err := checkSnapshots(m, o); err != nil {
 		r.Errors = append(r.Errors, err.Error())
 		r.Status = "blocked"

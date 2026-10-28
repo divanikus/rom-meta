@@ -288,6 +288,9 @@ func discoveryCLI(root string, o options, d discoveryOptions, review bool, in io
 		return err
 	}
 	fmt.Fprintf(out, "Discovery: %d ready, %d review, %d already owned, %d unsupported, %d excluded\nWorkspace: %s\n", r.Counts["ready"], r.Counts["review"], r.Counts["already-owned"], r.Counts["unsupported"], r.Counts["excluded"], root)
+	if r.Counts["skipped-output-platform"] > 0 {
+		fmt.Fprintf(out, "Skipped %d published outputs whose platforms are absent from the catalog; details: report.json\n", r.Counts["skipped-output-platform"])
+	}
 	if r.Counts["skipped-platform"] > 0 {
 		fmt.Fprintf(out, "Skipped %d DATs whose platforms are absent from the catalog; details: report.json\n", r.Counts["skipped-platform"])
 	}

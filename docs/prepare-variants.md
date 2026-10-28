@@ -93,10 +93,16 @@ not imply a maintained public equivalent of every T-En collection in every
 language. Ordinary retail DATs and other unidentified layouts are not silently
 treated as English translations.
 
-### Optional sources that help identify originals
+### Sources for hacks and original-game relationships
 
-These supplement the output DATs. Place them in the same sources tree; normal
-discovery detects them without adapter flags. Nothing is downloaded automatically.
+Romhack Archive metadata and detailed HackHash JSON can supply modified-output
+fingerprints and original-game relationships themselves. Translation DATs and
+local ROMs are not required for these sources. They also supplement DAT-based
+translations when output fingerprints match. Gaming Alexandria can supply its
+translation output list or improve those links.
+
+Place the sources you need in the same tree; normal discovery detects their known
+formats without adapter flags. Nothing is downloaded automatically.
 
 | Source | What to obtain | How it is connected |
 | --- | --- | --- |
@@ -132,9 +138,9 @@ For example, this entire tree connects through one `--sources /snapshots`:
 snapshots/
   translations/       # downloaded XML DATs or ZIPs of DATs; filenames are arbitrary
   gaming-alexandria/  # optional full GA translation DAT
-  romhack-archive/    # optional extracted metadata checkout
+  romhack-archive/    # extracted metadata; can be used without translation DATs
     database/...
-  hackhash-detailed.json  # optional detailed export
+  hackhash-detailed.json  # detailed export; can be used on its own
 ```
 
 Metadata files/XML members are bounded to 32 MiB and ZIP containers to 256 MiB
@@ -142,14 +148,15 @@ for automatic inspection. Oversized automatic inputs are reported and skipped;
 an explicitly selected oversized input fails clearly.
 
 Sources improve only outputs with matching published identities. Installing an
-additional source does not guarantee a relationship for every translation or
+additional source does not guarantee a relationship for every translation/hack or
 add missing descriptions/artwork to original cards.
 
 ## Discover and review a source library without ROMs
 
 Start with a read-only catalog snapshot containing original games and locally
-obtained translation XML DAT files (see downloads above). No ROM directory, API key or exact patch version is
-required. Run the standalone helper:
+obtained translation DATs, Romhack Archive metadata, detailed HackHash JSON, or a
+combination (see downloads above). No ROM directory, API key or exact patch
+version is required. The same commands handle hacks and translations:
 
 ```shell
 prepare-variants --catalog "/catalog-snapshot" --sources "/snapshots" --discover "/work/translation-review"
@@ -157,8 +164,10 @@ prepare-variants --review "/work/translation-review"
 prepare-variants --workspace "/work/translation-review" --out "/work/variant-catalog" --media artwork
 ```
 
-Discovery searches `--sources` recursively for supported XML DATs and ZIP
-members, identifies systems/languages, and connects known optional sources.
+Discovery searches `--sources` recursively for supported XML DATs/ZIP members,
+Romhack Archive metadata and detailed HackHash JSON. Automatic mode combines their
+output lists; an output already present in a DAT keeps its existing DAT definition.
+Systems and languages come from the known source formats.
 New files in this folder are picked up on refresh without further questions.
 Missing catalog platforms are skipped with an explanation in `report.json`;
 ambiguities remain explicit. Discovery writes analysis JSON in a new, empty
@@ -170,8 +179,14 @@ metadata fetching and frontend/RomM import remain separate normal workflows.
 
 Discovery follows these rules:
 
-- A translation DAT output supplies its own published raw size/SHA1 or typed CHD combined
-  SHA1. Original/base hashes never become modified-output hashes.
+- A translation DAT output supplies its own published raw size/SHA1 or typed CHD
+  combined SHA1. RHA and HackHash supply raw modified-ROM size/SHA1, plus optional
+  MD5/CRC32. Original/base hashes and patch-file hashes never become modified-output
+  hashes. Unsupported/missing output identities are held rather than guessed.
+- Standalone RHA/HackHash outputs retain source title, kind, credits, version and
+  declared languages when available. Hacks do not receive an English language
+  default or require a translation tag. These known structured formats are
+  supported; an arbitrary hack DAT is not automatically recognized.
 - Optional Gaming Alexandria, Romhack Archive and HackHash metadata are detected
   automatically. `--ga`, `--rha` and `--hackhash` remain explicit overrides.
   An exact modified-output match supplies an explicit parent assertion;
@@ -227,9 +242,11 @@ The workspace contains `decisions.json`, `report.json`, `links.json` and
 or document SHA256 editing is needed. Run `--discover /work/translation-review`
 again to refresh analysis with the same configured sources/catalog. Source paths
 and catalog root are workstation settings. Default folder discovery includes new
-metadata files on refresh. To narrow output DATs explicitly, repeat `--dat` with
-a relative XML/ZIP file or directory, for example `--dat translations/ps1.dat`.
-Other source adapters are still found automatically. The old `--ten` flag and
+metadata files on refresh. To narrow outputs to selected DATs explicitly, repeat
+`--dat` with a relative XML/ZIP file or directory, for example
+`--dat translations/ps1.dat`. In that mode RHA/HackHash still help resolve the
+selected DAT outputs, but do not add standalone outputs. Omit `--dat`/`--ten` to
+include standalone RHA/HackHash records. The old `--ten` flag and
 existing workspaces remain supported for compatibility; new commands use
 `--dat` or automatic selection. Changing the explicit selection/roots needs a
 new workspace, to which you can copy `decisions.json` before discovery resumes.
@@ -300,6 +317,32 @@ input checks its header/stat identity, without full-image hashing or an integrit
 claim. Game-only relationships use `reviewed`; release-name/base-hash evidence
 still requires an exact `based_on`. Ordinary offline export recognizes a prepared
 variant by its own fingerprint, even after the file is renamed.
+
+### Structured published-output references
+
+Discovery creates the optional schema-version-1 `published` field for standalone
+RHA/HackHash entries, instead of `dat`:
+
+```json
+"published": {
+  "format": "hackhash",
+  "path": "hackhash-detailed.json",
+  "record": "<generated SHA256 record identifier>"
+}
+```
+
+The formats are `romhack-archive` and `hackhash`; the path is relative to
+`--sources`. Keep the generated reference rather than composing record IDs
+manually. `record` identifies a source entry and its output fingerprint, not
+a ROM or patch SHA256. Staging reparses that known source format, checks the
+referenced modified output and all supplied file constraints, and pins source
+bytes. A `dat` reference and `published` reference cannot coexist in one entry.
+Unrelated, missing or changed source records cannot authenticate an output.
+
+The original-game association remains a separate reviewed link. Conflicting
+parents require review; conflicting modified-output hashes remain unsupported
+even after selecting a game. Old DAT manifests/workspaces need no conversion.
+The prepared YAML is the same ordinary variant format consumed by offline export.
 
 ## Advanced: collect relationships from local ROMs
 
