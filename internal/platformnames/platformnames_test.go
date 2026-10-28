@@ -324,3 +324,24 @@ func TestExplicitAliasOutranksSharedProviderName(t *testing.T) {
 		t.Fatalf("unique provider name = %q", got)
 	}
 }
+
+func TestDSiWareNormalizedDatasetMappings(t *testing.T) {
+	r := DefaultRegistry()
+	const platform = "Nintendo - Nintendo DSi (Digital) (CDN)"
+	for _, alias := range []string{"dsiware", "dsidigital"} {
+		if got := r.ResolveCLI(alias); got != platform {
+			t.Fatalf("%s = %s", alias, got)
+		}
+		if r.ResolveCLI(alias) == r.ResolveCLI("dsi") {
+			t.Fatal("digital alias replaced ordinary DSi")
+		}
+		for _, source := range []string{SourceIGDB, SourceLaunchBox} {
+			if got := r.ForSource(alias, source); got != "Nintendo DSi" {
+				t.Fatalf("%s = %s", source, got)
+			}
+		}
+		if id, ok := r.SourceID(alias, SourceScreenScraper); !ok || id != "15" {
+			t.Fatal("DSi ScreenScraper mapping", id, ok)
+		}
+	}
+}

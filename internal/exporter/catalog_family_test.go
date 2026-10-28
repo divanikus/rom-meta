@@ -101,7 +101,7 @@ func TestCatalogFamilyCrossCatalogCollisionIsAmbiguous(t *testing.T) {
 }
 
 func TestCatalogFamilyCapabilitiesAndDigitalOnly(t *testing.T) {
-	for _, base := range []string{"Nintendo - Wii", "Nintendo - Wii U", "Sony - PlayStation 3", "Sony - PlayStation Portable"} {
+	for _, base := range []string{"Nintendo - Wii", "Nintendo - Wii U", "Nintendo - Nintendo DSi", "Sony - PlayStation 3", "Sony - PlayStation Portable"} {
 		for _, disc := range []bool{true, false} {
 			t.Run(fmt.Sprint(base, disc), func(t *testing.T) {
 				options, _, _ := fixture(t)
@@ -130,7 +130,7 @@ func TestCatalogFamilyCapabilitiesAndDigitalOnly(t *testing.T) {
 				if err != nil || resolver.IndexStats.Games != want || len(resolver.Platform.Catalogs) != want {
 					t.Fatalf("%+v %v", resolver, err)
 				}
-				if base == "Nintendo - Wii" || base == "Nintendo - Wii U" {
+				if base == "Nintendo - Wii" || base == "Nintendo - Wii U" || base == "Nintendo - Nintendo DSi" {
 					if len(resolver.Platform.ExportSystems) != 0 {
 						t.Fatal("metadata routing advertised an absent launch reader")
 					}

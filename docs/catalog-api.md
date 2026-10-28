@@ -29,7 +29,7 @@ without waiting for active work; it does not establish freshness or completion.
 
 Related disc/digital datasets advertise `catalogs` on the hardware entry.
 Lookup through that entry searches the listed datasets together; an explicit
-member folder keeps its own scope. Wii/Wii U, PS3 PSN and PSP Minis remain
+member folder keeps its own scope. Wii/Wii U, DSiWare, PS3 PSN and PSP Minis remain
 separate DATs. Cross-dataset collisions stay ambiguous. This does not add launch
 readers for formats listed only under `name_binding`.
 

@@ -275,6 +275,12 @@ aliases:
     igdb: "Nintendo DSi"
     launchbox: "Nintendo DSi"
     screenscraper_id: 15
+  - match: "Nintendo - Nintendo DSi (Digital) (CDN)"
+    keys: [dsiware, dsidigital]
+    display: "DSiWare"
+    igdb: "Nintendo DSi"
+    launchbox: "Nintendo DSi"
+    screenscraper_id: 15
   - match: "Nintendo - Nintendo DSi (Digital) (CDN) (Decrypted)"
     display: "Nintendo DSi"
     igdb: "Nintendo DSi"

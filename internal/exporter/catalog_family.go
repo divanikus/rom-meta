@@ -4,6 +4,8 @@ package exporter
 // Acquisition remains scoped to each DAT; only consumer recognition is combined.
 func catalogFamily(name string) string {
 	switch name {
+	case "Nintendo - Nintendo DSi (Digital) (CDN)", "Nintendo - Nintendo DSi (Digital) (CDN) (Decrypted)":
+		return "Nintendo - Nintendo DSi"
 	case "Nintendo - Wii (Digital) (CDN)":
 		return "Nintendo - Wii"
 	case "Nintendo - Wii U (Digital) (CDN)":
