@@ -73,6 +73,9 @@ func reconcileMedia(old, current *yaml.Node, failed *failedMedia) (*yaml.Node, e
 					}
 					equal := true
 					for _, key := range []string{"url", "source_file", "importer"} {
+						if key == "url" && catalogyaml.Scalar(catalogyaml.Value(before, "sha256")) != "" && catalogyaml.Scalar(catalogyaml.Value(before, "sha256")) == catalogyaml.Scalar(catalogyaml.Value(after, "sha256")) {
+							continue
+						}
 						if catalogyaml.Scalar(catalogyaml.Value(before, key)) != catalogyaml.Scalar(catalogyaml.Value(after, key)) {
 							equal = false
 						}

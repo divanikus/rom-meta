@@ -135,7 +135,7 @@ func TestExplicitMediaTagRole(t *testing.T) {
 		t.Fatal(r, err)
 	}
 	body, _ := catalogfs.ReadFile(filepath.Join(game, "game.yaml"))
-	if bytes.Contains(body, []byte("box_front:")) || !bytes.Contains(body, []byte("screenshot-02")) {
+	if bytes.Contains(body, []byte("box_front:")) || !bytes.Contains(body, []byte("screenshot.gamelist.sample.jpg")) {
 		t.Fatal(string(body))
 	}
 	o.MediaRoles["unknown"] = "box-front"

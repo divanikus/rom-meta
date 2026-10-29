@@ -63,9 +63,15 @@ are `screenshot`, `box-front`, `logo`, `gameplay-video`, `fanart`, `manual` and
 current observation. Owner candidates survive. A missing or unsupported file
 keeps an earlier successful reference while reporting the gap.
 
-Referenced media uses source-labelled, content-addressed filenames inside the
-matched release's media folder. Images, thumbnails, marquees, videos, fanart and
-manuals retain their source paths and checksums. Missing files are reported;
+Referenced media uses readable source-labelled names inside the matched release's
+media folder: `logo.gamelist.personal.png`, `gameplay-video.gamelist.personal.mp4`
+and `screenshot.gamelist.personal.png`. SHA-256 and original paths stay in YAML;
+unknown region/language placeholders and checksum suffixes are omitted. Multiple
+distinct files for a role/release/collection receive ordinal suffixes such as
+`logo-01.gamelist.personal.png` and `logo-02.gamelist.personal.jpg`. Ordinals span
+formats; an already published readable name stays stable as alternatives arrive.
+Retained older content also counts as a distinct variant. Images, thumbnails,
+marquees, videos, fanart and manuals retain their source paths and checksums. Missing files are reported;
 available metadata/media can still be applied, with an incomplete exit status.
 Unsupported formats, including fanart playlists, are reported as warnings.
 Absolute paths, traversal and source symlink escapes are rejected. Media outside
@@ -73,7 +79,7 @@ the imported XML's directory tree, remote URLs, and modern frontend media locate
 only through filename inference require a separate adapter.
 
 After replacement, automatic browser/export/API selection uses current
-references across all observations in the collection. Old content-addressed
+references across all observations in the collection. Older media
 files remain available for recovery but are not automatic candidates once
 unreferenced. Another observation/language/collection can retain them; an explicit
 export `media_overrides` pin may also select a retained file intentionally.
@@ -102,3 +108,22 @@ selection:
 
 Importing does not change an existing export profile or installed frontend.
 Review the report before applying and use the ordinary export preview afterward.
+
+## Rename previously imported media
+
+Preview and apply the same naming rules without the original packs:
+
+```shell
+rom-meta gamelist media-names --data-root /path/to/catalog --collection personal --report /path/to/names-preview.json
+rom-meta gamelist media-names --data-root /path/to/catalog --collection personal --report /path/to/names-applied.json --apply
+```
+
+An optional `--platform` limits this operation to one exact catalog folder.
+Run catalog writers sequentially. The migration verifies content, handles loose
+and packed storage, updates game-relative/catalog-relative YAML references and
+keeps original `source_file`/`source_path` provenance. Other source namespaces remain
+unchanged. Identical content in the same role/format can share one destination.
+Original YAML and a rename receipt stay under `.rommeta/imports`; the private report
+includes the filename/checksum inventory. Repeating after completion changes
+nothing. Review external export-profile pins against the rename report, because
+profiles outside the catalog cannot be discovered automatically.

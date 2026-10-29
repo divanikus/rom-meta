@@ -50,6 +50,7 @@ type Result struct {
 	Unmatched    int           `json:"unmatched"`
 	Ambiguous    int           `json:"ambiguous"`
 	Updated      int           `json:"updated"`
+	MediaRenamed int           `json:"media_renamed"`
 	MediaAdded   int           `json:"media_added"`
 	MediaBytes   int64         `json:"media_bytes"`
 	MissingMedia int           `json:"missing_media"`
@@ -61,13 +62,17 @@ type Result struct {
 }
 type target struct{ game, release, variant string }
 type card struct {
-	original []byte
-	doc      *catalogyaml.Document
-	media    map[string]asset
+	original    []byte
+	doc         *catalogyaml.Document
+	media       map[string]asset
+	renames     map[string]string
+	mediaHashes map[string]string
+	remove      []string
 }
 type asset struct {
 	input, digest string
 	size          int64
+	catalog       bool
 }
 
 var romExtensions = func() map[string]bool {
@@ -343,6 +348,7 @@ func Import(o Options) (result Result, err error) {
 			if _, explicit := o.MediaRoles[r.tag]; !explicit && r.tag == "image" && (strings.Contains(lower, "/boxart/") || strings.Contains(lower, "/covers/")) {
 				kind, mediaType = "box-front", "box_front"
 			}
+			// In-memory content key only; normalizeMedia assigns readable paths before staging.
 			dest := path.Join("media", t.release, kind+".unspecified.und."+hash[:12]+"."+source+ext)
 			if !safeRelative(dest) {
 				return result, fmt.Errorf("release key cannot be used as a media folder: %q", t.release)
@@ -360,9 +366,7 @@ func Import(o Options) (result Result, err error) {
 			}
 			if os.IsNotExist(e) {
 				if _, ok := c.media[dest]; !ok {
-					c.media[dest] = asset{inputPath, hash, size}
-					result.MediaAdded++
-					result.MediaBytes += size
+					c.media[dest] = asset{input: inputPath, digest: hash, size: size}
 				}
 			}
 			candidate := encode(map[string]any{"url": dest, "source_file": relative, "importer": "es-de", "source_tag": r.tag, "sha256": hash, "size": size})
@@ -423,6 +427,13 @@ func Import(o Options) (result Result, err error) {
 	// Compare syntax trees: a no-op leaves original formatting and packed bytes alone.
 	updates := map[string][]byte{}
 	for game, c := range cards {
+		added, size, e := normalizeMedia(root, game, source, c)
+		if e != nil {
+			return result, e
+		}
+		result.MediaAdded += added
+		result.MediaBytes += size
+		result.MediaRenamed += len(c.renames)
 		previous, e := catalogyaml.Parse(c.original)
 		if e != nil {
 			return result, e
@@ -461,110 +472,30 @@ func Import(o Options) (result Result, err error) {
 	if !o.Apply || len(updates) == 0 && !policyChanged {
 		return result, nil
 	}
-	runRoot := filepath.Join(root, ".rommeta", "imports")
-	if e = os.MkdirAll(runRoot, 0700); e != nil {
-		return result, e
-	}
-	stage, e := os.MkdirTemp(runRoot, "es-de-")
+	stage, e := publishCards(root, cards, updates, in, o.Progress, func(stage string) error {
+		if policyChanged {
+			if e = os.WriteFile(filepath.Join(stage, "source-policies.yaml.before"), policyOriginal, 0600); e != nil {
+				return e
+			}
+			body, e := policy.Marshal()
+			if e != nil {
+				return e
+			}
+			if e = atomicfile.WriteFile(policyPath, body, 0644); e != nil {
+				return e
+			}
+		}
+		return nil
+	})
+	result.Backup = stage
 	if e != nil {
 		return result, e
-	}
-	result.Backup = stage
-	// Stage all media and metadata before the first catalog write.
-	staged := map[string]map[string]string{}
-	games := make([]string, 0, len(updates))
-	for game := range updates {
-		games = append(games, game)
-	}
-	sort.Strings(games)
-	for _, game := range games {
-		c := cards[game]
-		rel, _ := filepath.Rel(root, game)
-		dir := filepath.Join(stage, "stage", rel)
-		if e = os.MkdirAll(dir, 0700); e != nil {
-			return result, e
-		}
-		original, e := catalogfs.ReadFile(filepath.Join(game, "game.yaml"))
-		if e != nil {
-			return result, e
-		}
-		if !bytes.Equal(original, c.original) {
-			return result, fmt.Errorf("catalog changed during planning: %s", game)
-		}
-		backup := filepath.Join(stage, "backups", rel, "game.yaml")
-		if e = os.MkdirAll(filepath.Dir(backup), 0700); e != nil {
-			return result, e
-		}
-		if e = os.WriteFile(backup, c.original, 0600); e != nil {
-			return result, e
-		}
-		metadata := filepath.Join(dir, "game.yaml")
-		if e = os.WriteFile(metadata, updates[game], 0600); e != nil {
-			return result, e
-		}
-		files := map[string]string{"game.yaml": metadata}
-		for dest, a := range c.media {
-			input, e := in.open(a.input)
-			if e != nil {
-				return result, e
-			}
-			file, e := os.CreateTemp(dir, "asset-")
-			if e != nil {
-				input.Close()
-				return result, e
-			}
-			h := sha256.New()
-			n, e := io.Copy(io.MultiWriter(file, h), io.LimitReader(input, 512<<20+1))
-			input.Close()
-			closeErr := file.Close()
-			if e != nil {
-				return result, e
-			}
-			if closeErr != nil {
-				return result, closeErr
-			}
-			if n != a.size || hex.EncodeToString(h.Sum(nil)) != a.digest {
-				return result, fmt.Errorf("source media changed during import")
-			}
-			files[dest] = file.Name()
-		}
-		staged[game] = files
-	}
-	if policyChanged {
-		if e = os.WriteFile(filepath.Join(stage, "source-policies.yaml.before"), policyOriginal, 0600); e != nil {
-			return result, e
-		}
-		body, e := policy.Marshal()
-		if e != nil {
-			return result, e
-		}
-		if e = atomicfile.WriteFile(policyPath, body, 0644); e != nil {
-			return result, e
-		}
-	}
-	for i, game := range games {
-		if o.Progress != nil {
-			o.Progress(game, i+1, len(games))
-		}
-		original, e := catalogfs.ReadFile(filepath.Join(game, "game.yaml"))
-		if e != nil {
-			return result, e
-		}
-		if !bytes.Equal(original, cards[game].original) {
-			return result, fmt.Errorf("catalog changed before publication: %s", game)
-		}
-		if e = publishFiles(game, staged[game]); e != nil {
-			return result, fmt.Errorf("import incomplete; retained stage and backups %s: %w", stage, e)
-		}
 	}
 	body, e := json.MarshalIndent(result, "", "  ")
 	if e != nil {
 		return result, e
 	}
 	if e = os.WriteFile(filepath.Join(stage, "result.json"), body, 0600); e != nil {
-		return result, e
-	}
-	if e = os.RemoveAll(filepath.Join(stage, "stage")); e != nil {
 		return result, e
 	}
 	return result, nil
@@ -590,13 +521,13 @@ func checkParents(root, directory string) error {
 	}
 	return nil
 }
-func publishFiles(game string, files map[string]string) error {
+func publishFiles(game string, files map[string]string, remove []string) error {
 	packed, err := catalogfs.Packed(filepath.Join(game, "game.yaml"))
 	if err != nil {
 		return err
 	}
 	if packed {
-		return catalogfs.PutFiles(game, files, nil)
+		return catalogfs.PutFiles(game, files, remove)
 	}
 	names := make([]string, 0, len(files))
 	for name := range files {
@@ -612,6 +543,14 @@ func publishFiles(game string, files map[string]string) error {
 		}
 		dest := filepath.Join(game, filepath.FromSlash(name))
 		if err = atomicfile.WriteFile(dest, data, 0644); err != nil {
+			return err
+		}
+	}
+	for _, name := range remove {
+		if _, written := files[name]; written {
+			continue
+		}
+		if err := catalogfs.Remove(filepath.Join(game, filepath.FromSlash(name))); err != nil {
 			return err
 		}
 	}

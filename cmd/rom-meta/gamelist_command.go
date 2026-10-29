@@ -14,6 +14,9 @@ func runGamelist(args []string) error {
 		printGamelistUsage()
 		return nil
 	}
+	if args[0] == "media-names" {
+		return runGamelistMediaNames(args[1:])
+	}
 	if args[0] != "import" {
 		return fmt.Errorf("unknown gamelist command: %s", args[0])
 	}
@@ -139,6 +142,7 @@ func printGamelistUsage() {
 	fmt.Println(`rom-meta gamelist import harvests existing ES-DE metadata and referenced media.
 
 Usage:
+  rom-meta gamelist media-names --collection <name> [--data-root <catalog>] [--report <path>] [--apply]
   rom-meta gamelist import <gamelist.xml-or-pack.zip> --collection <name> --language <code> [options]
 
 Options:
