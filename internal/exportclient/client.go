@@ -227,6 +227,10 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 			return nil, err
 		}
 	}
+	profile, launchBoxPolicy, err := exporter.ClientExportProfile(profile)
+	if err != nil {
+		return nil, err
+	}
 	batch := &exporter.BatchPlan{SchemaVersion: 1, Target: target, ROMRoot: root, Out: out, Plans: []*exporter.Plan{}, Skipped: []exporter.SkippedSystem{}}
 	job := &Job{Batch: batch, Single: options.Platform != "", client: c, assets: map[string]catalogapi.ExportAsset{}, stamps: map[string]os.FileInfo{}, progress: options.Progress}
 	requested := append([]string(nil), options.Systems...)
@@ -388,6 +392,7 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 			}
 		}
 		if plan != nil {
+			plan.Profile.LaunchBox = launchBoxPolicy
 			if err = exporter.FinalizeExport(plan); err != nil {
 				return nil, err
 			}

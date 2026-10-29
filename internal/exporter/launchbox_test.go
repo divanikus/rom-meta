@@ -44,41 +44,46 @@ func TestLaunchBoxCartridgesMediaAndStableIDs(t *testing.T) {
 		t.Fatal(err)
 	}
 	list := readLaunchBox(t, plan)
-	if len(list.Games) != 2 {
+	if len(list.Games) != 1 || len(list.Versions) != 2 {
 		t.Fatal(list)
 	}
-	for i, g := range list.Games {
-		if g.Title != "Example" || g.Notes != "English & <safe> description" || g.Platform != "Nintendo 64" || !g.Emulation || !g.Installed || g.MaxPlayers != 4 || g.Genre != "Action; Adventure" {
-			t.Fatalf("%+v", g)
-		}
-		if g.ApplicationPath != filepath.Join(options.ROMRoot, filepath.FromSlash(plan.Records[i].ROM)) {
-			t.Fatal(g.ApplicationPath)
-		}
-		if !strings.HasPrefix(g.VideoPath, "Videos/Nintendo 64/") {
-			t.Fatal(g.VideoPath)
-		}
-		for role, m := range plan.Records[i].Media {
-			if !strings.Contains(m.OutputPath, g.ID+"-01.") {
+	g := list.Games[0]
+	if g.Title != "Example & Friends" || g.Notes != "English & <safe> description" || g.Platform != "Nintendo 64" || !g.Installed || g.MaxPlayers != 4 || g.Genre != "Action; Adventure" {
+		t.Fatalf("%+v", g)
+	}
+	if g.ApplicationPath != filepath.Join(options.ROMRoot, "first.z64") || list.Versions[0].ApplicationPath != g.ApplicationPath {
+		t.Fatal("wrong default version")
+	}
+	if !strings.HasPrefix(g.VideoPath, "Videos/Nintendo 64/") {
+		t.Fatal(g.VideoPath)
+	}
+	for i, r := range plan.Records {
+		for role, m := range r.Media {
+			if i == 0 && !strings.Contains(m.OutputPath, g.ID+"-01.") {
 				t.Fatalf("%s: %+v", role, m)
+			}
+			if i == 1 && !strings.HasPrefix(m.OutputPath, "VersionMedia/") {
+				t.Fatal("alternate art leaked into native card")
 			}
 			if _, err := os.Stat(filepath.Join(plan.Out, filepath.FromSlash(m.OutputPath))); err != nil {
 				t.Fatal(err)
 			}
 		}
 	}
-	if list.Games[0].ID == list.Games[1].ID {
-		t.Fatal("same-title media identity collision")
+	if list.Versions[0].ID == list.Versions[1].ID || list.Versions[0].GameID != g.ID || list.Versions[1].Section != "Version" {
+		t.Fatal("version identity/parent/section")
 	}
 	again := *plan
 	again.Out = filepath.Join(filepath.Dir(plan.Out), "other")
 	again.Records = append([]Record(nil), plan.Records...)
 	again.Records[0].Fields = map[string]Value{"title": {Value: "Changed display title"}}
-	if launchBoxID(&again, again.Records[0]) != list.Games[0].ID {
-		t.Fatal("ID depends on output or metadata")
+	if launchBoxID(&again, again.Records[0]) != g.ID {
+		t.Fatal("game ID depends on output or metadata")
 	}
+	originalVersionID := launchBoxVersionID(plan, plan.Records[0])
 	again.ROMRoot = filepath.Join(options.ROMRoot, "moved")
-	if launchBoxID(&again, again.Records[0]) == list.Games[0].ID {
-		t.Fatal("ID ignores actual launch path")
+	if launchBoxID(&again, again.Records[0]) != g.ID || launchBoxVersionID(&again, again.Records[0]) == originalVersionID {
+		t.Fatal("game/version path identity boundary")
 	}
 	if !reflect.DeepEqual(beforeCatalog, treeHashes(t, options.DataRoot)) || !reflect.DeepEqual(beforeROM, treeHashes(t, options.ROMRoot)) {
 		t.Fatal("modified inputs")
@@ -114,7 +119,7 @@ func TestLaunchBoxDiscPlaylistAndUnsupported(t *testing.T) {
 		t.Fatal(err)
 	}
 	list := readLaunchBox(t, plan)
-	if len(list.Games) != 2 {
+	if len(list.Games) != 1 || len(list.Versions) != 2 {
 		t.Fatalf("%+v", list)
 	}
 	if list.Games[0].ApplicationPath != filepath.Join(dir, "Disc Game.m3u") {

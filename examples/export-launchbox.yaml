@@ -1,0 +1,19 @@
+schema_version: 1
+# Shared selection-policy schema; choose --target launchbox on the command line.
+target: es-de
+launchbox:
+  kinds: [original, translation, hack]
+  regions: [USA, Europe, Japan]
+  languages: [ru, en, ja]
+titles:
+  mode: regional
+  labels: keep
+  variants: auto
+selection:
+  description:
+    languages: [ru, en]
+  media:
+    cover: {}
+    screenshot: {}
+    logo: {}
+    video: {}

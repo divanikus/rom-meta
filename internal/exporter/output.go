@@ -216,6 +216,9 @@ func writePlan(plan *Plan, staging, sidecarDir string, progress func(string, str
 			record.Media[role] = media
 		}
 	}
+	if err := writeLaunchBoxPlaylists(plan, staging); err != nil {
+		return err
+	}
 	xmlBytes, err := RenderGamelist(plan)
 	if plan.Target == "launchbox" {
 		xmlBytes, err = RenderLaunchBox(plan)
@@ -335,6 +338,23 @@ func report(plan *Plan) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "RomMeta offline %s export\nPlatform: %s\nROMs: %d\nMatched: %d\nAmbiguous: %d\nUnmatched: %d\nUnsupported: %d\nMedia files: %d\nMedia bytes: %d\nScope: local/personal\n\n", plan.Target, plan.Platform, len(plan.Records), plan.Matched, plan.Ambiguous, plan.Unmatched, plan.Unsupported, plan.MediaFiles, plan.MediaBytes)
 	fmt.Fprintf(&b, "Bindings: %d hash / %d release/set-name / %d game-name\n\n", plan.HashMatches, plan.NameMatches, plan.GameOnly)
+	if plan.LaunchBox != nil {
+		fmt.Fprintf(&b, "LaunchBox: %d game cards / %d playable versions\n", len(plan.LaunchBox.Groups), plan.LaunchBox.VersionCount)
+		for _, group := range plan.LaunchBox.Groups {
+			fmt.Fprintf(&b, "Game: %s | %s\n", group.Title, group.Game)
+			for _, version := range group.Versions {
+				marker := "version"
+				if version.ID == group.Primary {
+					marker = "primary"
+				}
+				fmt.Fprintf(&b, "  %s: %s -> %s\n", marker, version.Name, version.Path)
+			}
+		}
+		for _, warning := range plan.LaunchBox.Warnings {
+			fmt.Fprintf(&b, "Warning: %s\n", warning)
+		}
+		b.WriteString("\n")
+	}
 	c := Coverage(plan)
 	fmt.Fprintf(&b, "Matched display coverage: %d/%d descriptions / %d/%d covers\n", c.Descriptions, c.Matched, c.Covers, c.Matched)
 	fmt.Fprintf(&b, "Game-scope descriptions: %d | Unknown artwork variants: %d\n\n", c.GameDescriptions, c.UnknownVariants)
@@ -393,4 +413,4 @@ and https://gitlab.com/es-de/emulationstation-de/-/blob/master/USERGUIDE.md
 `, plan.ROMRoot, plan.System, plan.System, plan.System, plan.System, plan.System)
 }
 
-const previewTemplate = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RomMeta · {{.Platform}} export</title><style>body{margin:0;background:#111827;color:#e5e7eb;font:16px/1.6 system-ui,sans-serif}main{max-width:1180px;margin:auto;padding:32px}h1{margin-bottom:0}header p{color:#9ca3af}.stats{display:flex;gap:20px;flex-wrap:wrap;margin:24px 0}.stats span{background:#1f2937;border-radius:10px;padding:12px 18px}article{background:#1f2937;border:1px solid #374151;border-radius:12px;margin:20px 0;padding:24px;display:grid;grid-template-columns:220px 1fr;gap:24px}article img{max-width:100%;max-height:280px;object-fit:contain}.badge{font-size:12px;text-transform:uppercase;color:#6ee7b7}h2{margin:4px 0}.release,.provenance{color:#9ca3af;font-size:13px}.description{white-space:pre-line}.assets{display:flex;gap:16px;flex-wrap:wrap}a{color:#93c5fd}.assets img{max-width:260px;max-height:160px}code{overflow-wrap:anywhere}.warning{color:#fbbf24}@media(max-width:650px){article{grid-template-columns:1fr}}</style><main><header><h1>{{.Platform}} · offline export</h1><p>Local metadata and media. ROM filenames preserved. {{.Target}} staging package.</p></header><div class="stats"><span>{{len .Records}} ROMs</span><span>{{.Matched}} matched</span><span>{{.Ambiguous}} ambiguous</span><span>{{.Unmatched}} unmatched</span><span>{{.MediaFiles}} media files</span></div>{{range .Records}}<article><div>{{with asset . "cover"}}<a href="{{.}}"><img src="{{.}}" alt="Selected cover"></a>{{end}}{{with asset . "logo"}}<img src="{{.}}" alt="Game logo">{{end}}</div><div><span class="badge">{{.Status}}</span><h2>{{value . "title"}}</h2><p class="release">{{.Release}}<br><code>{{.ROM}}</code></p>{{with value . "description"}}<p class="description">{{.}}</p>{{end}}{{with index .Fields "description"}}<p class="provenance">Description: {{.Source}} · {{.Language}}</p>{{end}}<p>{{value . "developer"}} · {{value . "publisher"}}<br>{{value . "genres"}} · {{value . "release_date"}}</p><div class="assets">{{with asset . "screenshot"}}<a href="{{.}}"><img src="{{.}}" alt="Gameplay screenshot"></a>{{end}}{{with asset . "video"}}<a href="{{.}}">Selected video</a>{{end}}</div>{{range .Warnings}}<p class="warning">{{.}}</p>{{end}}{{if ne .Status "matched"}}<p class="warning">{{.Reason}}</p>{{end}}</div></article>{{end}}<p><a href="report.txt">Coverage report</a> · <a href="manifest.json">Selection manifest</a> · <a href="{{root (xmlPath .)}}">Frontend XML</a> · <a href="README.txt">Installation notes</a></p></main></html>`
+const previewTemplate = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RomMeta · {{.Platform}} export</title><style>body{margin:0;background:#111827;color:#e5e7eb;font:16px/1.6 system-ui,sans-serif}main{max-width:1180px;margin:auto;padding:32px}h1{margin-bottom:0}header p{color:#9ca3af}.stats{display:flex;gap:20px;flex-wrap:wrap;margin:24px 0}.stats span{background:#1f2937;border-radius:10px;padding:12px 18px}article{background:#1f2937;border:1px solid #374151;border-radius:12px;margin:20px 0;padding:24px;display:grid;grid-template-columns:220px 1fr;gap:24px}article img{max-width:100%;max-height:280px;object-fit:contain}.badge{font-size:12px;text-transform:uppercase;color:#6ee7b7}h2{margin:4px 0}.release,.provenance{color:#9ca3af;font-size:13px}.description{white-space:pre-line}.assets{display:flex;gap:16px;flex-wrap:wrap}a{color:#93c5fd}.assets img{max-width:260px;max-height:160px}code{overflow-wrap:anywhere}.warning{color:#fbbf24}@media(max-width:650px){article{grid-template-columns:1fr}}</style><main><header><h1>{{.Platform}} · offline export</h1><p>Local metadata and media. ROM filenames preserved. {{.Target}} staging package.</p></header>{{with .LaunchBox}}<section><h2>{{len .Groups}} game cards · {{.VersionCount}} versions</h2>{{range $group := .Groups}}<h3>{{.Title}}</h3><ul>{{range .Versions}}<li>{{if eq .ID $group.Primary}}Primary · {{end}}{{.Name}}<br><code>{{.Path}}</code></li>{{end}}</ul>{{end}}{{range .Warnings}}<p class="warning">{{.}}</p>{{end}}</section>{{end}}<div class="stats"><span>{{len .Records}} ROMs</span><span>{{.Matched}} matched</span><span>{{.Ambiguous}} ambiguous</span><span>{{.Unmatched}} unmatched</span><span>{{.MediaFiles}} media files</span></div>{{range .Records}}<article><div>{{with asset . "cover"}}<a href="{{.}}"><img src="{{.}}" alt="Selected cover"></a>{{end}}{{with asset . "logo"}}<img src="{{.}}" alt="Game logo">{{end}}</div><div><span class="badge">{{.Status}}</span><h2>{{value . "title"}}</h2><p class="release">{{.Release}}<br><code>{{.ROM}}</code></p>{{with value . "description"}}<p class="description">{{.}}</p>{{end}}{{with index .Fields "description"}}<p class="provenance">Description: {{.Source}} · {{.Language}}</p>{{end}}<p>{{value . "developer"}} · {{value . "publisher"}}<br>{{value . "genres"}} · {{value . "release_date"}}</p><div class="assets">{{with asset . "screenshot"}}<a href="{{.}}"><img src="{{.}}" alt="Gameplay screenshot"></a>{{end}}{{with asset . "video"}}<a href="{{.}}">Selected video</a>{{end}}</div>{{range .Warnings}}<p class="warning">{{.}}</p>{{end}}{{if ne .Status "matched"}}<p class="warning">{{.Reason}}</p>{{end}}</div></article>{{end}}<p><a href="report.txt">Coverage report</a> · <a href="manifest.json">Selection manifest</a> · <a href="{{root (xmlPath .)}}">Frontend XML</a> · <a href="README.txt">Installation notes</a></p></main></html>`

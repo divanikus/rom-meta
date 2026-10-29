@@ -42,6 +42,7 @@ type Selection struct {
 }
 
 type Profile struct {
+	LaunchBox            LaunchBoxPolicy       `yaml:"launchbox,omitempty" json:"launchbox"`
 	SchemaVersion        int                   `yaml:"schema_version" json:"schema_version"`
 	Target               string                `yaml:"target" json:"target"`
 	Titles               TitlePolicy           `yaml:"titles" json:"titles"`
@@ -107,6 +108,7 @@ type DiscVariant struct {
 }
 
 type Record struct {
+	GameTitle       string              `json:"game_title,omitempty"`
 	DiscVariants    []DiscVariant       `json:"disc_variants,omitempty"`
 	Variant         string              `json:"variant,omitempty"`
 	VariantInfo     *VariantInfo        `json:"variant_info,omitempty"`
@@ -136,28 +138,29 @@ type Record struct {
 }
 
 type Plan struct {
-	HashMatches   int               `json:"hash_matches"`
-	NameMatches   int               `json:"name_matches"`
-	GameOnly      int               `json:"game_only"`
-	SchemaVersion int               `json:"schema_version"`
-	Target        string            `json:"target"`
-	Platform      string            `json:"platform"`
-	System        string            `json:"system"`
-	DataRoot      string            `json:"data_root"`
-	ROMRoot       string            `json:"rom_root"`
-	Out           string            `json:"-"`
-	SourceAPI     string            `json:"source_api,omitempty"`
-	MediaRoot     string            `json:"-"`
-	MediaPaths    map[string]string `json:"-"`
-	Context       context.Context   `json:"-"`
-	Profile       Profile           `json:"profile"`
-	Records       []Record          `json:"records"`
-	Matched       int               `json:"matched"`
-	Ambiguous     int               `json:"ambiguous"`
-	Unmatched     int               `json:"unmatched"`
-	Unsupported   int               `json:"unsupported"`
-	MediaFiles    int               `json:"media_files"`
-	MediaBytes    int64             `json:"media_bytes"`
+	LaunchBox     *LaunchBoxProjection `json:"launchbox,omitempty"`
+	HashMatches   int                  `json:"hash_matches"`
+	NameMatches   int                  `json:"name_matches"`
+	GameOnly      int                  `json:"game_only"`
+	SchemaVersion int                  `json:"schema_version"`
+	Target        string               `json:"target"`
+	Platform      string               `json:"platform"`
+	System        string               `json:"system"`
+	DataRoot      string               `json:"data_root"`
+	ROMRoot       string               `json:"rom_root"`
+	Out           string               `json:"-"`
+	SourceAPI     string               `json:"source_api,omitempty"`
+	MediaRoot     string               `json:"-"`
+	MediaPaths    map[string]string    `json:"-"`
+	Context       context.Context      `json:"-"`
+	Profile       Profile              `json:"profile"`
+	Records       []Record             `json:"records"`
+	Matched       int                  `json:"matched"`
+	Ambiguous     int                  `json:"ambiguous"`
+	Unmatched     int                  `json:"unmatched"`
+	Unsupported   int                  `json:"unsupported"`
+	MediaFiles    int                  `json:"media_files"`
+	MediaBytes    int64                `json:"media_bytes"`
 }
 
 var roles = map[string]struct{ Kind, Dir string }{
@@ -231,6 +234,10 @@ func loadProfileReader(root string, input io.Reader) (Profile, error) {
 		return p, fmt.Errorf("profile requires schema_version: 1 and target: es-de")
 	}
 	var err error
+	p.LaunchBox, err = normalizeLaunchBoxPolicy(p.LaunchBox)
+	if err != nil {
+		return p, err
+	}
 	p.Titles, err = normalizeTitlePolicy(p.Titles)
 	if err != nil {
 		return p, err

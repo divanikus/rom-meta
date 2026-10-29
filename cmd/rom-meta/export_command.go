@@ -136,6 +136,9 @@ func runExport(args []string) error {
 	return nil
 }
 func printExportSummary(plan *exporter.Plan) {
+	if plan.LaunchBox != nil {
+		fmt.Printf("%s: %d LaunchBox game cards | %d playable versions\n", plan.System, len(plan.LaunchBox.Groups), plan.LaunchBox.VersionCount)
+	}
 	c := exporter.Coverage(plan)
 	fmt.Printf("%s display: descriptions %d/%d | covers %d/%d | game-scope prose %d | unknown artwork categories %d\n", plan.System, c.Descriptions, c.Matched, c.Covers, c.Matched, c.GameDescriptions, c.UnknownVariants)
 	fmt.Printf("%s / %s: %d ROMs | matched: %d (%d hash / %d release or set name / %d game-name) | ambiguous: %d | unmatched: %d | unsupported: %d | media: %d files / %.1f MiB\n", plan.System, plan.Platform, len(plan.Records), plan.Matched, plan.HashMatches, plan.NameMatches, plan.GameOnly, plan.Ambiguous, plan.Unmatched, plan.Unsupported, plan.MediaFiles, float64(plan.MediaBytes)/(1024*1024))

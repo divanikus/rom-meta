@@ -207,6 +207,7 @@ func attachRecord(root string, g *game, release string, record *Record, profile 
 	if err := loadGameDocument(root, g); err != nil {
 		return err
 	}
+	record.GameTitle = g.name
 	record.Game, _ = filepath.Rel(root, g.path)
 	record.Game = filepath.ToSlash(record.Game)
 	record.Release = release

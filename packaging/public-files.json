@@ -41,6 +41,7 @@
     "docs/scummvm.md",
     "docs/source-setup.md",
     "examples/export-es-de-library.yaml",
+    "examples/export-launchbox.yaml",
     "examples/export-n64-es-de.yaml",
     "examples/export-romm-api.yaml",
     "go.mod",
