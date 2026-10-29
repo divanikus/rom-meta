@@ -45,6 +45,7 @@ See [source setup](docs/source-setup.md) for accounts/credentials and
 | Target | Integration | Output |
 | --- | --- | --- |
 | ES-DE | Built-in `export --target es-de`, with a local catalog or `--api` | Gamelists, selected media, preview and provenance reports |
+| LaunchBox | Built-in [export --target launchbox](docs/launchbox-export.md), local or over API | Native platform XML, selected media, preview and provenance reports |
 | RomM | Separate [server importer example](examples/romm-importer/README.md) | Metadata and media for already-scanned games in the pinned RomM runtime |
 
 See [supported input formats and export scenarios](docs/export-scenarios.md).

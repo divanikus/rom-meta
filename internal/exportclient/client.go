@@ -1,4 +1,4 @@
-// Package exportclient builds ES-DE output from local ROMs and a remote catalog.
+// Package exportclient builds frontend output from local ROMs and a remote catalog.
 package exportclient
 
 import (
@@ -165,6 +165,10 @@ func outputPath(path string) (string, error) {
 }
 
 func Build(ctx context.Context, options Options) (*Job, error) {
+	target, err := exporter.NormalizeTarget(options.Target)
+	if err != nil {
+		return nil, err
+	}
 	modes := 0
 	if options.Platform != "" {
 		modes++
@@ -223,7 +227,7 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 			return nil, err
 		}
 	}
-	batch := &exporter.BatchPlan{SchemaVersion: 1, Target: "es-de", ROMRoot: root, Out: out, Plans: []*exporter.Plan{}, Skipped: []exporter.SkippedSystem{}}
+	batch := &exporter.BatchPlan{SchemaVersion: 1, Target: target, ROMRoot: root, Out: out, Plans: []*exporter.Plan{}, Skipped: []exporter.SkippedSystem{}}
 	job := &Job{Batch: batch, Single: options.Platform != "", client: c, assets: map[string]catalogapi.ExportAsset{}, stamps: map[string]os.FileInfo{}, progress: options.Progress}
 	requested := append([]string(nil), options.Systems...)
 	if job.Single {
@@ -385,6 +389,9 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 		}
 		if plan != nil {
 			if err = exporter.FinalizeExport(plan); err != nil {
+				return nil, err
+			}
+			if err = exporter.ProjectTarget(plan, target); err != nil {
 				return nil, err
 			}
 			batch.Plans = append(batch.Plans, plan)

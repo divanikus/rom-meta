@@ -45,6 +45,10 @@ type hashes struct {
 }
 
 func Build(options Options) (*Plan, error) {
+	target, err := NormalizeTarget(options.Target)
+	if err != nil {
+		return nil, err
+	}
 	if options.ROMRoot == "" || options.Out == "" || options.Platform == "" {
 		return nil, fmt.Errorf("--rom-root, --out and --platform are required")
 	}
@@ -139,6 +143,9 @@ func Build(options Options) (*Plan, error) {
 		return nil, err
 	}
 	plan.ROMRoot, plan.Out, plan.Context = romRoot, out, options.Context
+	if err := ProjectTarget(plan, target); err != nil {
+		return nil, err
+	}
 	return plan, nil
 }
 

@@ -20,7 +20,7 @@ func runExport(args []string) error {
 	api := ""
 	all, list := false, false
 	flags.StringVar(&api, "api", "", "Catalog HTTP(S) origin; reads local ROMs without a local catalog")
-	flags.StringVar(&target, "target", "es-de", "Output target (es-de)")
+	flags.StringVar(&target, "target", "es-de", "Output target (es-de or launchbox)")
 	flags.StringVar(&options.DataRoot, "data-root", ".", "Local catalog root")
 	flags.StringVar(&options.Platform, "platform", "", "One catalog platform or supported ES-DE system")
 	flags.StringVar(&selected, "platforms", "", "Comma-separated ES-DE system directories under --rom-root")
@@ -34,7 +34,7 @@ func runExport(args []string) error {
 	flags.IntVar(&options.Limit, "limit", 0, "Maximum inputs per system in sorted path order (0: all)")
 	flags.BoolVar(&options.Apply, "apply", false, "Write a new staged package after planning")
 	flags.Usage = func() {
-		fmt.Fprint(os.Stdout, "rom-meta export builds an offline ES-DE package from existing ROMs.\n\nUse --platform for one system, --platforms for selected folders or --all for the ES-DE root.\nUse --api <origin> for a remote catalog, or --data-root for local files.\nDry-run by default; --apply writes only a new output directory.\nSource ROMs and catalog files stay unchanged. See --list-systems for readers.\n")
+		fmt.Fprint(os.Stdout, "rom-meta export builds an offline frontend package from existing ROMs.\n\nUse --platform for one system, --platforms for selected folders or --all for the ES-DE root.\nUse --api <origin> for a remote catalog, or --data-root for local files.\nDry-run by default; --apply writes only a new output directory.\nSource ROMs and catalog files stay unchanged. See --list-systems for readers.\n")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
@@ -46,9 +46,10 @@ func runExport(args []string) error {
 	if flags.NArg() != 0 {
 		return fmt.Errorf("unexpected positional export arguments")
 	}
-	if target != "es-de" {
-		return fmt.Errorf("export target is es-de")
+	if _, err := exporter.NormalizeTarget(target); err != nil {
+		return err
 	}
+	options.Target = target
 	if list {
 		fmt.Println("Supported ES-DE systems:", strings.Join(exporter.SupportedSystems(), ", "))
 		fmt.Println("Cartridges: raw/single-payload ZIP. Discs: standalone CHD/ISO. Arcade/MAME: saved set-name bindings for ZIP/7z; no payload/dependency validation.")
@@ -100,7 +101,7 @@ func runExport(args []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("\nES-DE export: %d systems | %d skipped\nOutput: %s\n", len(batch.Plans), len(batch.Skipped), batch.Out)
+		fmt.Printf("\n%s export: %d systems | %d skipped\nOutput: %s\n", target, len(batch.Plans), len(batch.Skipped), batch.Out)
 		for _, plan := range batch.Plans {
 			printExportSummary(plan)
 		}
@@ -131,7 +132,7 @@ func runExport(args []string) error {
 	if err := exporter.Apply(plan, options.Progress); err != nil {
 		return err
 	}
-	fmt.Printf("Created %s\nOpen preview.html, report.txt or gamelists/%s/gamelist.xml there.\n", plan.Out, plan.System)
+	fmt.Printf("Created %s\nOpen preview.html, report.txt and README.txt there.\n", plan.Out)
 	return nil
 }
 func printExportSummary(plan *exporter.Plan) {
@@ -163,7 +164,7 @@ func runNetworkExport(options exporter.Options, api, selected string, all bool) 
 	if err != nil {
 		return err
 	}
-	fmt.Printf("\nES-DE network export: %d systems | %d skipped\n", len(job.Batch.Plans), len(job.Batch.Skipped))
+	fmt.Printf("\n%s network export: %d systems | %d skipped\n", job.Batch.Target, len(job.Batch.Plans), len(job.Batch.Skipped))
 	for _, plan := range job.Batch.Plans {
 		printExportSummary(plan)
 	}
@@ -178,6 +179,6 @@ func runNetworkExport(options exporter.Options, api, selected string, all bool) 
 	if err = job.Apply(ctx); err != nil {
 		return err
 	}
-	fmt.Printf("Created %s\nOpen preview.html before installing in ES-DE.\n", job.Batch.Out)
+	fmt.Printf("Created %s\nOpen preview.html before installing in the frontend.\n", job.Batch.Out)
 	return nil
 }

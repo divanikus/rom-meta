@@ -18,7 +18,7 @@ import (
 type Options struct {
 	Context                                              context.Context
 	DataRoot, ROMRoot, Platform, Out, ProfilePath, Match string
-	System, ArcadeSnapshot                               string
+	Target, System, ArcadeSnapshot                       string
 	Limit                                                int
 	Apply                                                bool
 	Progress                                             func(stage, name string, current, total int)

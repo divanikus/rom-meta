@@ -4,6 +4,9 @@ Create a catalog without a DAT, game files or an installed ScummVM. RomMeta gets
 the game list from structured data in the official ScummVM website repository;
 existing providers supply descriptions, artwork and video.
 
+LaunchBox launch export needs detected local game-data folders; catalog cards
+alone are insufficient. See [LaunchBox scope](launchbox-export.md#scummvm).
+
 ## Prepare
 
 Build/install RomMeta from README. Online import needs public HTTPS access to

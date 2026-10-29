@@ -34,6 +34,11 @@ type BatchPlan struct {
 var errNoInputs = errors.New("no supported ROM inputs selected")
 
 func BuildBatch(options BatchOptions) (*BatchPlan, error) {
+	target, err := NormalizeTarget(options.Target)
+	if err != nil {
+		return nil, err
+	}
+	options.Target = target
 	if options.Platform != "" || options.All == (len(options.Systems) > 0) {
 		return nil, fmt.Errorf("choose --platform, --platforms or --all; batch needs --all or --platforms")
 	}
@@ -78,7 +83,7 @@ func BuildBatch(options BatchOptions) (*BatchPlan, error) {
 	if err != nil {
 		return nil, err
 	}
-	batch := &BatchPlan{SchemaVersion: 1, Target: "es-de", DataRoot: root, ROMRoot: romRoot, Out: out, Plans: []*Plan{}, Skipped: []SkippedSystem{}}
+	batch := &BatchPlan{SchemaVersion: 1, Target: target, DataRoot: root, ROMRoot: romRoot, Out: out, Plans: []*Plan{}, Skipped: []SkippedSystem{}}
 	seen := map[string]bool{}
 	for _, requestedSystem := range requested {
 		system := strings.ToLower(strings.TrimSpace(requestedSystem))
@@ -142,13 +147,21 @@ func ApplyBatch(batch *BatchPlan, progress func(string, string, int, int)) error
 	if len(batch.Plans) == 0 {
 		return fmt.Errorf("no systems with selected inputs; no package created")
 	}
+	seen := map[string]bool{}
+	for _, plan := range batch.Plans {
+		path := strings.ToLower(outputXMLPath(plan))
+		if seen[path] {
+			return fmt.Errorf("duplicate target platform output: %s", path)
+		}
+		seen[path] = true
+	}
 	staging, err := beginPackage(batch.DataRoot, batch.ROMRoot, batch.Out)
 	if err != nil {
 		return err
 	}
 	defer catalogfs.RemoveAll(staging)
 	var report strings.Builder
-	report.WriteString("RomMeta offline ES-DE batch export\n\n")
+	fmt.Fprintf(&report, "RomMeta offline %s batch export\n\n", batch.Target)
 	for _, plan := range batch.Plans {
 		childProgress := progress
 		if progress != nil {
@@ -174,10 +187,13 @@ func ApplyBatch(batch *BatchPlan, progress func(string, string, int, int)) error
 		return err
 	}
 	readme := fmt.Sprintf("RomMeta local/personal ES-DE batch package\n\nROM root: %s\nROMs and source catalog were not changed.\nOpen preview.html and per-system reports before installing.\nCopy gamelists/<system>/gamelist.xml into your configured ES-DE gamelists location.\nCopy downloaded_media/<system>/ into your configured ES-DE media directory.\nPreserve ROM filenames/subdirectories; keep copies of previous frontend metadata.\nSkipped systems have no generated files. Consumer/emulator compatibility is not verified.\nCHD container identities and MAME set-name bindings are described in per-system reports.\n", batch.ROMRoot)
+	if batch.Target == "launchbox" {
+		readme = launchBoxInstructions()
+	}
 	if err := writeOutput(filepath.Join(staging, "README.txt"), []byte(readme)); err != nil {
 		return err
 	}
-	t, err := template.New("batch").Parse(batchPreviewTemplate)
+	t, err := template.New("batch").Funcs(template.FuncMap{"xmlPath": outputXMLPath}).Parse(batchPreviewTemplate)
 	if err != nil {
 		return err
 	}
@@ -199,4 +215,4 @@ func reportSummary(plan *Plan) string {
 	return fmt.Sprintf("%s: %d ROMs; %d matched (%d hash / %d named release or set / %d game-only), %d ambiguous, %d unmatched, %d unsupported; %d media\n", plan.System, len(plan.Records), plan.Matched, plan.HashMatches, plan.NameMatches, plan.GameOnly, plan.Ambiguous, plan.Unmatched, plan.Unsupported, plan.MediaFiles)
 }
 
-const batchPreviewTemplate = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RomMeta · ES-DE export</title><style>body{max-width:1000px;margin:40px auto;padding:20px;background:#111827;color:#e5e7eb;font:16px/1.7 system-ui}a{color:#93c5fd}article{padding:20px;margin:16px 0;background:#1f2937;border-radius:10px}.warning{color:#fbbf24}</style><h1>ES-DE · offline export</h1><p>{{len .Plans}} systems · {{len .Skipped}} skipped</p>{{range .Plans}}<article><h2><a href="reports/{{.System}}/preview.html">{{.System}} · {{.Platform}}</a></h2><p>{{len .Records}} ROMs · {{.Matched}} matched · {{.Ambiguous}} ambiguous · {{.Unmatched}} unmatched · {{.Unsupported}} unsupported · {{.MediaFiles}} media</p><a href="gamelists/{{.System}}/gamelist.xml">Gamelist</a> · <a href="reports/{{.System}}/report.txt">Report</a></article>{{end}}{{range .Skipped}}<p class="warning">Skipped {{.System}}: {{.Reason}}</p>{{end}}<p><a href="manifest.json">Manifest</a> · <a href="report.txt">Summary</a> · <a href="README.txt">Installation</a></p></html>`
+const batchPreviewTemplate = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RomMeta · {{.Target}} export</title><style>body{max-width:1000px;margin:40px auto;padding:20px;background:#111827;color:#e5e7eb;font:16px/1.7 system-ui}a{color:#93c5fd}article{padding:20px;margin:16px 0;background:#1f2937;border-radius:10px}.warning{color:#fbbf24}</style><h1>{{.Target}} · offline export</h1><p>{{len .Plans}} systems · {{len .Skipped}} skipped</p>{{range .Plans}}<article><h2><a href="reports/{{.System}}/preview.html">{{.System}} · {{.Platform}}</a></h2><p>{{len .Records}} ROMs · {{.Matched}} matched · {{.Ambiguous}} ambiguous · {{.Unmatched}} unmatched · {{.Unsupported}} unsupported · {{.MediaFiles}} media</p><a href="{{xmlPath .}}">Frontend XML</a> · <a href="reports/{{.System}}/report.txt">Report</a></article>{{end}}{{range .Skipped}}<p class="warning">Skipped {{.System}}: {{.Reason}}</p>{{end}}<p><a href="manifest.json">Manifest</a> · <a href="report.txt">Summary</a> · <a href="README.txt">Installation</a></p></html>`

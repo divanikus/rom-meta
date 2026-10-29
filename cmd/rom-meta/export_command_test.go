@@ -27,6 +27,15 @@ func TestExportHelpAndArgumentValidation(t *testing.T) {
 	}
 }
 
+func TestLaunchBoxExportArgumentValidation(t *testing.T) {
+	if err := runExport([]string{"--target", "launchbox", "--list-systems"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := runExport([]string{"--target", "launchbox"}); err == nil || !strings.Contains(err.Error(), "required") {
+		t.Fatal(err)
+	}
+}
+
 func TestNetworkExportRejectsMixedCatalogRoots(t *testing.T) {
 	err := runExport([]string{"--api", "http://localhost:8787", "--data-root", ".", "--platform", "nes"})
 	if err == nil || !strings.Contains(err.Error(), "choose --api or --data-root") {

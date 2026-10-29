@@ -5,14 +5,15 @@ from generating frontend output. This matrix describes supported inputs, generat
 
 ## User paths
 
-| Scenario | Entry point | Output / evidence | Status in 0.1.0 |
+| Scenario | Entry point | Output / evidence | Status |
 | --- | --- | --- | --- |
 | One existing ROM system directory | `export --target es-de --platform gamegear` | New gamelist/media package; hash/name/game confidence and omissions in manifest | Implemented, experimental frontend projection |
 | Several ES-DE system folders | `export --all` or `--platforms n64,snes,psx,arcade` | One staged multi-system package; skipped systems reported; no partial final output on failure | Implemented |
 | ES-DE files with a remote catalog | `export --api <origin>` with `--platform`, `--platforms` or `--all` | Same readers, evidence and package as local mode; client hashes ROMs, server supplies selected metadata/media | Implemented; no ROM upload/catalog share |
+| LaunchBox with a local or remote catalog | [export --target launchbox](launchbox-export.md), single or batch | Native XML, UUID media, absolute launch paths; one card per accepted M3U | Implemented, experimental staging; configure emulators separately |
 | Reuse source/language/region/art preferences | `--profile` | Deterministic selected metadata/media with provenance; no provider network calls | Implemented |
 | Enrich already scanned RomM games | [Server importer](../examples/romm-importer/README.md) `plan`, `apply`, `check` | Native fields/provider slots and supported Resources; generated parts/receipts; fill-only default | Experimental, pinned RomM 5.4.1 runtime with native DB access |
-| Integrate a different consumer | `serve` `/v1/*` and `/docs` | Metadata/proof/asset API; consumer must implement its own mapping | API implemented; no additional built-in frontend exporter |
+| Integrate a different consumer | `serve` `/v1/*` and `/docs` | Metadata/proof/asset API; consumer must implement its own mapping | API implemented; custom consumer mapping required |
 
 The RomM server importer needs native runtime/DB handlers and Resources access.
 A website login or stock edit-API token alone does not configure this example.
@@ -69,5 +70,5 @@ whole-collection file ceiling; generated parts bound lookup/apply work. See the
 
 The tests use synthetic fixtures to check recognition, projection, transport and
 preservation rules. They do not validate emulator compatibility or gameplay.
-New RomM versions need runtime/schema review before use. Further frontend targets,
+New RomM versions need runtime/schema review before use. Other frontend targets,
 arbitrary templates and broader disc/arcade proof remain unsupported.

@@ -527,3 +527,74 @@ func TestRemoteMixedDiscAndDigitalCatalogParity(t *testing.T) {
 		t.Fatalf("mixed --all: %+v %+v %v", local, remote, err)
 	}
 }
+
+func TestLaunchBoxLocalNetworkParity(t *testing.T) {
+	for _, system := range []string{"n64", "psx"} {
+		t.Run(system, func(t *testing.T) {
+			root, roms := t.TempDir(), t.TempDir()
+			data := []byte("synthetic game bytes")
+			ext := ".z64"
+			if system == "psx" {
+				ext = ".chd"
+			}
+			name := "Game (USA)" + ext
+			card(t, root, system, "Game", "Game", "Game (USA)", name, data)
+			if system == "psx" {
+				put(t, filepath.Join(roms, "Game.m3u", "Game.m3u"), []byte(name+"\n"))
+				put(t, filepath.Join(roms, "Game.m3u", name), data)
+			} else {
+				put(t, filepath.Join(roms, name), data)
+			}
+			api := server(t, root, nil)
+			options := exporter.Options{DataRoot: root, ROMRoot: roms, Platform: system, Target: "launchbox", Out: filepath.Join(t.TempDir(), "local")}
+			local, err := exporter.Build(options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = exporter.Apply(local, nil); err != nil {
+				t.Fatal(err)
+			}
+			options.DataRoot = ""
+			options.Out = filepath.Join(t.TempDir(), "remote")
+			job, err := Build(context.Background(), Options{API: api.URL, BatchOptions: exporter.BatchOptions{Options: options}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if job.Batch.Target != "launchbox" || job.Batch.Plans[0].Target != "launchbox" {
+				t.Fatal("wrong remote target")
+			}
+			if err = job.Apply(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			native := func(root string) map[string]string {
+				result := map[string]string{}
+				err := filepath.WalkDir(root, func(path string, e os.DirEntry, err error) error {
+					if err != nil {
+						return err
+					}
+					rel, _ := filepath.Rel(root, path)
+					if !e.IsDir() && (strings.HasPrefix(rel, "Data"+string(filepath.Separator)) || strings.HasPrefix(rel, "Images"+string(filepath.Separator))) {
+						data, err := os.ReadFile(path)
+						if err != nil {
+							return err
+						}
+						result[rel] = fmt.Sprintf("%x", sha256.Sum256(data))
+					}
+					return nil
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				return result
+			}
+			if len(native(local.Out)) < 2 || !reflect.DeepEqual(native(local.Out), native(job.Batch.Out)) {
+				t.Fatal("local/network native package differs")
+			}
+			left, _ := json.Marshal(local.Records)
+			right, _ := json.Marshal(job.Batch.Plans[0].Records)
+			if string(left) != string(right) {
+				t.Fatal("local/network records differ")
+			}
+		})
+	}
+}

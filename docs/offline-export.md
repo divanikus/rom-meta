@@ -4,6 +4,8 @@ Generate gamelists, selected media and reports for existing ROMs. Local mode rea
 a prepared catalog offline; `--api` uses that catalog through `serve`. Neither
 mode modifies ROMs/catalogs. ES-DE/emulator integration remains experimental.
 
+For native LaunchBox XML/media, use the [LaunchBox exporter](launchbox-export.md).
+
 ## Quick start: existing ES-DE ROMs
 
 Prepare/import/fetch the catalog once. Export then generates metadata for the

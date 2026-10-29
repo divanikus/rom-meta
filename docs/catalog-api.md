@@ -4,7 +4,9 @@
 address. It uses the portable catalog without provider acquisition or a new
 authoritative database. Consumers include the
 [RomM importer](romm-server-importer.md) and
-[ES-DE exporter](offline-export.md#export-from-a-remote-catalog).
+[ES-DE exporter](offline-export.md#export-from-a-remote-catalog) and
+[LaunchBox exporter](launchbox-export.md). LaunchBox rendering runs on the client
+after existing export API validation; the server contract remains unchanged.
 
 ## Serve a complete catalog for native-inventory lookups
 
