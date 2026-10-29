@@ -57,7 +57,7 @@ func derivativeLabel(name string) bool {
 	}
 	return false
 }
-func matchEntry(entry Entry, ref string, names, hashes map[string][]target, useMD5 bool) ([]target, string, string) {
+func matchEntry(entry Entry, ref string, names, hashes map[string][]target, useMD5 bool, reviewPaths []string) ([]target, string, string) {
 	name := path.Base(ref)
 	stem := name
 	if romExtensions[strings.ToLower(path.Ext(name))] {
@@ -80,6 +80,12 @@ func matchEntry(entry Entry, ref string, names, hashes map[string][]target, useM
 	byHash := hashes[hash]
 	if len(byHash) == 0 {
 		return byName, "exact-release-name", "not-found"
+	}
+	for _, prefix := range reviewPaths {
+		current, review := strings.ToLower(ref), strings.ToLower(prefix)
+		if current == review || strings.HasPrefix(current, review+"/") {
+			return nil, "", "path-needs-review"
+		}
 	}
 	// A source-reported hash is a metadata association, not verification of the
 	// selected ROM. Never silently move an existing exact name to another target.

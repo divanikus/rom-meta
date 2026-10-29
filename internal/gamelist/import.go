@@ -28,6 +28,7 @@ type Options struct {
 	Apply                                                           bool
 	MatchMD5                                                        bool
 	MediaRoles                                                      map[string]string
+	MD5ReviewPaths                                                  []string
 	Progress                                                        func(string, int, int)
 }
 type Observation struct {
@@ -118,6 +119,16 @@ func sameNode(a, b *yaml.Node) bool {
 // Import attaches exact, unique release-name observations to existing cards.
 // Frontend IDs and reported hashes remain source evidence, never dump proof.
 func Import(o Options) (result Result, err error) {
+	for i, prefix := range o.MD5ReviewPaths {
+		if !o.MatchMD5 {
+			return result, fmt.Errorf("--md5-review-path requires --match-md5")
+		}
+		normalized, e := relativeRef(strings.TrimSuffix(prefix, "/"))
+		if e != nil {
+			return result, e
+		}
+		o.MD5ReviewPaths[i] = normalized
+	}
 	if err = validateMediaRoles(o.MediaRoles); err != nil {
 		return result, err
 	}
@@ -228,7 +239,7 @@ func Import(o Options) (result Result, err error) {
 			return result, fmt.Errorf("duplicate gamelist launch path %q", ref)
 		}
 		seen[ref] = true
-		candidates, method, hashStatus := matchEntry(entry, ref, index, hashIndex, o.MatchMD5)
+		candidates, method, hashStatus := matchEntry(entry, ref, index, hashIndex, o.MatchMD5, o.MD5ReviewPaths)
 		observation := Observation{Path: ref, Status: "unmatched", MatchMethod: method, MD5Status: hashStatus}
 		if hashStatus == "name-conflict" || strings.HasSuffix(hashStatus, "needs-review") {
 			result.HashReview++

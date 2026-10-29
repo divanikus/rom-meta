@@ -62,7 +62,7 @@ func TestReportedMD5AssociatesRenamedFileWithoutROM(t *testing.T) {
 }
 func TestReportedMD5HoldsConflictsVariantsAndComponents(t *testing.T) {
 	hash := strings.Repeat("a", 32)
-	for _, mode := range []string{"conflict", "variant", "component", "multi-file", "ambiguous", "derivative", "variant-folder"} {
+	for _, mode := range []string{"conflict", "variant", "component", "multi-file", "ambiguous", "derivative", "variant-folder", "review-path"} {
 		t.Run(mode, func(t *testing.T) {
 			o, game := fixture(t, false)
 			o.MatchMD5 = true
@@ -76,6 +76,10 @@ func TestReportedMD5HoldsConflictsVariantsAndComponents(t *testing.T) {
 			}
 			if mode == "variant-folder" {
 				name = "Variants/Renamed.zip"
+			}
+			if mode == "review-path" {
+				name = "Review/Renamed.zip"
+				o.MD5ReviewPaths = []string{"Review"}
 			}
 			xml = bytes.ReplaceAll(xml, []byte("Different label (USA).zip"), []byte(name))
 			xml = bytes.ReplaceAll(xml, []byte("<md5>unverified</md5>"), []byte("<md5>"+hash+"</md5>"))
@@ -116,7 +120,7 @@ func TestReportedMD5HoldsConflictsVariantsAndComponents(t *testing.T) {
 			if mode == "ambiguous" && r.Ambiguous != 1 {
 				t.Fatal(r)
 			}
-			if (mode == "conflict" || mode == "variant" || mode == "derivative" || mode == "variant-folder") && r.HashReview != 1 {
+			if (mode == "conflict" || mode == "variant" || mode == "derivative" || mode == "variant-folder" || mode == "review-path") && r.HashReview != 1 {
 				t.Fatal(r)
 			}
 		})

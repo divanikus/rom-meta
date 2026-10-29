@@ -31,6 +31,9 @@ and multi-file set hashes are excluded. Unique exact names can disambiguate equa
 hash targets. Name/hash conflicts, known derived variants and variant/mod/translation-labelled
 paths requiring a parent decision remain in the report. An unmatched hash falls
 back to names: some lists hash the complete ZIP, others the contained ROM.
+Use repeated `--md5-review-path <relative-path-or-prefix>` flags for sections
+known to retain unreliable hashes, for example `--md5-review-path review`.
+Matching those paths stays in review rather than silently accepting a base hash.
 The association retains `reported-md5` provenance and does not verify a ROM or
 create a fingerprint. Reports expose hash methods and review status. No ROM data
 is opened to perform this association.

@@ -85,7 +85,7 @@ func parseGamelistOptions(args []string) (o gamelist.Options, report string, hel
 		}
 		k, v, has := strings.Cut(a, "=")
 		switch k {
-		case "--data-root", "--platform", "--collection", "--language", "--member", "--origin", "--report", "--media-role":
+		case "--data-root", "--platform", "--collection", "--language", "--member", "--origin", "--report", "--media-role", "--md5-review-path":
 		default:
 			return o, report, false, fmt.Errorf("unknown gamelist option: %s", a)
 		}
@@ -100,6 +100,8 @@ func parseGamelistOptions(args []string) (o gamelist.Options, report string, hel
 			return o, report, false, fmt.Errorf("%s requires a value", k)
 		}
 		switch k {
+		case "--md5-review-path":
+			o.MD5ReviewPaths = append(o.MD5ReviewPaths, v)
 		case "--media-role":
 			tag, role, ok := strings.Cut(v, "=")
 			if !ok || tag == "" || role == "" {
@@ -149,6 +151,7 @@ Options:
   --report <file>     Private JSON report, including unresolved paths.
   --match-md5         Try source-reported MD5 against whole-file catalog fingerprints.
   --media-role <tag=role>  Override a media tag role; repeat for different tags.
+  --md5-review-path <path>  Hold known unreliable MD5 paths/prefixes for review; repeatable.
   --apply             Write source candidates and referenced media.
 
 Names require unique complete release names or explicit release aliases.
