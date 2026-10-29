@@ -12,6 +12,7 @@ import (
 
 	"rommeta/internal/catalogfs"
 	"rommeta/internal/catalogyaml"
+	"rommeta/internal/medianames"
 )
 
 // Issue is a validation problem tied to a repository path.
@@ -478,6 +479,10 @@ func isAllowedMediaName(name string) bool {
 }
 
 func mediaSourceName(name string) string {
+	parts := medianames.SourceParts(strings.Split(strings.TrimSuffix(name, filepath.Ext(name)), "."))
+	if len(parts) > 1 && strings.HasPrefix(parts[len(parts)-1], "gamelist.") {
+		return parts[len(parts)-1]
+	}
 	if match := sourceSpecificMediaName.FindStringSubmatch(name); len(match) >= 2 {
 		return match[1]
 	}

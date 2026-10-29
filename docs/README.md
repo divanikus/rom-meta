@@ -6,6 +6,7 @@ Start with the [operator walkthrough](cli-workflow.md) and
 | Task | Guide |
 | --- | --- |
 | Connect providers | [Source setup and credentials](source-setup.md) |
+| Import private gamelists | [Existing frontend metadata/media](gamelist-import.md) |
 | Import and enrich | [CLI workflow](cli-workflow.md), [fetch](fetch.md) |
 | Arcade or ScummVM input | [MAME import](arcade-import.md), [ScummVM](scummvm.md) |
 | Prepare translations/hacks | [Variants and inherited metadata](catalog-variants.md), [staging helper](prepare-variants.md) |

@@ -50,6 +50,11 @@ func runCommand() (code int) {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			return 2
 		}
+	case "gamelist":
+		if err := runGamelist(args[1:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
 	case "scummvm":
 		if err := runScummVM(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
@@ -182,6 +187,7 @@ Commands:
   init       Initialize catalog folders and source configuration.
   dat        Plan and import DAT/XML releases and fingerprints.
   scummvm    Import game cards from official ScummVM data.
+  gamelist   Import private ES-DE metadata and referenced media.
   fetch      Collect configured metadata, artwork and video.
   sources    Inspect configuration, credentials readiness and coverage.
   platforms  List platform aliases and source mappings.

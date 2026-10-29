@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
+	"rommeta/internal/medianames"
 	"rommeta/internal/zipnames"
 )
 
@@ -140,7 +141,7 @@ func PackName(member string) (string, error) {
 	}
 	name := path.Base(member)
 	stem := strings.TrimSuffix(name, path.Ext(name))
-	parts := strings.Split(stem, ".")
+	parts := medianames.SourceParts(strings.Split(stem, "."))
 	source := "unattributed"
 	if len(parts) > 1 {
 		source = parts[len(parts)-1]
@@ -148,7 +149,7 @@ func PackName(member string) (string, error) {
 	if source == "" {
 		return "", fmt.Errorf("empty media source: %s", member)
 	}
-	for _, r := range source {
+	for _, r := range strings.TrimPrefix(source, "gamelist.") {
 		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
 			return "", fmt.Errorf("unsupported source token in %s", member)
 		}

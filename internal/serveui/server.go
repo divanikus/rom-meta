@@ -22,6 +22,7 @@ import (
 	"rommeta/internal/catalogstate"
 	"rommeta/internal/catalogyaml"
 	"rommeta/internal/httpdocs"
+	"rommeta/internal/medianames"
 	"rommeta/internal/platformnames"
 )
 
@@ -516,7 +517,7 @@ func mediaFile(root, path string) (localMediaFile, bool) {
 	rel = filepath.ToSlash(rel)
 	name := filepath.Base(path)
 	stem := strings.TrimSuffix(name, filepath.Ext(name))
-	parts := strings.Split(stem, ".")
+	parts := medianames.SourceParts(strings.Split(stem, "."))
 	kind := parts[0]
 	source := ""
 	if len(parts) > 1 {

@@ -31,5 +31,5 @@ func SplitVariant(parts []string) (string, []string) {
 		}
 		clean = append(clean, part)
 	}
-	return variant, clean
+	return variant, SourceParts(clean)
 }

@@ -21,6 +21,7 @@ RomMeta includes no ROMs, BIOS, provider database or downloaded artwork.
 | No-Intro | XML DAT files, including DAT members in ZIP archives; release attributes and ROM checksums |
 | Redump | XML DAT files, including DAT members in ZIP archives; disc releases and file checksums |
 | [MAME](docs/arcade-import.md) | Official `listxml` XML/ZIP input with version-matched classifications, set components and parent/clone relationships |
+| [Private gamelists](docs/gamelist-import.md) | ES-DE/EmulationStation XML or ZIP packs with referenced media; enrichment of existing catalog releases |
 | [ScummVM](docs/scummvm.md) | Structured official game list imported as game cards; no DAT or game files required |
 
 ## Metadata and media sources
