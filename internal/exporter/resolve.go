@@ -14,6 +14,7 @@ import (
 	"rommeta/internal/catalogfs"
 	"rommeta/internal/catalogyaml"
 	"rommeta/internal/medianames"
+	"rommeta/internal/titlematch"
 )
 
 type candidate struct {
@@ -260,7 +261,12 @@ func resolveMedia(root string, g *game, release, rom string, profile Profile, re
 			fromRelease := ""
 			if parent != mediaRoot {
 				fromRelease = filepath.Base(parent)
-				if !(releaseSpecific && fromRelease == release) && rule.Scope != "game" {
+				if fromRelease != release && rule.Scope != "game" {
+					continue
+				}
+				// Metadata release ownership does not assert dump verification.
+				// Game-wide fallback may reuse regions, but not another edition.
+				if release != "" && !titlematch.CompatibleSymbols(releaseTitleContext(g.root, release).Regional, releaseTitleContext(g.root, fromRelease).Regional) {
 					continue
 				}
 			}
@@ -325,7 +331,7 @@ func resolveMedia(root string, g *game, release, rom string, profile Profile, re
 			scope := 1
 			if fromRelease != "" {
 				scope = 2
-				if releaseSpecific && fromRelease == release {
+				if fromRelease == release {
 					scope = 0
 				}
 			}

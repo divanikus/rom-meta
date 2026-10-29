@@ -3,6 +3,7 @@ package exporter
 import (
 	"os"
 	"path/filepath"
+	"rommeta/internal/catalogyaml"
 	"strings"
 	"testing"
 )
@@ -59,5 +60,44 @@ func TestMediaOverrideRejectsUnsafeDuplicateAndMissingFiles(t *testing.T) {
 	profile(t, &options, "schema_version: 1\ntarget: es-de\ntitles: {mode: regional, labels: keep, variants: auto}\nmedia_overrides:\n  - game: platforms/Nintendo - Nintendo 64/Example\n    release: Example (USA)\n    role: cover\n    path: media/missing.png\n")
 	if _, err := Build(options); err == nil {
 		t.Fatal("missing pinned file silently fell back")
+	}
+}
+
+func TestMediaOwnershipKeepsEditionsSeparateForUnverifiedNames(t *testing.T) {
+	root := t.TempDir()
+	card := filepath.Join(root, "platforms", "Test", "Example")
+	doc, err := catalogyaml.Parse([]byte("title: Example\nreleases:\n  Example (USA): {title: Example, regions: [USA]}\n  Example+ (USA): {title: Example+, regions: [USA]}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := &game{path: card, name: "Example", root: doc.Root()}
+	p, err := loadProfileReader("", strings.NewReader("schema_version: 1\ntarget: es-de\nselection:\n  media:\n    cover: {scope: game}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"Example (USA)", "Example+ (USA)"} {
+		put(t, filepath.Join(card, "media", name, "box-front.usa.launchbox.jpg"), []byte(name))
+	}
+	for _, verified := range []bool{false, true} {
+		for _, release := range []string{"Example (USA)", "Example+ (USA)"} {
+			media, _, err := resolveMedia(root, g, release, "example.zip", p, verified, "test")
+			if err != nil || !strings.Contains(media["cover"].SourcePath, "/"+release+"/") {
+				t.Fatalf("%s verified=%v: %+v %v", release, verified, media, err)
+			}
+		}
+	}
+	if err := os.Remove(filepath.Join(card, "media", "Example (USA)", "box-front.usa.launchbox.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	media, _, err := resolveMedia(root, g, "Example (USA)", "example.zip", p, false, "test")
+	if err != nil || media["cover"].SourcePath != "" {
+		t.Fatalf("borrowed Plus cover: %+v %v", media, err)
+	}
+	rule := p.Selection.Media["cover"]
+	rule.Scope = "release"
+	p.Selection.Media["cover"] = rule
+	media, _, err = resolveMedia(root, g, "Example+ (USA)", "example.zip", p, false, "test")
+	if err != nil || !strings.Contains(media["cover"].SourcePath, "/Example+ (USA)/") {
+		t.Fatalf("name-only metadata lost its own media: %+v %v", media, err)
 	}
 }

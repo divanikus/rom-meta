@@ -182,3 +182,7 @@ not establish an unofficial match; edition and ambiguity checks still apply.
 Grouped media for an edition with a different plus/prime marker stays in that
 edition’s release folders. Identical URLs retain each required release path.
 Existing files need a reviewed ownership repair; fetch does not relocate them.
+
+Export media fallback also retains plus/prime boundaries. A known metadata
+release selects its own folder even for an unverified catalog-name association;
+this does not verify the ROM dump. Reviewed media overrides remain explicit.
