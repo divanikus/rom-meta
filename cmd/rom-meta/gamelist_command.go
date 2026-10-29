@@ -88,7 +88,7 @@ func parseGamelistOptions(args []string) (o gamelist.Options, report string, hel
 		}
 		k, v, has := strings.Cut(a, "=")
 		switch k {
-		case "--data-root", "--platform", "--collection", "--language", "--member", "--origin", "--report", "--media-role", "--md5-review-path":
+		case "--data-root", "--platform", "--collection", "--language", "--member", "--origin", "--report", "--media-role", "--md5-review-path", "--nes-rom-root":
 		default:
 			return o, report, false, fmt.Errorf("unknown gamelist option: %s", a)
 		}
@@ -103,6 +103,8 @@ func parseGamelistOptions(args []string) (o gamelist.Options, report string, hel
 			return o, report, false, fmt.Errorf("%s requires a value", k)
 		}
 		switch k {
+		case "--nes-rom-root":
+			o.NESROMRoot = v
 		case "--md5-review-path":
 			o.MD5ReviewPaths = append(o.MD5ReviewPaths, v)
 		case "--media-role":
@@ -154,13 +156,14 @@ Options:
   --origin <id>       Stable relative identifier for repeated imports of one list.
   --report <file>     Private JSON report, including unresolved paths.
   --match-md5         Try source-reported MD5 against whole-file catalog fingerprints.
+  --nes-rom-root <dir>  Also compare legacy NES headers using verified existing local ROMs.
   --media-role <tag=role>  Override a media tag role; repeat for different tags.
   --md5-review-path <path>  Hold known unreliable MD5 paths/prefixes for review; repeatable.
   --apply             Write source candidates and referenced media.
 
-Names require unique complete release names or explicit release aliases.
+Names use complete release names/aliases or guarded legacy region notation.
 --match-md5 first tries existing whole-file fingerprints; conflicts/variants need review.
 Unresolved entries remain in the report; no cards, releases or fingerprints are invented.
 Imported curation is private by default. Existing canonical fields and other sources survive.
-No ROM payload is read, extracted or copied.`)
+ROM inputs are read only with --nes-rom-root; no ROM is rewritten or copied.`)
 }

@@ -25,3 +25,10 @@ func TestGamelistHashAndRoleOptions(t *testing.T) {
 		}
 	}
 }
+
+func TestGamelistNESROMRootOption(t *testing.T) {
+	o, _, _, err := parseGamelistOptions([]string{"input.xml", "--collection", "sample", "--language", "en", "--match-md5", "--nes-rom-root", "existing-roms"})
+	if err != nil || !o.MatchMD5 || o.NESROMRoot != "existing-roms" {
+		t.Fatal(o, err)
+	}
+}

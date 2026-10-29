@@ -23,7 +23,7 @@ func addTarget(index map[string][]target, key string, t target) {
 	}
 	index[key] = append(index[key], t)
 }
-func addMD5Targets(index map[string][]target, game string, doc *catalogyaml.Document) error {
+func addMD5Targets(index map[string][]target, sizes map[target]int64, game string, doc *catalogyaml.Document) error {
 	fingerprints, err := catalogcache.ReadFingerprints(game + "/fingerprints.yaml")
 	if err != nil {
 		return err
@@ -44,10 +44,15 @@ func addMD5Targets(index map[string][]target, game string, doc *catalogyaml.Docu
 		} else if fp.Release == "" || catalogyaml.Value(catalogyaml.Value(doc.Root(), "releases"), fp.Release) == nil {
 			continue
 		}
-		addTarget(index, md5, target{game: game, release: fp.Release, variant: fp.Variant})
+		t := target{game: game, release: fp.Release, variant: fp.Variant}
+		addTarget(index, md5, t)
+		sizes[t] = fp.Size
 	}
 	return nil
 }
+
+var alteredDumpLabel = regexp.MustCompile(`(?i)\[(?:[abfhopt][0-9][^\]]*|[abfhopt])\]`)
+
 func derivativeLabel(name string) bool {
 	n := "/" + strings.ToLower(name)
 	for _, label := range []string{"/translations/", "/variants/", "/variant/", "/mods/", "/hack/", "/hacks/", "[t-", "[t+", "[hack", "[rus", "[ru ", "(hack)"} {
@@ -55,9 +60,9 @@ func derivativeLabel(name string) bool {
 			return true
 		}
 	}
-	return false
+	return alteredDumpLabel.MatchString(n)
 }
-func matchEntry(entry Entry, ref string, names, hashes map[string][]target, useMD5 bool, reviewPaths []string) ([]target, string, string) {
+func matchEntry(entry Entry, ref string, names, legacyNames, hashes, legacyHashes map[string][]target, useMD5 bool, reviewPaths []string) ([]target, string, string) {
 	name := path.Base(ref)
 	stem := name
 	if romExtensions[strings.ToLower(path.Ext(name))] {
@@ -67,38 +72,71 @@ func matchEntry(entry Entry, ref string, names, hashes map[string][]target, useM
 	if len(byName) == 0 {
 		byName = names[nameKey(stem)]
 	}
+	nameMethod := "exact-release-name"
+	if len(byName) == 0 && !derivativeLabel(ref) && !pathNeedsReview(ref, reviewPaths) {
+		if keys := legacyNameKeys(stem, false); len(keys) == 1 {
+			byName = legacyNames[keys[0]]
+			if len(byName) > 0 {
+				nameMethod = "legacy-release-name"
+			}
+		}
+	}
 	if !useMD5 {
-		return byName, "exact-release-name", ""
+		return byName, nameMethod, ""
 	}
 	hash := strings.ToLower(strings.TrimSpace(entry.MD5))
 	if hash == "" {
-		return byName, "exact-release-name", "absent"
+		return byName, nameMethod, "absent"
 	}
 	if !md5Pattern.MatchString(hash) {
-		return byName, "exact-release-name", "invalid"
+		return byName, nameMethod, "invalid"
 	}
-	byHash := hashes[hash]
-	if len(byHash) == 0 {
-		return byName, "exact-release-name", "not-found"
+	byHash := append([]target(nil), hashes[hash]...)
+	hashMethod := "reported-md5"
+	if len(byHash) == 0 && len(legacyHashes[hash]) > 0 {
+		hashMethod = "reported-md5-legacy-nes-header"
 	}
-	for _, prefix := range reviewPaths {
-		current, review := strings.ToLower(ref), strings.ToLower(prefix)
-		if current == review || strings.HasPrefix(current, review+"/") {
-			return nil, "", "path-needs-review"
+	for _, candidate := range legacyHashes[hash] {
+		found := false
+		for _, old := range byHash {
+			found = found || old == candidate
 		}
+		if !found {
+			byHash = append(byHash, candidate)
+		}
+	}
+	if len(byHash) == 0 {
+		return byName, nameMethod, "not-found"
+	}
+	if pathNeedsReview(ref, reviewPaths) {
+		return nil, "", "path-needs-review"
 	}
 	// A source-reported hash is a metadata association, not verification of the
 	// selected ROM. Never silently move an existing exact name to another target.
-	if len(byName) == 1 {
-		for _, t := range byHash {
-			if t == byName[0] {
-				return byName, "reported-md5-and-name", "matched"
+	if len(byName) > 0 {
+		var common []target
+		for _, hashTarget := range byHash {
+			for _, nameTarget := range byName {
+				if hashTarget == nameTarget {
+					common = append(common, hashTarget)
+					break
+				}
 			}
 		}
-		return nil, "", "name-conflict"
+		if len(common) == 0 {
+			return nil, "", "name-conflict"
+		}
+		if len(common) != 1 {
+			return common, hashMethod, "ambiguous"
+		}
+		suffix := "name"
+		if nameMethod == "legacy-release-name" {
+			suffix = "legacy-name"
+		}
+		return common, hashMethod + "-and-" + suffix, "matched"
 	}
 	if len(byHash) != 1 {
-		return byHash, "reported-md5", "ambiguous"
+		return byHash, hashMethod, "ambiguous"
 	}
 	if byHash[0].variant != "" {
 		return nil, "", "variant-needs-review"
@@ -106,7 +144,7 @@ func matchEntry(entry Entry, ref string, names, hashes map[string][]target, useM
 	if derivativeLabel(ref) {
 		return nil, "", "derivative-needs-review"
 	}
-	return byHash, "reported-md5", "matched"
+	return byHash, hashMethod, "matched"
 }
 func validateMediaRoles(roles map[string]string) error {
 	tags := map[string]bool{"image": true, "thumbnail": true, "marquee": true, "video": true, "fanart": true, "manual": true}

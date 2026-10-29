@@ -1,4 +1,4 @@
-// Package gamelist harvests private frontend curation without reading ROM payloads.
+// Package gamelist harvests private frontend curation with optional local NES evidence.
 package gamelist
 
 import (

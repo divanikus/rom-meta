@@ -25,6 +25,7 @@ import (
 
 type Options struct {
 	Input, Member, Origin, DataRoot, Platform, Collection, Language string
+	NESROMRoot                                                      string
 	Apply                                                           bool
 	MatchMD5                                                        bool
 	MediaRoles                                                      map[string]string
@@ -121,9 +122,12 @@ func sameNode(a, b *yaml.Node) bool {
 	return bytes.Equal(x.Bytes(), y.Bytes())
 }
 
-// Import attaches exact, unique release-name observations to existing cards.
+// Import attaches uniquely qualified release-name or guarded hash observations.
 // Frontend IDs and reported hashes remain source evidence, never dump proof.
 func Import(o Options) (result Result, err error) {
+	if o.NESROMRoot != "" && !o.MatchMD5 {
+		return result, fmt.Errorf("--nes-rom-root requires --match-md5")
+	}
 	for i, prefix := range o.MD5ReviewPaths {
 		if !o.MatchMD5 {
 			return result, fmt.Errorf("--md5-review-path requires --match-md5")
@@ -174,6 +178,9 @@ func Import(o Options) (result Result, err error) {
 	if !safeRelative(platform) || strings.Contains(platform, "/") {
 		return result, fmt.Errorf("invalid catalog platform")
 	}
+	if o.NESROMRoot != "" && platform != "Nintendo - Nintendo Entertainment System" {
+		return result, fmt.Errorf("--nes-rom-root is only supported for the NES platform")
+	}
 	platformRoot := filepath.Join(root, "platforms", platform)
 	folders, err := catalogfs.ReadDir(platformRoot)
 	if err != nil {
@@ -182,7 +189,9 @@ func Import(o Options) (result Result, err error) {
 	source := "gamelist." + o.Collection
 	result = Result{Collection: o.Collection, Source: source, Platform: platform, Origin: in.origin, Apply: o.Apply, Entries: len(in.entries), Observations: []Observation{}}
 	index := map[string][]target{}
+	legacyIndex := map[string][]target{}
 	hashIndex := map[string][]target{}
+	fingerprintSizes := map[target]int64{}
 	cards := map[string]*card{}
 	add := func(name string, t target) {
 		k := nameKey(name)
@@ -195,6 +204,9 @@ func Import(o Options) (result Result, err error) {
 			}
 		}
 		index[k] = append(index[k], t)
+		for _, key := range legacyNameKeys(name, true) {
+			addTarget(legacyIndex, key, t)
+		}
 	}
 	for _, folder := range folders {
 		if !folder.IsDir() || strings.HasPrefix(folder.Name(), ".") {
@@ -214,7 +226,7 @@ func Import(o Options) (result Result, err error) {
 		}
 		cards[game] = &card{original: body, doc: doc, media: map[string]asset{}}
 		if o.MatchMD5 {
-			if e = addMD5Targets(hashIndex, game, doc); e != nil {
+			if e = addMD5Targets(hashIndex, fingerprintSizes, game, doc); e != nil {
 				return result, e
 			}
 		}
@@ -231,6 +243,13 @@ func Import(o Options) (result Result, err error) {
 			return result, e
 		}
 	}
+	legacyHashes := map[string][]target{}
+	if o.NESROMRoot != "" {
+		legacyHashes, err = addNESHeaderTargets(o.NESROMRoot, hashIndex, fingerprintSizes)
+		if err != nil {
+			return result, err
+		}
+	}
 	seen := map[string]bool{}
 	for i, entry := range in.entries {
 		if o.Progress != nil {
@@ -244,7 +263,7 @@ func Import(o Options) (result Result, err error) {
 			return result, fmt.Errorf("duplicate gamelist launch path %q", ref)
 		}
 		seen[ref] = true
-		candidates, method, hashStatus := matchEntry(entry, ref, index, hashIndex, o.MatchMD5, o.MD5ReviewPaths)
+		candidates, method, hashStatus := matchEntry(entry, ref, index, legacyIndex, hashIndex, legacyHashes, o.MatchMD5, o.MD5ReviewPaths)
 		observation := Observation{Path: ref, Status: "unmatched", MatchMethod: method, MD5Status: hashStatus}
 		if hashStatus == "name-conflict" || strings.HasSuffix(hashStatus, "needs-review") {
 			result.HashReview++

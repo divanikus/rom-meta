@@ -18,10 +18,15 @@ It names the source `gamelist.<collection>` in metadata, media filenames and the
 root source policy. The technical adapter is recorded as `importer: es-de`.
 Description language is explicit and independent of the gamelist's ROM language.
 
-By default, only unique complete ROM basenames, release keys, authority names
-and explicit release aliases on the selected platform are associated. Matching preserves
-punctuation and qualifiers; it never strips translation/hack labels to guess a
-parent. Unmatched and ambiguous entries remain in the private JSON report.
+Complete ROM basenames, release keys, authority names and explicit release aliases
+are tried first on the selected platform. A guarded legacy fallback recognizes
+region notation such as `(U)`, `(E)` and `(UE)`, plus the `[!]` dump marker. It
+preserves the complete title, punctuation, region set, revision, edition and
+unknown qualifiers. Catalog language-only and `GB Compatible` annotations may be
+absent in an older list; if that leaves multiple releases, the entry stays ambiguous.
+Explicit source language annotations remain constraints. Translation/hack paths and
+altered-dump flags do not use this fallback. No guessed aliases are written.
+Unmatched and ambiguous entries remain in the private JSON report.
 Frontend IDs and reported MD5 values remain source observations; they do not
 create provider IDs, releases, fingerprints, aliases or fold evidence.
 
@@ -35,8 +40,22 @@ Use repeated `--md5-review-path <relative-path-or-prefix>` flags for sections
 known to retain unreliable hashes, for example `--md5-review-path review`.
 Matching those paths stays in review rather than silently accepting a base hash.
 The association retains `reported-md5` provenance and does not verify a ROM or
-create a fingerprint. Reports expose hash methods and review status. No ROM data
-is opened to perform this association.
+create a fingerprint. Reports expose hash methods and review status. Ordinary
+name/MD5 association opens no ROM data.
+
+For an NES list reporting older iNES headers, optionally add
+`--nes-rom-root <existing-local-nes-directory>` together with `--match-md5`.
+This scans caller-provided raw `.nes` and single-ROM ZIP files. A local file must
+first match an eligible registered whole-file MD5 and size. The importer then
+computes an older header representation in memory and records
+`reported-md5-legacy-nes-header` evidence. Extended mapper/size and nonstandard
+console fields are skipped; collisions, variants and derivative paths keep their
+review rules. The comparison is a metadata association, not a new verified dump
+or a claim that header hardware fields are equivalent. Source-reported MD5 stays
+unchanged. No ROM, fingerprint or alias is written, downloaded or converted.
+The existing [iNES](https://www.nesdev.org/wiki/INES) and
+[NES 2.0](https://www.nesdev.org/wiki/NES_2.0) header layouts explain why full-file
+checksums can differ while the ROM payload is the same.
 
 Existing canonical fields, other provider stanzas and unrelated fields survive.
 Repeated observations use the same source-file/path identity; `--origin` supplies
