@@ -68,6 +68,7 @@ type ImportResult struct {
 	GameFileCount               int
 	NotFoundGameCount           int
 	WrittenFileCount            int
+	SkippedPreservedCount       int
 	SkippedExistingCount        int
 	SkippedWithoutEvidenceCount int
 	FailedLookupCount           int
@@ -86,13 +87,14 @@ type ImportFailure struct {
 }
 
 type catalogGame struct {
-	MAMEReleases   []catalogcache.Release
-	Platform       string
-	Path           string
-	Title          string
-	DefaultRelease string
-	Sources        []string
-	Fingerprints   []catalogcache.Fingerprint
+	PreservedSources []string
+	MAMEReleases     []catalogcache.Release
+	Platform         string
+	Path             string
+	Title            string
+	DefaultRelease   string
+	Sources          []string
+	Fingerprints     []catalogcache.Fingerprint
 }
 
 type sourceSettings struct {
@@ -892,12 +894,13 @@ func HasLookupEvidence(game catalogcache.Game) bool {
 
 func catalogGameFromCached(cached catalogcache.Game) catalogGame {
 	game := catalogGame{
-		Platform:       cached.Platform,
-		Path:           cached.Path,
-		Title:          cached.Title,
-		DefaultRelease: cached.DefaultRelease,
-		Sources:        cached.Sources,
-		Fingerprints:   cached.Fingerprints,
+		Platform:         cached.Platform,
+		Path:             cached.Path,
+		Title:            cached.Title,
+		DefaultRelease:   cached.DefaultRelease,
+		Sources:          cached.Sources,
+		PreservedSources: cached.PreservedSources,
+		Fingerprints:     cached.Fingerprints,
 	}
 	for _, release := range cached.Releases {
 		if release.MAMESet != "" {

@@ -131,6 +131,13 @@ func linkState(data []byte, entry linkReviewEntry, platformID int) (bool, error)
 	if e != nil {
 		return false, e
 	}
+	preserved, e := catalogyaml.SourcePreserved(doc.Root(), "igdb")
+	if e != nil {
+		return false, e
+	}
+	if preserved {
+		return false, fmt.Errorf("igdb source is preserved; remove it from fetch.preserve_sources before reviewing a replacement")
+	}
 	hasheous := catalogyaml.Value(catalogyaml.Value(catalogyaml.Value(doc.Root(), "sources"), "hasheous"), "matches")
 	var refs []map[string]any
 	if hasheous != nil {

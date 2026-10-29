@@ -1,6 +1,8 @@
 package sourceyaml
 
 import (
+	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,5 +60,28 @@ func TestWriteSourceMetadataPreservesOtherCatalogBlocks(t *testing.T) {
 		if !strings.Contains(text, wanted) {
 			t.Fatalf("missing %q:\n%s", wanted, text)
 		}
+	}
+}
+
+func TestWriterCannotReplacePreservedSource(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "game.yaml")
+	before := []byte("title: Game\nfetch: {preserve_sources: [igdb]}\nsources: {igdb: {status: not_found}, launchbox: {status: not_found}}\n")
+	if err := os.WriteFile(p, before, 0600); err != nil {
+		t.Fatal(err)
+	}
+	err := WriteSourceMetadata(p, "igdb", "    matches: [{igdb_id: 99}]\n")
+	if !errors.Is(err, ErrSourcePreserved) {
+		t.Fatalf("protected write accepted: %v", err)
+	}
+	after, _ := os.ReadFile(p)
+	if !bytes.Equal(before, after) {
+		t.Fatal("protected bytes changed")
+	}
+	if err := WriteSourceMetadata(p, "launchbox", "    status: refreshed\n"); err != nil {
+		t.Fatal(err)
+	}
+	after, _ = os.ReadFile(p)
+	if !bytes.Contains(after, []byte("preserve_sources")) || !bytes.Contains(after, []byte("igdb:")) {
+		t.Fatal("unrelated refresh discarded controls")
 	}
 }

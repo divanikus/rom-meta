@@ -45,18 +45,19 @@ type ImportOptions struct {
 
 // ImportResult describes a dry-run or applied LaunchBox enrichment.
 type ImportResult struct {
-	DataRoot             string
-	ZipPath              string
-	Snapshot             SnapshotResult
-	PlatformCount        int
-	GameBundleCount      int
-	ReleaseCount         int
-	MatchedReleaseCount  int
-	GameFileCount        int
-	NotFoundGameCount    int
-	WrittenFileCount     int
-	SkippedExistingCount int
-	Apply                bool
+	DataRoot              string
+	ZipPath               string
+	Snapshot              SnapshotResult
+	PlatformCount         int
+	GameBundleCount       int
+	ReleaseCount          int
+	MatchedReleaseCount   int
+	GameFileCount         int
+	NotFoundGameCount     int
+	WrittenFileCount      int
+	SkippedPreservedCount int
+	SkippedExistingCount  int
+	Apply                 bool
 }
 
 // SnapshotResult describes the LaunchBox snapshot used by a fetch.
@@ -123,14 +124,15 @@ type catalogRelease struct {
 }
 
 type catalogGame struct {
-	ArcadePlatform string
-	Platform       string
-	Folder         string
-	Path           string
-	Title          string
-	Aliases        []string
-	Releases       []catalogRelease
-	Sources        []string
+	PreservedSources []string
+	ArcadePlatform   string
+	Platform         string
+	Folder           string
+	Path             string
+	Title            string
+	Aliases          []string
+	Releases         []catalogRelease
+	Sources          []string
 }
 
 type releaseMetadata struct {
@@ -253,6 +255,10 @@ func Import(options ImportOptions) (ImportResult, error) {
 		}
 	})
 	platformCount, gameCount, err := streamCatalogGames(dataRoot, options.Platform, "launchbox", options.ForceOverwrite, streamProgress, func(game catalogGame) error {
+		if catalogcache.HasSource(game.PreservedSources, "launchbox") {
+			result.SkippedPreservedCount++
+			return nil
+		}
 		if !options.ForceOverwrite && catalogcache.HasSource(game.Sources, "launchbox") {
 			result.SkippedExistingCount++
 			return nil
@@ -1940,14 +1946,15 @@ func catalogGameFromCached(cached catalogcache.Game) catalogGame {
 		})
 	}
 	return catalogGame{
-		ArcadePlatform: cached.ArcadePlatform,
-		Platform:       cached.Platform,
-		Folder:         cached.Folder,
-		Path:           cached.Path,
-		Title:          cached.Title,
-		Aliases:        cached.Aliases,
-		Releases:       releases,
-		Sources:        cached.Sources,
+		ArcadePlatform:   cached.ArcadePlatform,
+		Platform:         cached.Platform,
+		Folder:           cached.Folder,
+		Path:             cached.Path,
+		Title:            cached.Title,
+		Aliases:          cached.Aliases,
+		Releases:         releases,
+		Sources:          cached.Sources,
+		PreservedSources: cached.PreservedSources,
 	}
 }
 

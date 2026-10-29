@@ -102,7 +102,10 @@ func (p *importPipeline) submit(game catalogGame) error {
 		return err
 	}
 	skipped := false
-	if !p.options.ForceOverwrite && catalogcache.HasSource(game.Sources, "hasheous") {
+	if catalogcache.HasSource(game.PreservedSources, "hasheous") {
+		p.result.SkippedPreservedCount++
+		skipped = true
+	} else if !p.options.ForceOverwrite && catalogcache.HasSource(game.Sources, "hasheous") {
 		p.result.SkippedExistingCount++
 		skipped = true
 	} else if p.options.SkipWithoutEvidence && len(requests) == 0 {

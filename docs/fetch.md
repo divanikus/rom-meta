@@ -85,6 +85,25 @@ Partial fetch appends matches only for successful new downloads, preserving prio
 matches, custom fields and recovery evidence. Failed/zero downloads add no match;
 existing files resume by presence. These rules do not retroactively verify old media.
 
+## Preserve reviewed source decisions
+
+In a card's `game.yaml`, list source stanzas that acquisition must keep:
+
+```yaml
+fetch:
+  preserve_sources: [igdb, openvgdb]
+```
+
+This keeps accepted matches or reviewed `not_found` decisions even with
+`--force-overwrite`. Other sources refresh normally. Protected metadata is skipped
+before searches and limits; the summary reports `Preserved`. Notes alone do not
+activate preservation. Saved media candidates can still be downloaded.
+
+Remove a source from this list to refresh it again. IGDB relationship refresh and
+reviewed link writes also respect preservation. Malformed controls fail instead
+of silently unlocking a source. The disposable catalog cache migrates automatically;
+catalog documents, provider snapshots and ROMs are retained.
+
 ## Progress, partial results and resume
 
 Catalog discovery and file transfers have separate counters. Applied media fetch

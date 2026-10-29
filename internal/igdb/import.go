@@ -58,30 +58,31 @@ type ImportProgress struct {
 
 // ImportResult describes a dry-run or applied IGDB enrichment.
 type ImportResult struct {
-	DataRoot             string
-	LinkRows             []string
-	APIBaseURL           string
-	TokenCachePath       string
-	PlatformCount        int
-	GameBundleCount      int
-	SelectedGameCount    int
-	SkippedByLimitCount  int
-	PlannedSearchCount   int
-	QueriedSearchCount   int
-	CachedSearchCount    int
-	MatchedGameCount     int
-	GameFileCount        int
-	NotFoundGameCount    int
-	WrittenFileCount     int
-	SkippedExistingCount int
-	FailedSearchCount    int
-	Failures             []ImportFailure
-	TokenChecked         bool
-	UsedCachedToken      bool
-	UsedCachedPlatforms  bool
-	RateLimitPerSecond   int
-	Limit                int
-	Apply                bool
+	DataRoot              string
+	LinkRows              []string
+	APIBaseURL            string
+	TokenCachePath        string
+	PlatformCount         int
+	GameBundleCount       int
+	SelectedGameCount     int
+	SkippedByLimitCount   int
+	PlannedSearchCount    int
+	QueriedSearchCount    int
+	CachedSearchCount     int
+	MatchedGameCount      int
+	GameFileCount         int
+	NotFoundGameCount     int
+	WrittenFileCount      int
+	SkippedPreservedCount int
+	SkippedExistingCount  int
+	FailedSearchCount     int
+	Failures              []ImportFailure
+	TokenChecked          bool
+	UsedCachedToken       bool
+	UsedCachedPlatforms   bool
+	RateLimitPerSecond    int
+	Limit                 int
+	Apply                 bool
 }
 
 // ImportFailure is a failed IGDB search that did not stop the whole run.
@@ -92,19 +93,20 @@ type ImportFailure struct {
 }
 
 type catalogGame struct {
-	MAMEReleases    []catalogcache.Release
-	ArcadePlatform  string
-	Platform        string
-	Folder          string
-	Path            string
-	Title           string
-	DefaultRelease  string
-	Releases        []string
-	ReleaseTitles   []string
-	Aliases         []string
-	Sources         []string
-	HasheousIGDBIDs []int
-	UnofficialOnly  bool
+	PreservedSources []string
+	MAMEReleases     []catalogcache.Release
+	ArcadePlatform   string
+	Platform         string
+	Folder           string
+	Path             string
+	Title            string
+	DefaultRelease   string
+	Releases         []string
+	ReleaseTitles    []string
+	Aliases          []string
+	Sources          []string
+	HasheousIGDBIDs  []int
+	UnofficialOnly   bool
 }
 
 type sourceSettings struct {
@@ -321,6 +323,10 @@ func Import(options ImportOptions) (ImportResult, error) {
 		}
 	})
 	platformCount, gameCount, err := streamCatalogGames(dataRoot, options.Platform, "igdb", options.ForceOverwrite, streamProgress, func(game catalogGame) error {
+		if catalogcache.HasSource(game.PreservedSources, "igdb") {
+			result.SkippedPreservedCount++
+			return nil
+		}
 		if !options.ForceOverwrite && catalogcache.HasSource(game.Sources, "igdb") {
 			result.SkippedExistingCount++
 			return nil
@@ -1108,14 +1114,15 @@ func streamCatalogGames(dataRoot, platform, source string, forceOverwrite bool, 
 
 func catalogGameFromCached(cached catalogcache.Game) catalogGame {
 	game := catalogGame{
-		ArcadePlatform: cached.ArcadePlatform,
-		Platform:       cached.Platform,
-		Folder:         cached.Folder,
-		Path:           cached.Path,
-		Title:          cached.Title,
-		DefaultRelease: cached.DefaultRelease,
-		Aliases:        cached.Aliases,
-		Sources:        cached.Sources,
+		ArcadePlatform:   cached.ArcadePlatform,
+		Platform:         cached.Platform,
+		Folder:           cached.Folder,
+		Path:             cached.Path,
+		Title:            cached.Title,
+		DefaultRelease:   cached.DefaultRelease,
+		Aliases:          cached.Aliases,
+		Sources:          cached.Sources,
+		PreservedSources: cached.PreservedSources,
 	}
 	releaseCount := 0
 	unofficialReleaseCount := 0

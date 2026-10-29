@@ -39,18 +39,19 @@ type ImportOptions struct {
 
 // ImportResult describes a dry-run or applied OpenVGDB enrichment.
 type ImportResult struct {
-	DataRoot             string
-	DBPath               string
-	Snapshot             SnapshotResult
-	PlatformCount        int
-	GameBundleCount      int
-	ReleaseCount         int
-	MatchedReleaseCount  int
-	GameFileCount        int
-	NotFoundGameCount    int
-	WrittenFileCount     int
-	SkippedExistingCount int
-	Apply                bool
+	DataRoot              string
+	DBPath                string
+	Snapshot              SnapshotResult
+	PlatformCount         int
+	GameBundleCount       int
+	ReleaseCount          int
+	MatchedReleaseCount   int
+	GameFileCount         int
+	NotFoundGameCount     int
+	WrittenFileCount      int
+	SkippedPreservedCount int
+	SkippedExistingCount  int
+	Apply                 bool
 }
 
 // SnapshotResult describes the OpenVGDB snapshot used by a fetch.
@@ -126,14 +127,15 @@ func ensureSnapshot(dataRoot, url string, progressCallbacks ...taskprogress.Func
 }
 
 type catalogGame struct {
-	MAMESets     map[string]string
-	Platform     string
-	Folder       string
-	Path         string
-	Title        string
-	Releases     []string
-	Sources      []string
-	Fingerprints []catalogcache.Fingerprint
+	PreservedSources []string
+	MAMESets         map[string]string
+	Platform         string
+	Folder           string
+	Path             string
+	Title            string
+	Releases         []string
+	Sources          []string
+	Fingerprints     []catalogcache.Fingerprint
 }
 
 type releaseMetadata struct {
@@ -213,6 +215,10 @@ func Import(options ImportOptions) (ImportResult, error) {
 		}
 	})
 	platformCount, gameCount, err := streamCatalogGames(dataRoot, options.Platform, "openvgdb", options.ForceOverwrite, streamProgress, func(game catalogGame) error {
+		if catalogcache.HasSource(game.PreservedSources, "openvgdb") {
+			result.SkippedPreservedCount++
+			return nil
+		}
 		if !options.ForceOverwrite && catalogcache.HasSource(game.Sources, "openvgdb") {
 			result.SkippedExistingCount++
 			return nil
@@ -591,14 +597,15 @@ func catalogGameFromCached(cached catalogcache.Game) catalogGame {
 		}
 	}
 	return catalogGame{
-		MAMESets:     sets,
-		Platform:     cached.Platform,
-		Folder:       cached.Folder,
-		Path:         cached.Path,
-		Title:        cached.Title,
-		Releases:     releases,
-		Sources:      cached.Sources,
-		Fingerprints: cached.Fingerprints,
+		MAMESets:         sets,
+		Platform:         cached.Platform,
+		Folder:           cached.Folder,
+		Path:             cached.Path,
+		Title:            cached.Title,
+		Releases:         releases,
+		Sources:          cached.Sources,
+		PreservedSources: cached.PreservedSources,
+		Fingerprints:     cached.Fingerprints,
 	}
 }
 
