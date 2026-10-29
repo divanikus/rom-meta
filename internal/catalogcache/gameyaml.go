@@ -83,8 +83,8 @@ func parseSourceMatchMedia(game *Game, source string, match *yaml.Node, order *i
 	directRelease := catalogyaml.Scalar(catalogyaml.Value(match, "release"))
 	group := catalogyaml.Strings(catalogyaml.Value(match, "releases"))
 	editionSpecific := false
-	for _, release := range group {
-		if !titlematch.CompatibleSymbols(game.Title, release) {
+	for _, release := range game.Releases {
+		if !titlematch.CompatibleSymbols(game.Title, release.Name) {
 			editionSpecific = true
 		}
 	}

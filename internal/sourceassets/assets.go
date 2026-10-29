@@ -18,8 +18,11 @@ import (
 	"sync"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"rommeta/internal/catalogcache"
 	"rommeta/internal/catalogfs"
+	"rommeta/internal/catalogyaml"
 	"rommeta/internal/fetchstate"
 	"rommeta/internal/medianames"
 	"rommeta/internal/platformnames"
@@ -80,11 +83,12 @@ type Failure struct {
 }
 
 type catalogGame struct {
-	Platform     string
-	Folder       string
-	Path         string
-	ReleaseCount int
-	MediaURLs    []catalogcache.MediaURL
+	EditionScoped bool
+	Platform      string
+	Folder        string
+	Path          string
+	ReleaseCount  int
+	MediaURLs     []catalogcache.MediaURL
 }
 
 type assetCandidate struct {
@@ -750,12 +754,19 @@ func streamCatalogGames(dataRoot, platform, readingStage string, progress taskpr
 		Platforms:    platformFilters(platform),
 		ReadingStage: readingStage,
 	}, progress, func(cached catalogcache.Game) error {
+		editionScoped := false
+		for _, release := range cached.Releases {
+			if !titlematch.CompatibleSymbols(cached.Title, release.Name) {
+				editionScoped = true
+			}
+		}
 		return fn(catalogGame{
-			Platform:     cached.Platform,
-			Folder:       cached.Folder,
-			Path:         cached.Path,
-			ReleaseCount: len(cached.Releases),
-			MediaURLs:    cached.MediaURLs,
+			EditionScoped: editionScoped,
+			Platform:      cached.Platform,
+			Folder:        cached.Folder,
+			Path:          cached.Path,
+			ReleaseCount:  len(cached.Releases),
+			MediaURLs:     cached.MediaURLs,
 		})
 	})
 }
@@ -841,7 +852,7 @@ func gameAssetCandidates(game catalogGame, source string) []assetCandidate {
 		}
 		records = append(records, record)
 	}
-	return assetCandidatesFromRecords(game.Path, source, records, game.ReleaseCount)
+	return assetCandidatesFromRecords(game.Path, source, records, game.ReleaseCount, game.EditionScoped)
 }
 
 func readGameAssetCandidates(gamePath, source string) ([]assetCandidate, error) {
@@ -849,6 +860,17 @@ func readGameAssetCandidates(gamePath, source string) ([]assetCandidate, error) 
 	contents, err := catalogfs.ReadFile(gameYAML)
 	if err != nil {
 		return nil, err
+	}
+
+	editionScoped := false
+	if document, err := catalogyaml.Parse(contents); err == nil {
+		title := catalogyaml.Scalar(catalogyaml.Value(document.Root(), "title"))
+		_ = catalogyaml.Mapping(catalogyaml.Value(document.Root(), "releases"), func(name string, _ *yaml.Node) error {
+			if !titlematch.CompatibleSymbols(title, name) {
+				editionScoped = true
+			}
+			return nil
+		})
 	}
 
 	var records []mediaURLRecord
@@ -1038,7 +1060,7 @@ func readGameAssetCandidates(gamePath, source string) ([]assetCandidate, error) 
 					editionSpecific = true
 				}
 			}
-			if (matchMediaReleaseSpecific || editionSpecific) && len(currentReleases) > 0 {
+			if (matchMediaReleaseSpecific || editionSpecific || editionScoped) && len(currentReleases) > 0 {
 				releases = currentReleases
 			}
 			if len(releases) == 0 {
@@ -1061,11 +1083,12 @@ func readGameAssetCandidates(gamePath, source string) ([]assetCandidate, error) 
 			setMediaRecordField(&records[index], key, parseScalar(rawValue))
 		}
 	}
-	candidates := assetCandidatesFromRecords(gamePath, source, records, countTopLevelReleases(contents))
+	candidates := assetCandidatesFromRecords(gamePath, source, records, countTopLevelReleases(contents), editionScoped)
 	return candidates, nil
 }
 
-func assetCandidatesFromRecords(gamePath, source string, records []mediaURLRecord, releaseCount int) []assetCandidate {
+func assetCandidatesFromRecords(gamePath, source string, records []mediaURLRecord, releaseCount int, editionScope ...bool) []assetCandidate {
+	forceFolders := len(editionScope) > 0 && editionScope[0]
 	recordsByType := map[string][]mediaURLRecord{}
 	for _, record := range records {
 		record = mediaRecordWithReleaseDefaults(record, releaseCount)
@@ -1083,7 +1106,7 @@ func assetCandidatesFromRecords(gamePath, source string, records []mediaURLRecor
 			}
 			return records[i].URL < records[j].URL
 		})
-		records = collapseDuplicateURLRecords(gamePath, records)
+		records = collapseDuplicateURLRecords(gamePath, records, forceFolders)
 		releaseSpecific := mediaRecordsNeedReleaseFolders(gamePath, records, releaseCount)
 
 		type targetRecord struct {
@@ -1096,7 +1119,7 @@ func assetCandidatesFromRecords(gamePath, source string, records []mediaURLRecor
 		for _, record := range records {
 			targetDir := filepath.Join(gamePath, "media")
 			release := ""
-			if releaseSpecific && releaseNeedsMediaFolder(gamePath, record.Release) {
+			if record.Release != "" && (forceFolders || releaseSpecific && releaseNeedsMediaFolder(gamePath, record.Release)) {
 				targetDir = filepath.Join(targetDir, record.Release)
 				release = record.Release
 			}
@@ -1177,7 +1200,7 @@ func countTopLevelReleases(contents []byte) int {
 	return count
 }
 
-func collapseDuplicateURLRecords(gamePath string, records []mediaURLRecord) []mediaURLRecord {
+func collapseDuplicateURLRecords(gamePath string, records []mediaURLRecord, forceFolders bool) []mediaURLRecord {
 	indexByURL := map[string]int{}
 	collapsed := make([]mediaURLRecord, 0, len(records))
 	for _, record := range records {
@@ -1186,7 +1209,7 @@ func collapseDuplicateURLRecords(gamePath string, records []mediaURLRecord) []me
 			continue
 		}
 		record.URL = key
-		if releaseNeedsMediaFolder(gamePath, record.Release) {
+		if record.Release != "" && (forceFolders || releaseNeedsMediaFolder(gamePath, record.Release)) {
 			key += "\x00" + record.Release
 		}
 		if index, ok := indexByURL[key]; ok {

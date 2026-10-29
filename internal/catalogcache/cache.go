@@ -22,7 +22,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 6
+const schemaVersion = 7
 
 // Game is the cached subset of game.yaml used by fetchers.
 type Game struct {
@@ -306,7 +306,7 @@ CREATE TABLE IF NOT EXISTS catalog_cache_meta (
 		if err := c.migrateArcadeIdentity(); err != nil {
 			return err
 		}
-	case version == 3, version == 4, version == 5:
+	case version == 3, version == 4, version == 5, version == 6:
 	case version != schemaVersion:
 		return incompatibleCacheError(c.path, fmt.Sprintf("schema version %d, expected %d", version, schemaVersion))
 	}
@@ -318,7 +318,7 @@ CREATE TABLE IF NOT EXISTS catalog_cache_meta (
 	// Version 5 briefly stored fetch preservation controls. Its unused extra
 	// column is harmless; retain provider snapshots while retiring that policy.
 	// Reparse media ownership after preserving grouped edition boundaries.
-	if version > 0 && version < 6 {
+	if version > 0 && version < 7 {
 		if _, err := c.db.Exec("UPDATE catalog_games SET size = -2"); err != nil {
 			return err
 		}

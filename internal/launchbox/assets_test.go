@@ -235,7 +235,7 @@ sources:
 		t.Fatalf("lost edition ownership: %#v", result)
 	}
 	text := readFileForTest(t, plan)
-	for _, release := range []string{"Synth+ (USA)", "Synth+ (Japan)"} {
+	for _, release := range []string{"Synth (USA)", "Synth+ (USA)", "Synth+ (Japan)"} {
 		if !strings.Contains(text, "dir=platforms/Nintendo - Nintendo DS/Synth/media/"+release) {
 			t.Fatalf("missing %s: %s", release, text)
 		}
