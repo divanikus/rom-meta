@@ -1202,6 +1202,17 @@ func countTopLevelReleases(contents []byte) int {
 
 func collapseDuplicateURLRecords(gamePath string, records []mediaURLRecord, forceFolders bool) []mediaURLRecord {
 	indexByURL := map[string]int{}
+	// A URL explicitly shared by different editions has no exclusive owner.
+	// Keep it common instead of manufacturing precise per-edition evidence.
+	firstRelease, shared := map[string]string{}, map[string]bool{}
+	for _, record := range records {
+		key := sourceurl.StripSecrets(record.URL)
+		if previous, ok := firstRelease[key]; ok && !titlematch.CompatibleSymbols(previous, record.Release) {
+			shared[key] = true
+		} else if !ok {
+			firstRelease[key] = record.Release
+		}
+	}
 	collapsed := make([]mediaURLRecord, 0, len(records))
 	for _, record := range records {
 		key := sourceurl.StripSecrets(record.URL)
@@ -1209,6 +1220,9 @@ func collapseDuplicateURLRecords(gamePath string, records []mediaURLRecord, forc
 			continue
 		}
 		record.URL = key
+		if shared[key] {
+			record.Release = ""
+		}
 		if record.Release != "" && (forceFolders || releaseNeedsMediaFolder(gamePath, record.Release)) {
 			key += "\x00" + record.Release
 		}

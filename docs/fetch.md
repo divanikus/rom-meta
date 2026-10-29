@@ -186,3 +186,6 @@ Existing files need a reviewed ownership repair; fetch does not relocate them.
 Export media fallback also retains plus/prime boundaries. A known metadata
 release selects its own folder even for an unverified catalog-name association;
 this does not verify the ROM dump. Reviewed media overrides remain explicit.
+
+If a source explicitly gives the same media URL to different editions, it remains
+shared; that URL alone cannot establish exclusive edition ownership.

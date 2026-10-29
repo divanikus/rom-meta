@@ -766,3 +766,20 @@ func readFile(t *testing.T, path string) string {
 	}
 	return string(contents)
 }
+
+func TestSharedEditionURLDoesNotClaimExclusiveOwnership(t *testing.T) {
+	records := []mediaURLRecord{
+		{Release: "Game (USA)", MediaType: "box_front", URL: "https://example.test/common.jpg"},
+		{Release: "Game+ (USA)", MediaType: "box_front", URL: "https://example.test/common.jpg"},
+		{Release: "Game+ (Japan)", MediaType: "box_front", URL: "https://example.test/common.jpg"},
+	}
+	got := collapseDuplicateURLRecords("Game", records, true)
+	if len(got) != 1 || got[0].Release != "" {
+		t.Fatalf("invented exact edition media: %#v", got)
+	}
+	records = records[1:]
+	got = collapseDuplicateURLRecords("Game", records, true)
+	if len(got) != 2 || got[0].Release == "" || got[1].Release == "" {
+		t.Fatalf("lost required Plus release paths: %#v", got)
+	}
+}
