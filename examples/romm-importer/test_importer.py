@@ -140,6 +140,33 @@ class ImporterTest(unittest.TestCase):
         self.addCleanup(self.project_patch.stop)
     def make_plan(self):
         return imp.build_plan(self.runtime, self.api, 49, "roms/Test/retail", {1, 2}, projector=projection)
+    def test_scoped_edition_media_never_returns_to_base_on_repeat(self):
+        card = self.api.value["cards"][self.card_id]
+        owners = ["Game (USA)", "Game+ (USA)"]
+        for item, owner in zip(self.api.value["inputs"], owners):
+            item["record"]["release"] = owner
+            card["game"]["data"]["releases"][owner] = {"regions": ["USA"]}
+        for asset in card["assets"]:
+            if asset["kind"] in ("gameplay-video", "logo", "screenshot"):
+                asset["path"] = f'{self.card_id}/media/{owners[1]}/{Path(asset["path"]).name}'
+        plan = imp.build_plan(self.runtime, self.api, 49, "roms/Test/retail", {1, 2})
+        base, plus = plan["entries"]
+        blocked = {"gameplay-video", "logo", "screenshot"}
+        self.assertFalse(any(f["asset"]["kind"] in blocked for f in base["files"]))
+        self.assertEqual({f["asset"]["kind"] for f in plus["files"]} & blocked, blocked)
+        imp.apply_plan(self.runtime, self.api, plan, self.root / "edition-plan.json", self.root)
+        repeated = imp.build_plan(self.runtime, self.api, 49, "roms/Test/retail", {1, 2})
+        self.assertFalse(any(e["patch"] or e["files"] for e in repeated["entries"]))
+        self.assertNotIn("video_path", self.runtime.rows[1]["columns"].get("gamelist_metadata", {}))
+
+    def test_scoped_media_inherits_prepared_variant_chain_and_base(self):
+        record = {"game": "card", "variant": "English", "metadata_release": "Original (Japan)",
+                  "variant_info": {"chain": ["English", "Parent"]}}
+        paths = ["card/media/logo.png"] + [f"card/media/{owner}/logo.png" for owner in
+                 ("English", "Parent", "Original (Japan)", "Other (USA)")]
+        self.assertEqual([a["path"] for a in imp.scoped_media_assets([{"path": p} for p in paths], record)], paths[:-1])
+        self.assertEqual(imp.scoped_media_assets([{"path": p} for p in paths], {"game": "card"}), [{"path": paths[0]}])
+
     def test_invalid_images_skip_only_media_keep_metadata_and_repeat_noop(self):
         bad = next(a for a in self.api.value["cards"][self.card_id]["assets"] if a["kind"] == "box-back")
         original = self.runtime.validate_media

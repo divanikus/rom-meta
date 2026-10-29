@@ -119,12 +119,21 @@ as BattleCity/Battle City. Unscoped alternate names are descriptive. Collisions,
 incompatible editions and known disjoint regions remain unmatched. Bounded hash
 lookup and new defaults prefer official releases, retaining all-unofficial order.
 
-LaunchBox, IGDB and ScreenScraper name comparisons retain `+` and a terminal prime
-(`Zero 2'`); formatting apostrophes inside words remain flexible. OpenVGDB rejects
-rows whose numbered title/edition contradicts a shared external reference when
-another row agrees with that reference's URL title. This check runs before name
-or hash selection; opaque references do not establish a conflict. It cannot detect
-arbitrary incorrect prose or artwork without contradictory identity evidence.
+Metadata and EmuMovies name comparisons retain attached/suffix `+` and terminal
+primes (`Zero 2'`). Closing subtitle quotes and spaced component separators remain
+formatting. A folded card's generic title/aliases cannot erase release edition
+markers in LaunchBox. Explicit verified regional/branding aliases remain useful
+when a provider uses a different name.
+
+OpenVGDB checks contradictory external identities conservatively: ignore transport
+numbers, compare the same series/known region, and respect explicit same-card
+regional/reissue associations. A coherent sibling release can expose a borrowed
+predecessor reference. Opaque or unconfirmed differences do not prove a conflict;
+arbitrary wrong prose/artwork still needs independent evidence.
+
+EmuMovies can omit `(NDSi Enhanced)` on DS media only when the remaining title
+identity matches exactly, including edition markers. Existing media presence
+still controls resume; matcher improvements do not relocate old files automatically.
 
 Saved `not_found` results are skipped on normal resume. After a matcher/snapshot
 fix, deliberately refresh the affected provider:
@@ -169,3 +178,7 @@ LaunchBox's explicit `ReleaseType: Homebrew` or `Unlicensed` also supplies
 unofficial classification when its title has no tag. The value is retained in
 source metadata and the snapshot cache. A plain released/unreleased record does
 not establish an unofficial match; edition and ambiguity checks still apply.
+
+Grouped media for an edition with a different plus/prime marker stays in that
+edition’s release folders. Identical URLs retain each required release path.
+Existing files need a reviewed ownership repair; fetch does not relocate them.

@@ -340,9 +340,14 @@ func matchMetadata(platformIndex map[string][]releaseMetadata, release catalogRe
 	}
 
 	keys := append(titleMatchKeys(release.Name), titleMatchKeys(release.Title)...)
-	keys = append(keys, titleMatchKeys(gameTitle)...)
+	localTitle := firstNonEmpty(release.Title, stripTags(release.Name))
+	if titlematch.CompatibleSymbols(localTitle, gameTitle) {
+		keys = append(keys, titleMatchKeys(gameTitle)...)
+	}
 	for _, alias := range aliases {
-		keys = append(keys, titleMatchKeys(alias)...)
+		if titlematch.CompatibleSymbols(localTitle, alias) {
+			keys = append(keys, titleMatchKeys(alias)...)
+		}
 	}
 	return bestLaunchBoxMetadata(platformIndex, keys, release, false)
 }
@@ -396,6 +401,9 @@ func bestLaunchBoxMetadata(platformIndex map[string][]releaseMetadata, keys []st
 	}
 	filtered := candidates[:0]
 	for _, metadata := range candidates {
+		if !launchBoxSymbolsCompatible(release, metadata) {
+			continue
+		}
 		if release.MAMESet != "" && !arcadeCandidateAllowed(release, metadata) {
 			continue
 		}
@@ -833,7 +841,7 @@ func newLaunchBoxSnapshotCache(dataRoot, zipPath string) (launchBoxSnapshotCache
 		return launchBoxSnapshotCache{}, err
 	}
 	return launchBoxSnapshotCache{
-		SchemaVersion:      7,
+		SchemaVersion:      8,
 		ZipPath:            relativePath,
 		ZipSize:            info.Size(),
 		ZipModTimeUnixNano: info.ModTime().UnixNano(),
@@ -2234,6 +2242,21 @@ func regionalTitleMatches(release catalogRelease, metadata releaseMetadata, key 
 						}
 					}
 				}
+			}
+		}
+	}
+	return false
+}
+
+func launchBoxSymbolsCompatible(release catalogRelease, metadata releaseMetadata) bool {
+	local := firstNonEmpty(release.Title, stripTags(release.Name))
+	if titlematch.CompatibleSymbols(local, metadata.Title) {
+		return true
+	}
+	for _, candidate := range metadata.TitleCandidates {
+		for _, key := range titleMatchKeys(candidate.Title) {
+			if titlematch.CompatibleSymbols(local, candidate.Title) && regionalTitleMatches(release, metadata, key) {
+				return true
 			}
 		}
 	}

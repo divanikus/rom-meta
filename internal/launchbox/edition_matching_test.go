@@ -53,3 +53,28 @@ func TestRegionalTitleRequiresExactRegionAndUniqueIdentity(t *testing.T) {
 		}
 	}
 }
+
+func TestFoldedReleaseCannotBorrowGenericCardEdition(t *testing.T) {
+	base := releaseMetadata{DatabaseID: "base", Title: "Example", Region: "USA"}
+	plus := releaseMetadata{DatabaseID: "plus", Title: "Example+", Region: "USA"}
+	index := map[string][]releaseMetadata{}
+	for _, m := range []releaseMetadata{base, plus} {
+		for _, key := range titleMatchKeys(m.Title) {
+			index[key] = []releaseMetadata{m}
+		}
+	}
+	for _, name := range []string{"Example", "Example+"} {
+		got, ok := matchMetadata(index, catalogRelease{Name: name + " (USA)", Title: name, Regions: []string{"USA"}}, "Example", "Example")
+		want := "base"
+		if name == "Example+" {
+			want = "plus"
+		}
+		if !ok || got.DatabaseID != want {
+			t.Fatalf("%s: %#v %v", name, got, ok)
+		}
+	}
+	delete(index, "example plus")
+	if got, ok := matchMetadata(index, catalogRelease{Name: "Example+ (USA)", Title: "Example+", Regions: []string{"USA"}}, "Example", "Example"); ok {
+		t.Fatalf("generic card erased edition: %#v", got)
+	}
+}

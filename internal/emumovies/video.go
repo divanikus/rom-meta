@@ -19,7 +19,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 
 	"rommeta/internal/catalogcache"
 	"rommeta/internal/catalogfs"
@@ -29,6 +28,7 @@ import (
 	"rommeta/internal/sourceyaml"
 	"rommeta/internal/store"
 	"rommeta/internal/taskprogress"
+	"rommeta/internal/titlematch"
 )
 
 // VideoOptions controls EmuMovies video download planning and fetching.
@@ -1293,24 +1293,7 @@ func moveTrailingArticle(value string) string {
 	return value
 }
 
-func looseTitleKey(value string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
-	if value == "" {
-		return ""
-	}
-	var b strings.Builder
-	for _, r := range value {
-		switch {
-		case unicode.IsLetter(r) || unicode.IsDigit(r):
-			b.WriteRune(r)
-		case r == '&':
-			b.WriteString(" and ")
-		default:
-			b.WriteByte(' ')
-		}
-	}
-	return strings.TrimSpace(repeatedSpace.ReplaceAllString(b.String(), " "))
-}
+func looseTitleKey(value string) string { return titlematch.Key(value) }
 
 func compactTitleKey(value string) string {
 	return strings.ReplaceAll(looseTitleKey(value), " ", "")

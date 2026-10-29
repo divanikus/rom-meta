@@ -204,3 +204,40 @@ sources:
 		t.Fatalf("media/rights.yaml should not be created, stat err=%v", err)
 	}
 }
+
+func TestGroupedPlusArtworkKeepsReleaseOwnership(t *testing.T) {
+	root := t.TempDir()
+	game := filepath.Join(root, "platforms", "Nintendo - Nintendo DS", "Synth")
+	writeFileForTest(t, filepath.Join(game, "game.yaml"), `title: Synth
+releases:
+  "Synth (USA)": {}
+  "Synth+ (USA)": {}
+  "Synth+ (Japan)": {}
+sources:
+  launchbox:
+    matches:
+      - releases: ["Synth (USA)"]
+        media:
+          box_front:
+            - url: https://example.test/base.jpg
+      - releases: ["Synth+ (USA)", "Synth+ (Japan)"]
+        media:
+          box_front:
+            - url: https://example.test/plus.jpg
+              region: World
+`)
+	plan := filepath.Join(root, "plan.aria2")
+	result, err := FetchAssets(AssetOptions{DataRoot: root, PlanPath: plan, PlanFormat: "aria2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.CandidateCount != 3 {
+		t.Fatalf("lost edition ownership: %#v", result)
+	}
+	text := readFileForTest(t, plan)
+	for _, release := range []string{"Synth+ (USA)", "Synth+ (Japan)"} {
+		if !strings.Contains(text, "dir=platforms/Nintendo - Nintendo DS/Synth/media/"+release) {
+			t.Fatalf("missing %s: %s", release, text)
+		}
+	}
+}

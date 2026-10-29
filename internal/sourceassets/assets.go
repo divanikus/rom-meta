@@ -28,6 +28,7 @@ import (
 	"rommeta/internal/sourceurl"
 	"rommeta/internal/store"
 	"rommeta/internal/taskprogress"
+	"rommeta/internal/titlematch"
 )
 
 // Options controls source-media downloads from source media stanzas.
@@ -329,7 +330,11 @@ func assetDedupeKey(source string, candidate assetCandidate) string {
 	if source == "" || mediaType == "" || rawURL == "" {
 		return ""
 	}
-	return source + "\x00" + mediaType + "\x00" + rawURL
+	key := source + "\x00" + mediaType + "\x00" + rawURL
+	if candidate.Release != "" {
+		key += "\x00" + candidate.GamePath + "\x00" + candidate.Release
+	}
+	return key
 }
 
 func sortAssetCandidates(candidates []assetCandidate) {
@@ -1027,7 +1032,13 @@ func readGameAssetCandidates(gamePath, source string) ([]assetCandidate, error) 
 			}
 			currentMediaIndex = len(records)
 			releases := []string{""}
-			if matchMediaReleaseSpecific && len(currentReleases) > 0 {
+			editionSpecific := false
+			for _, release := range currentReleases {
+				if !titlematch.CompatibleSymbols(filepath.Base(gamePath), release) {
+					editionSpecific = true
+				}
+			}
+			if (matchMediaReleaseSpecific || editionSpecific) && len(currentReleases) > 0 {
 				releases = currentReleases
 			}
 			if len(releases) == 0 {
@@ -1072,7 +1083,7 @@ func assetCandidatesFromRecords(gamePath, source string, records []mediaURLRecor
 			}
 			return records[i].URL < records[j].URL
 		})
-		records = collapseDuplicateURLRecords(records)
+		records = collapseDuplicateURLRecords(gamePath, records)
 		releaseSpecific := mediaRecordsNeedReleaseFolders(gamePath, records, releaseCount)
 
 		type targetRecord struct {
@@ -1166,7 +1177,7 @@ func countTopLevelReleases(contents []byte) int {
 	return count
 }
 
-func collapseDuplicateURLRecords(records []mediaURLRecord) []mediaURLRecord {
+func collapseDuplicateURLRecords(gamePath string, records []mediaURLRecord) []mediaURLRecord {
 	indexByURL := map[string]int{}
 	collapsed := make([]mediaURLRecord, 0, len(records))
 	for _, record := range records {
@@ -1175,6 +1186,9 @@ func collapseDuplicateURLRecords(records []mediaURLRecord) []mediaURLRecord {
 			continue
 		}
 		record.URL = key
+		if releaseNeedsMediaFolder(gamePath, record.Release) {
+			key += "\x00" + record.Release
+		}
 		if index, ok := indexByURL[key]; ok {
 			mergeMediaRecord(&collapsed[index], record)
 			continue
@@ -1375,7 +1389,7 @@ func stripTrailingField(value, open, close string) string {
 }
 
 func sameTitle(left, right string) bool {
-	return compactTitleKey(left) != "" && compactTitleKey(left) == compactTitleKey(right)
+	return titlematch.CompatibleSymbols(left, right) && compactTitleKey(left) != "" && compactTitleKey(left) == compactTitleKey(right)
 }
 
 func compactTitleKey(value string) string {

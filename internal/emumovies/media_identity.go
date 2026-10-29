@@ -83,6 +83,15 @@ var wiiWareLabel = regexp.MustCompile(`(?i)\(\s*wiiware\s*\)`)
 func catalogMediaName(platform, sourceName, catalogName string, providerSystem ...string) string {
 	var label *regexp.Regexp
 	switch platformnames.ForSource(platform, platformnames.SourceEmuMovies) {
+	case "Nintendo DS":
+		if !ndsiEnhancedLabel.MatchString(catalogName) {
+			return catalogName
+		}
+		without := strings.TrimSpace(ndsiEnhancedLabel.ReplaceAllString(catalogName, " "))
+		if mediaIdentityKey(sourceName) == mediaIdentityKey(without) {
+			return without
+		}
+		return catalogName
 	case "Sony PSP":
 		label = pspMinisLabel
 	case "Nintendo Wii", "Nintendo WiiWare":
@@ -98,3 +107,5 @@ func catalogMediaName(platform, sourceName, catalogName string, providerSystem .
 	}
 	return strings.TrimSpace(label.ReplaceAllString(catalogName, " "))
 }
+
+var ndsiEnhancedLabel = regexp.MustCompile(`(?i)\(\s*ndsi enhanced\s*\)`)

@@ -21,6 +21,12 @@ func TestMediaMatchingPreservesEditionAndHardwareIdentity(t *testing.T) {
 		source, release string
 		want            bool
 	}{
+		{"Example (USA)", "Example+ (USA)", false},
+		{"Example+ (USA)", "Example (USA)", false},
+		{"Example+ (USA)", "Example++ (USA)", false},
+		{"Example' (Japan)", "Example (Japan)", false},
+		{"Example (Japan)", "Example' (Japan)", false},
+		{"Example′ (Japan)", "Example' (Japan)", true},
 		{"Example (USA)", "Example (USA) (Game of the Year Edition)", false},
 		{"Example (USA) (Game of the Year Edition)", "Example (USA)", false},
 		{"Example (USA)", "Example - Complete Edition (USA)", false},
@@ -264,5 +270,23 @@ func TestWiiWareLabelFallbackRequiresItsOwnVideoDirectory(t *testing.T) {
 			}
 
 		})
+	}
+}
+
+func TestDSiEnhancedLabelKeepsExplicitEdition(t *testing.T) {
+	for _, tc := range []struct {
+		source, release string
+		want            bool
+	}{
+		{"Example+ (USA)", "Example+ (USA) (NDSi Enhanced)", true},
+		{"Example (USA)", "Example+ (USA) (NDSi Enhanced)", false},
+		{"Example+ (USA)", "Example (USA) (NDSi Enhanced)", false},
+	} {
+		game := identityGame("target", tc.release)
+		game.Platform = "Nintendo - Nintendo DS"
+		_, ok := matchVideoEntry(game.Platform, "videos", "HQ", "ftps", "example.test", FTPEntry{Name: tc.source + ".mp4", Size: 123}, []catalogGame{game})
+		if ok != tc.want {
+			t.Fatalf("%#v got %v", tc, ok)
+		}
 	}
 }

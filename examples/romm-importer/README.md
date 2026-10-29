@@ -46,6 +46,11 @@ provenance and use the first member's metadata basis. Each member's source credi
 and base remain independent; the group does not assert a coherent patch edition
 or complete playable disc set. Unknown or conflicting members prevent an update.
 
+Additional artwork, video and screenshots use shared-card files and the selected
+release or prepared variant chain/base. Other release folders are excluded, so
+a folded base game cannot borrow an expanded edition’s media. Cover/manual
+paths still follow the export profile’s explicit selection.
+
 Variant-owned media precedes its parent variants and original base. Changes are
 still planned/applied through the normal importer workflow; preparing or testing
 variants does not deploy an image, modify a live catalog or start another writer.

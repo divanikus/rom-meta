@@ -9,6 +9,7 @@ import (
 
 	"rommeta/internal/catalogyaml"
 	"rommeta/internal/regions"
+	"rommeta/internal/titlematch"
 )
 
 func parseGameYAML(contents []byte) (Game, error) {
@@ -80,7 +81,20 @@ var arcadeUnofficialPattern = regexp.MustCompile(`\b(?:bootleg|hack)\b`)
 
 func parseSourceMatchMedia(game *Game, source string, match *yaml.Node, order *int) {
 	directRelease := catalogyaml.Scalar(catalogyaml.Value(match, "release"))
-	parseMediaMap(game, source, directRelease, catalogyaml.Value(match, "media"), order)
+	group := catalogyaml.Strings(catalogyaml.Value(match, "releases"))
+	editionSpecific := false
+	for _, release := range group {
+		if !titlematch.CompatibleSymbols(game.Title, release) {
+			editionSpecific = true
+		}
+	}
+	if directRelease == "" && editionSpecific {
+		for _, release := range group {
+			parseMediaMap(game, source, release, catalogyaml.Value(match, "media"), order)
+		}
+	} else {
+		parseMediaMap(game, source, directRelease, catalogyaml.Value(match, "media"), order)
+	}
 	releases := catalogyaml.Value(match, "releases")
 	if releases == nil || releases.Kind != yaml.SequenceNode {
 		return

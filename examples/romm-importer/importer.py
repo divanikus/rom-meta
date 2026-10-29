@@ -340,6 +340,17 @@ def carrier(asset, role):
     return None
 
 
+def scoped_media_assets(assets, record):
+    # Additional media inherits only shared-card or explicit release/variant
+    # ownership. A folded card is not evidence that another edition's assets fit.
+    root = PurePosixPath(record["game"]) / "media"
+    owners = {record.get("release"), record.get("metadata_release")}
+    if record.get("variant"):
+        owners.update(record.get("variant_info", {}).get("chain", [record["variant"]]))
+    parents = {root} | {root / owner for owner in owners if owner}
+    return [asset for asset in assets if PurePosixPath(asset["path"]).parent in parents]
+
+
 def asset_rank(asset, record, card, policy):
     rule = policy.get("media", {}).get("cover", {})
     sources = rule.get("sources", ["emumovies", "launchbox", "screenscraper", "igdb", "openvgdb"])
@@ -497,7 +508,7 @@ def plan_entry(runtime, selection, item, snapshot, projection, repair_igdb_refer
         patch["slug"] = slug
     files = []
     omissions = []
-    assets = card["assets"]
+    assets = scoped_media_assets(card["assets"], record)
     invalid = getattr(runtime, "invalid_images", {}) if invalid_images is None else invalid_images
 
     def usable(asset):
@@ -509,7 +520,8 @@ def plan_entry(runtime, selection, item, snapshot, projection, repair_igdb_refer
         progress(f'WARNING | Skip invalid image | {asset["source"]} | {asset["path"]} | {reason}')
         return False
 
-    by_path = {asset["path"]: asset for asset in assets}
+    # Cover/manual paths are explicit selections made by the export profile.
+    by_path = {asset["path"]: asset for asset in card["assets"]}
     selected = record.get("media", {})
     cover = by_path.get(selected.get("cover", {}).get("source_path"))
     if cover and not usable(cover):

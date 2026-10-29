@@ -239,6 +239,12 @@ func Import(options ImportOptions) (ImportResult, error) {
 				metadata, ok = platformMatches.matchMAMESet(set)
 			} else {
 				metadata, ok = platformMatches.match(release, game.Fingerprints)
+				if ok && platformMatches.cardReferenceConflict(metadata, game.Fingerprints, game.Releases) {
+					ok = false
+				}
+				if !ok {
+					metadata, ok = platformMatches.matchCatalogReference(release, game.Fingerprints, game.Releases)
+				}
 			}
 			if !ok {
 				continue
@@ -380,8 +386,9 @@ type matchedRelease struct {
 }
 
 type platformReleaseIndex struct {
-	byName map[string]releaseMetadata
-	byHash map[string][]releaseMetadata
+	byName    map[string]releaseMetadata
+	byHash    map[string][]releaseMetadata
+	conflicts *platformReleaseIndex
 }
 
 func (index platformReleaseIndex) match(release string, fingerprints []catalogcache.Fingerprint) (releaseMetadata, bool) {
@@ -489,8 +496,9 @@ where sys.systemName = ?
 	defer rows.Close()
 
 	result := platformReleaseIndex{
-		byName: map[string]releaseMetadata{},
-		byHash: map[string][]releaseMetadata{},
+		byName:    map[string]releaseMetadata{},
+		byHash:    map[string][]releaseMetadata{},
+		conflicts: &platformReleaseIndex{byName: map[string]releaseMetadata{}, byHash: map[string][]releaseMetadata{}},
 	}
 	type namedMetadata struct {
 		name     string
@@ -559,8 +567,15 @@ where sys.systemName = ?
 	}
 	for _, record := range records {
 		metadata := record.metadata
-		if conflictingReference(metadata, references[referenceKey(metadata.ReferenceURL)]) {
-			continue
+		peers := references[referenceKey(metadata.ReferenceURL)]
+		if referenceConflict(metadata, peers, false) {
+			result.conflicts.byName[normalizeKey(record.name)] = metadata
+			for _, key := range releaseHashKeys(metadata) {
+				result.conflicts.byHash[key] = append(result.conflicts.byHash[key], metadata)
+			}
+			if conflictingReference(metadata, peers) {
+				continue
+			}
 		}
 		result.byName[normalizeKey(record.name)] = metadata
 		for _, hashKey := range releaseHashKeys(metadata) {
@@ -1024,4 +1039,65 @@ func parseScalar(value string) string {
 		}
 	}
 	return value
+}
+
+// Explicit same-card release associations can establish a regional name or a
+// reissue despite different title numbering. A reference borrowed from a
+// different card still has no such evidence. Edition symbols remain boundaries.
+func (index platformReleaseIndex) matchCatalogReference(release string, fingerprints []catalogcache.Fingerprint, releases []string) (releaseMetadata, bool) {
+	if index.conflicts == nil {
+		return releaseMetadata{}, false
+	}
+	candidate, ok := index.conflicts.match(release, fingerprints)
+	if !ok {
+		return releaseMetadata{}, false
+	}
+	_, symbols := numberedTitle(candidate.Title)
+	for _, name := range releases {
+		if name == release {
+			continue
+		}
+		peer, ok := index.match(name, fingerprints)
+		if !ok {
+			continue
+		}
+		_, peerSymbols := numberedTitle(peer.Title)
+		if referenceKey(peer.ReferenceURL) != "" && referenceKey(peer.ReferenceURL) == referenceKey(candidate.ReferenceURL) && symbols == peerSymbols {
+			return candidate, true
+		}
+	}
+	return releaseMetadata{}, false
+}
+
+// An explicit same-card release may expose a wrongly borrowed reference even
+// across regional series names, e.g. a Japanese row attached to the prior game.
+func (index platformReleaseIndex) cardReferenceConflict(candidate releaseMetadata, fingerprints []catalogcache.Fingerprint, releases []string) bool {
+	if index.conflicts == nil {
+		return false
+	}
+	raw, ok := index.conflicts.byName[normalizeKey(strings.TrimSuffix(candidate.ROMFileName, filepath.Ext(candidate.ROMFileName)))]
+	if !ok || raw.ReferenceURL != candidate.ReferenceURL {
+		return false
+	}
+	numbers, symbols := numberedTitle(candidate.Title)
+	for _, name := range releases {
+		peer, ok := index.match(name, fingerprints)
+		if !ok || peer.ROMFileName == candidate.ROMFileName || referenceKey(peer.ReferenceURL) == referenceKey(candidate.ReferenceURL) {
+			continue
+		}
+		pn, ps := numberedTitle(peer.Title)
+		if pn != numbers || ps != symbols {
+			continue
+		}
+		u := referenceKey(peer.ReferenceURL)
+		_, slug, found := strings.Cut(filepath.Base(u), "-")
+		if !found {
+			continue
+		}
+		rn, rs := numberedTitle(slug)
+		if rn == pn && rs == ps {
+			return true
+		}
+	}
+	return false
 }
