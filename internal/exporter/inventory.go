@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"rommeta/internal/catalogfs"
+	"rommeta/internal/catalogyaml"
 	"rommeta/internal/medianames"
 	"sort"
 	"strconv"
@@ -30,6 +31,17 @@ type CatalogAsset struct {
 // unsupported role as an upload, touches a server filesystem or starts a fetch.
 func InventoryMedia(root string, records []Record) ([]CatalogAsset, error) {
 	seen := map[string]bool{}
+	pinned := map[string]map[string]bool{}
+	for _, record := range records {
+		for _, media := range record.Media {
+			if media.Selection == "override" {
+				if pinned[record.Game] == nil {
+					pinned[record.Game] = map[string]bool{}
+				}
+				pinned[record.Game][media.SourcePath] = true
+			}
+		}
+	}
 	assets := []CatalogAsset{}
 	for _, record := range records {
 		game := record.Game
@@ -45,6 +57,14 @@ func InventoryMedia(root string, records []Record) ([]CatalogAsset, error) {
 		if e == nil {
 			e = yaml.Unmarshal(content, &doc)
 		}
+		if e != nil {
+			return nil, e
+		}
+		tree, e := catalogyaml.Parse(content)
+		if e != nil {
+			return nil, e
+		}
+		activeGamelistMedia, e := catalogyaml.GamelistMediaReferences(tree.Root())
 		if e != nil {
 			return nil, e
 		}
@@ -102,6 +122,15 @@ func InventoryMedia(root string, records []Record) ([]CatalogAsset, error) {
 			}
 			if len(parts) > 3 {
 				lang = parts[2]
+			}
+			if active, managed := activeGamelistMedia[source]; managed || strings.HasPrefix(source, "gamelist.") {
+				gameRel, e := filepath.Rel(gameRoot, name)
+				if e != nil {
+					return e
+				}
+				if !active[filepath.ToSlash(gameRel)] && !pinned[game][filepath.ToSlash(rel)] {
+					return nil
+				}
 			}
 			style := mediaStyle{}
 			if kind == "box-front" {

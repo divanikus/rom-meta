@@ -13,3 +13,15 @@ func TestGamelistOptions(t *testing.T) {
 		}
 	}
 }
+
+func TestGamelistHashAndRoleOptions(t *testing.T) {
+	o, _, _, err := parseGamelistOptions([]string{"input.xml", "--collection", "sample", "--language", "en", "--match-md5", "--media-role", "thumbnail=screenshot", "--media-role=image=ignore"})
+	if err != nil || !o.MatchMD5 || o.MediaRoles["thumbnail"] != "screenshot" || o.MediaRoles["image"] != "ignore" {
+		t.Fatal(o, err)
+	}
+	for _, args := range [][]string{{"--media-role", "image"}, {"--media-role", "image=ignore", "--media-role", "image=screenshot"}} {
+		if _, _, _, err := parseGamelistOptions(args); err == nil {
+			t.Fatal(args)
+		}
+	}
+}

@@ -190,8 +190,12 @@ func resolveMedia(root string, g *game, release, rom string, profile Profile, re
 	result := map[string]Media{}
 	var warnings []string
 	mediaRoot := filepath.Join(g.path, "media")
+	activeGamelistMedia, err := catalogyaml.GamelistMediaReferences(g.root)
+	if err != nil {
+		return nil, nil, err
+	}
 	var paths []string
-	err := catalogfs.WalkDir(mediaRoot, func(path string, entry fs.DirEntry, walkErr error) error {
+	err = catalogfs.WalkDir(mediaRoot, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			if os.IsNotExist(walkErr) {
 				return nil
@@ -299,6 +303,15 @@ func resolveMedia(root string, g *game, release, rom string, profile Profile, re
 			}
 			if len(parts) > 3 {
 				language = strings.ToLower(parts[2])
+			}
+			if active, managed := activeGamelistMedia[source]; managed || strings.HasPrefix(source, "gamelist.") {
+				rel, e := filepath.Rel(g.path, path)
+				if e != nil {
+					return nil, nil, e
+				}
+				if !active[filepath.ToSlash(rel)] {
+					continue
+				}
 			}
 			sourceRank := position(rule.Sources, source)
 			if source == "local" {

@@ -26,13 +26,17 @@ import (
 type Options struct {
 	Input, Member, Origin, DataRoot, Platform, Collection, Language string
 	Apply                                                           bool
+	MatchMD5                                                        bool
+	MediaRoles                                                      map[string]string
 	Progress                                                        func(string, int, int)
 }
 type Observation struct {
-	Path    string `json:"path"`
-	Status  string `json:"status"`
-	Game    string `json:"game,omitempty"`
-	Release string `json:"release,omitempty"`
+	Path        string `json:"path"`
+	Status      string `json:"status"`
+	Game        string `json:"game,omitempty"`
+	Release     string `json:"release,omitempty"`
+	MatchMethod string `json:"match_method,omitempty"`
+	MD5Status   string `json:"md5_status,omitempty"`
 }
 type Result struct {
 	Collection   string        `json:"collection"`
@@ -48,11 +52,13 @@ type Result struct {
 	MediaAdded   int           `json:"media_added"`
 	MediaBytes   int64         `json:"media_bytes"`
 	MissingMedia int           `json:"missing_media"`
+	HashMatched  int           `json:"hash_matched"`
+	HashReview   int           `json:"hash_review"`
 	Warnings     []string      `json:"warnings,omitempty"`
 	Observations []Observation `json:"observations"`
 	Backup       string        `json:"backup,omitempty"`
 }
-type target struct{ game, release string }
+type target struct{ game, release, variant string }
 type card struct {
 	original []byte
 	doc      *catalogyaml.Document
@@ -112,6 +118,9 @@ func sameNode(a, b *yaml.Node) bool {
 // Import attaches exact, unique release-name observations to existing cards.
 // Frontend IDs and reported hashes remain source evidence, never dump proof.
 func Import(o Options) (result Result, err error) {
+	if err = validateMediaRoles(o.MediaRoles); err != nil {
+		return result, err
+	}
 	if !collectionPattern.MatchString(o.Collection) {
 		return result, fmt.Errorf("--collection must be a lowercase identifier (letters, digits, hyphen, underscore)")
 	}
@@ -157,6 +166,7 @@ func Import(o Options) (result Result, err error) {
 	source := "gamelist." + o.Collection
 	result = Result{Collection: o.Collection, Source: source, Platform: platform, Origin: in.origin, Apply: o.Apply, Entries: len(in.entries), Observations: []Observation{}}
 	index := map[string][]target{}
+	hashIndex := map[string][]target{}
 	cards := map[string]*card{}
 	add := func(name string, t target) {
 		k := nameKey(name)
@@ -187,8 +197,13 @@ func Import(o Options) (result Result, err error) {
 			return result, fmt.Errorf("%s: %w", game, e)
 		}
 		cards[game] = &card{original: body, doc: doc, media: map[string]asset{}}
+		if o.MatchMD5 {
+			if e = addMD5Targets(hashIndex, game, doc); e != nil {
+				return result, e
+			}
+		}
 		e = catalogyaml.Mapping(catalogyaml.Value(doc.Root(), "releases"), func(release string, node *yaml.Node) error {
-			t := target{game, release}
+			t := target{game: game, release: release}
 			add(release, t)
 			for _, alias := range catalogyaml.Strings(catalogyaml.Value(node, "aliases")) {
 				add(alias, t)
@@ -213,16 +228,15 @@ func Import(o Options) (result Result, err error) {
 			return result, fmt.Errorf("duplicate gamelist launch path %q", ref)
 		}
 		seen[ref] = true
-		name := path.Base(ref)
-		stem := name
-		if romExtensions[strings.ToLower(path.Ext(name))] {
-			stem = strings.TrimSuffix(name, path.Ext(name))
+		candidates, method, hashStatus := matchEntry(entry, ref, index, hashIndex, o.MatchMD5)
+		observation := Observation{Path: ref, Status: "unmatched", MatchMethod: method, MD5Status: hashStatus}
+		if hashStatus == "name-conflict" || strings.HasSuffix(hashStatus, "needs-review") {
+			result.HashReview++
+			result.Unmatched++
+			observation.Status = hashStatus
+			result.Observations = append(result.Observations, observation)
+			continue
 		}
-		candidates := index[nameKey(name)]
-		if len(candidates) == 0 {
-			candidates = index[nameKey(stem)]
-		}
-		observation := Observation{Path: ref, Status: "unmatched"}
 		if len(candidates) != 1 {
 			if len(candidates) > 1 {
 				result.Ambiguous++
@@ -236,13 +250,16 @@ func Import(o Options) (result Result, err error) {
 		t := candidates[0]
 		c := cards[t.game]
 		result.Matched++
+		if strings.HasPrefix(method, "reported-md5") {
+			result.HashMatched++
+		}
 		observation.Status = "matched"
 		observation.Release = t.release
 		relative, _ := filepath.Rel(root, t.game)
 		observation.Game = filepath.ToSlash(relative)
 		result.Observations = append(result.Observations, observation)
 		match := mapping()
-		for key, value := range map[string]string{"release": t.release, "importer": "es-de", "collection": o.Collection, "source_file": in.origin, "source_path": ref, "match_method": "exact-release-name", "title": entry.Title, "developer": entry.Developer, "publisher": entry.Publisher, "players": entry.Players, "region": regions.NormalizeDisplay(entry.Region), "reported_md5": entry.MD5, "frontend_id": entry.ID, "rating": entry.Rating, "rom_languages": entry.Languages} {
+		for key, value := range map[string]string{"release": t.release, "importer": "es-de", "collection": o.Collection, "source_file": in.origin, "source_path": ref, "match_method": method, "title": entry.Title, "developer": entry.Developer, "publisher": entry.Publisher, "players": entry.Players, "region": regions.NormalizeDisplay(entry.Region), "reported_md5": entry.MD5, "frontend_id": entry.ID, "rating": entry.Rating, "rom_languages": entry.Languages} {
 			if value != "" {
 				_ = catalogyaml.Set(match, key, scalar(value))
 			}
@@ -257,6 +274,7 @@ func Import(o Options) (result Result, err error) {
 			_ = catalogyaml.Set(match, "release_date", scalar(date))
 		}
 		media := mapping()
+		failed := newFailedMedia()
 		refs := []struct{ tag, value, kind, mediaType string }{
 			{"image", entry.Image, "screenshot-01", "screenshot"},
 			{"thumbnail", entry.Thumbnail, "box-front", "box_front"},
@@ -269,6 +287,12 @@ func Import(o Options) (result Result, err error) {
 			if strings.TrimSpace(r.value) == "" {
 				continue
 			}
+			if role, explicit := o.MediaRoles[r.tag]; explicit {
+				if role == "ignore" {
+					continue
+				}
+				r.kind, r.mediaType = mappedRole(r.tag, role)
+			}
 			relative, e := relativeRef(r.value)
 			if e != nil {
 				return result, e
@@ -276,18 +300,20 @@ func Import(o Options) (result Result, err error) {
 			inputPath := path.Join(path.Dir(in.member), relative)
 			ext := strings.ToLower(path.Ext(relative))
 			supported := ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp"
-			if r.tag == "video" {
+			if r.mediaType == "video" {
 				supported = ext == ".mp4"
 			}
-			if r.tag == "manual" {
+			if r.mediaType == "manual" {
 				supported = ext == ".pdf"
 			}
 			if !supported {
+				failed.keep(r.tag, relative, r.mediaType)
 				result.Warnings = append(result.Warnings, ref+": unsupported "+r.tag+" "+relative)
 				continue
 			}
 			hash, size, e := sourceDigest(in, inputPath)
 			if os.IsNotExist(e) {
+				failed.keep(r.tag, relative, r.mediaType)
 				result.MissingMedia++
 				result.Warnings = append(result.Warnings, ref+": missing "+relative)
 				continue
@@ -296,13 +322,14 @@ func Import(o Options) (result Result, err error) {
 				return result, e
 			}
 			if size == 0 {
+				failed.keep(r.tag, relative, r.mediaType)
 				result.MissingMedia++
 				result.Warnings = append(result.Warnings, ref+": empty "+relative)
 				continue
 			}
 			kind, mediaType := r.kind, r.mediaType
 			lower := "/" + strings.ToLower(relative) + "/"
-			if r.tag == "image" && (strings.Contains(lower, "/boxart/") || strings.Contains(lower, "/covers/")) {
+			if _, explicit := o.MediaRoles[r.tag]; !explicit && r.tag == "image" && (strings.Contains(lower, "/boxart/") || strings.Contains(lower, "/covers/")) {
 				kind, mediaType = "box-front", "box_front"
 			}
 			dest := path.Join("media", t.release, kind+".unspecified.und."+hash[:12]+"."+source+ext)
@@ -327,7 +354,7 @@ func Import(o Options) (result Result, err error) {
 					result.MediaBytes += size
 				}
 			}
-			candidate := encode(map[string]any{"url": dest, "source_file": relative, "importer": "es-de", "sha256": hash, "size": size})
+			candidate := encode(map[string]any{"url": dest, "source_file": relative, "importer": "es-de", "source_tag": r.tag, "sha256": hash, "size": size})
 			list := catalogyaml.Value(media, mediaType)
 			if list == nil {
 				list = &yaml.Node{Kind: yaml.SequenceNode}
@@ -335,9 +362,7 @@ func Import(o Options) (result Result, err error) {
 			}
 			list.Content = append(list.Content, candidate)
 		}
-		if len(media.Content) > 0 {
-			_ = catalogyaml.Set(match, "media", media)
-		}
+		_ = catalogyaml.Set(match, "media", media)
 		sources, e := catalogyaml.EnsureMapping(c.doc.Root(), "sources")
 		if e != nil {
 			return result, e
@@ -360,7 +385,13 @@ func Import(o Options) (result Result, err error) {
 				// Preserve fields and languages outside this importer's current observation.
 				for k := 0; k+1 < len(match.Content); k += 2 {
 					key, value := match.Content[k].Value, match.Content[k+1]
-					if key == "descriptions" || key == "media" {
+					if key == "media" {
+						value, e = reconcileMedia(catalogyaml.Value(old, key), value, failed)
+						if e != nil {
+							return result, e
+						}
+					}
+					if key == "descriptions" {
 						existing := catalogyaml.Value(old, key)
 						if existing != nil && existing.Kind == yaml.MappingNode {
 							_ = catalogyaml.Mapping(value, func(k string, v *yaml.Node) error { return catalogyaml.Set(existing, k, v) })

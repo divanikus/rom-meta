@@ -184,7 +184,7 @@ func (s *server) game(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	media, err := localMediaFiles(s.root, found.Path)
+	media, err := localMediaFiles(s.root, found.Path, document)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -466,7 +466,11 @@ func renderSourceNode(source string, stanza *yaml.Node) string {
 	return strings.TrimSpace(string(contents))
 }
 
-func localMediaFiles(root, gamePath string) ([]localMediaFile, error) {
+func localMediaFiles(root, gamePath string, document *catalogyaml.Document) ([]localMediaFile, error) {
+	active, err := catalogyaml.GamelistMediaReferences(document.Root())
+	if err != nil {
+		return nil, err
+	}
 	mediaRoot := filepath.Join(gamePath, "media")
 	info, err := catalogfs.Stat(mediaRoot)
 	if err != nil {
@@ -487,6 +491,15 @@ func localMediaFiles(root, gamePath string) ([]localMediaFile, error) {
 			return nil
 		}
 		item, ok := mediaFile(root, path)
+		if strings.HasPrefix(item.Source, "gamelist.") {
+			relative, e := filepath.Rel(gamePath, path)
+			if e != nil {
+				return e
+			}
+			if !active[item.Source][filepath.ToSlash(relative)] {
+				return nil
+			}
+		}
 		if ok {
 			result = append(result, item)
 		}

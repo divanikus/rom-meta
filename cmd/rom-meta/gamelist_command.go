@@ -39,6 +39,7 @@ func runGamelist(args []string) error {
 		mode = "Applied"
 	}
 	fmt.Printf("%s: %s / %s\nEntries: %d; matched: %d; unmatched: %d; ambiguous: %d\nChanged cards: %d; new media: %d (%d bytes); missing media: %d\n", mode, result.Platform, result.Source, result.Entries, result.Matched, result.Unmatched, result.Ambiguous, result.Updated, result.MediaAdded, result.MediaBytes, result.MissingMedia)
+	fmt.Printf("MD5 associations: %d; hash cases requiring review: %d\n", result.HashMatched, result.HashReview)
 	if result.Backup != "" {
 		fmt.Printf("Backups and receipt: %s\n", result.Backup)
 	}
@@ -53,7 +54,7 @@ func runGamelist(args []string) error {
 		fmt.Printf("Report: %s\n", report)
 	}
 	if !options.Apply {
-		fmt.Println("Add --apply to import exact release-name matches.")
+		fmt.Println("Add --apply to import the planned metadata and media.")
 	}
 	if result.MissingMedia > 0 {
 		return fmt.Errorf("import has %d unavailable media references; see report", result.MissingMedia)
@@ -66,6 +67,10 @@ func parseGamelistOptions(args []string) (o gamelist.Options, report string, hel
 		a := args[i]
 		if isHelpArg(a) {
 			return o, report, true, nil
+		}
+		if a == "--match-md5" {
+			o.MatchMD5 = true
+			continue
 		}
 		if a == "--apply" {
 			o.Apply = true
@@ -80,7 +85,7 @@ func parseGamelistOptions(args []string) (o gamelist.Options, report string, hel
 		}
 		k, v, has := strings.Cut(a, "=")
 		switch k {
-		case "--data-root", "--platform", "--collection", "--language", "--member", "--origin", "--report":
+		case "--data-root", "--platform", "--collection", "--language", "--member", "--origin", "--report", "--media-role":
 		default:
 			return o, report, false, fmt.Errorf("unknown gamelist option: %s", a)
 		}
@@ -95,6 +100,18 @@ func parseGamelistOptions(args []string) (o gamelist.Options, report string, hel
 			return o, report, false, fmt.Errorf("%s requires a value", k)
 		}
 		switch k {
+		case "--media-role":
+			tag, role, ok := strings.Cut(v, "=")
+			if !ok || tag == "" || role == "" {
+				return o, report, false, fmt.Errorf("--media-role requires tag=role")
+			}
+			if o.MediaRoles == nil {
+				o.MediaRoles = map[string]string{}
+			}
+			if _, exists := o.MediaRoles[tag]; exists {
+				return o, report, false, fmt.Errorf("duplicate media role for %s", tag)
+			}
+			o.MediaRoles[tag] = role
 		case "--data-root":
 			o.DataRoot = v
 		case "--platform":
@@ -130,9 +147,12 @@ Options:
   --member <path>     Gamelist ZIP member when the archive has multiple lists.
   --origin <id>       Stable relative identifier for repeated imports of one list.
   --report <file>     Private JSON report, including unresolved paths.
+  --match-md5         Try source-reported MD5 against whole-file catalog fingerprints.
+  --media-role <tag=role>  Override a media tag role; repeat for different tags.
   --apply             Write source candidates and referenced media.
 
-Only unique complete release names and explicit release aliases are matched.
+Names require unique complete release names or explicit release aliases.
+--match-md5 first tries existing whole-file fingerprints; conflicts/variants need review.
 Unresolved entries remain in the report; no cards, releases or fingerprints are invented.
 Imported curation is private by default. Existing canonical fields and other sources survive.
 No ROM payload is read, extracted or copied.`)

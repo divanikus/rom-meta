@@ -18,18 +18,47 @@ It names the source `gamelist.<collection>` in metadata, media filenames and the
 root source policy. The technical adapter is recorded as `importer: es-de`.
 Description language is explicit and independent of the gamelist's ROM language.
 
-Only unique complete ROM basenames, release keys, authority names and explicit
-release aliases on the selected platform are associated. Matching preserves
+By default, only unique complete ROM basenames, release keys, authority names
+and explicit release aliases on the selected platform are associated. Matching preserves
 punctuation and qualifiers; it never strips translation/hack labels to guess a
 parent. Unmatched and ambiguous entries remain in the private JSON report.
 Frontend IDs and reported MD5 values remain source observations; they do not
 create provider IDs, releases, fingerprints, aliases or fold evidence.
+
+Add `--match-md5` to try source-reported MD5 before names. Only existing
+single-file catalog fingerprints on the selected platform are eligible; component
+and multi-file set hashes are excluded. Unique exact names can disambiguate equal
+hash targets. Name/hash conflicts, known derived variants and variant/mod/translation-labelled
+paths requiring a parent decision remain in the report. An unmatched hash falls
+back to names: some lists hash the complete ZIP, others the contained ROM.
+The association retains `reported-md5` provenance and does not verify a ROM or
+create a fingerprint. Reports expose hash methods and review status. No ROM data
+is opened to perform this association.
 
 Existing canonical fields, other provider stanzas and unrelated fields survive.
 Repeated observations use the same source-file/path identity; `--origin` supplies
 a stable relative identifier if inputs are moved or renamed. Imports from
 different gamelists in the same collection coexist. Repeating an unchanged import
 writes no catalog data.
+
+Media tags have explicit adapter defaults:
+
+| XML tag | Default catalog role |
+| --- | --- |
+| `image` | Screenshot; a `boxart`/`covers` directory selects box front |
+| `thumbnail` | Box front |
+| `marquee` | Logo |
+| `video` | Gameplay video (MP4) |
+| `fanart` | Fanart image |
+| `manual` | Manual (PDF) |
+
+These are adapter conventions; a frontend list can use different meanings.
+Override them with repeated `--media-role <tag=role>` flags, for example
+`--media-role thumbnail=screenshot --media-role image=ignore`. Supported roles
+are `screenshot`, `box-front`, `logo`, `gameplay-video`, `fanart`, `manual` and
+`ignore`. Role changes/removals retire only this importer's references in the
+current observation. Owner candidates survive. A missing or unsupported file
+keeps an earlier successful reference while reporting the gap.
 
 Referenced media uses source-labelled, content-addressed filenames inside the
 matched release's media folder. Images, thumbnails, marquees, videos, fanart and
@@ -39,6 +68,12 @@ Unsupported formats, including fanart playlists, are reported as warnings.
 Absolute paths, traversal and source symlink escapes are rejected. Media outside
 the imported XML's directory tree, remote URLs, and modern frontend media located
 only through filename inference require a separate adapter.
+
+After replacement, automatic browser/export/API selection uses current
+references across all observations in the collection. Old content-addressed
+files remain available for recovery but are not automatic candidates once
+unreferenced. Another observation/language/collection can retain them; an explicit
+export `media_overrides` pin may also select a retained file intentionally.
 
 The default source policy is `redistribution: private`. Keep input packs, media,
 reports and `.rommeta/imports/` outside Git. Applied imports retain original YAML

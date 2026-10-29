@@ -787,6 +787,9 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+// ReadFingerprints reads a logical fingerprint document without opening the writable cache.
+func ReadFingerprints(path string) ([]Fingerprint, error) { return readFingerprintsYAML(path) }
+
 func readFingerprintsYAML(path string) ([]Fingerprint, error) {
 	contents, err := catalogfs.ReadFile(path)
 	if err != nil {
