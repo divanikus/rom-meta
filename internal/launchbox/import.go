@@ -28,6 +28,7 @@ import (
 	"rommeta/internal/regions"
 	"rommeta/internal/sourceyaml"
 	"rommeta/internal/taskprogress"
+	"rommeta/internal/titlematch"
 
 	_ "modernc.org/sqlite"
 )
@@ -45,19 +46,18 @@ type ImportOptions struct {
 
 // ImportResult describes a dry-run or applied LaunchBox enrichment.
 type ImportResult struct {
-	DataRoot              string
-	ZipPath               string
-	Snapshot              SnapshotResult
-	PlatformCount         int
-	GameBundleCount       int
-	ReleaseCount          int
-	MatchedReleaseCount   int
-	GameFileCount         int
-	NotFoundGameCount     int
-	WrittenFileCount      int
-	SkippedPreservedCount int
-	SkippedExistingCount  int
-	Apply                 bool
+	DataRoot             string
+	ZipPath              string
+	Snapshot             SnapshotResult
+	PlatformCount        int
+	GameBundleCount      int
+	ReleaseCount         int
+	MatchedReleaseCount  int
+	GameFileCount        int
+	NotFoundGameCount    int
+	WrittenFileCount     int
+	SkippedExistingCount int
+	Apply                bool
 }
 
 // SnapshotResult describes the LaunchBox snapshot used by a fetch.
@@ -124,15 +124,14 @@ type catalogRelease struct {
 }
 
 type catalogGame struct {
-	PreservedSources []string
-	ArcadePlatform   string
-	Platform         string
-	Folder           string
-	Path             string
-	Title            string
-	Aliases          []string
-	Releases         []catalogRelease
-	Sources          []string
+	ArcadePlatform string
+	Platform       string
+	Folder         string
+	Path           string
+	Title          string
+	Aliases        []string
+	Releases       []catalogRelease
+	Sources        []string
 }
 
 type releaseMetadata struct {
@@ -255,10 +254,6 @@ func Import(options ImportOptions) (ImportResult, error) {
 		}
 	})
 	platformCount, gameCount, err := streamCatalogGames(dataRoot, options.Platform, "launchbox", options.ForceOverwrite, streamProgress, func(game catalogGame) error {
-		if catalogcache.HasSource(game.PreservedSources, "launchbox") {
-			result.SkippedPreservedCount++
-			return nil
-		}
 		if !options.ForceOverwrite && catalogcache.HasSource(game.Sources, "launchbox") {
 			result.SkippedExistingCount++
 			return nil
@@ -362,6 +357,21 @@ func bestLaunchBoxMetadata(platformIndex map[string][]releaseMetadata, keys []st
 			}
 			seen[metadata.DatabaseID] = true
 			candidates = append(candidates, metadata)
+		}
+	}
+	if len(candidates) == 0 {
+		// Region-labelled provider names are identity evidence only for that
+		// release region. Unscoped alternate names remain descriptive.
+		for _, key := range keys {
+			for _, metadata := range platformIndex["regional:"+key] {
+				if metadata.DatabaseID != "" && !seen[metadata.DatabaseID] && regionalTitleMatches(release, metadata, key) {
+					seen[metadata.DatabaseID] = true
+					candidates = append(candidates, metadata)
+				}
+			}
+		}
+		if len(candidates) > 1 {
+			return releaseMetadata{}, false
 		}
 	}
 	if len(candidates) == 0 {
@@ -823,7 +833,7 @@ func newLaunchBoxSnapshotCache(dataRoot, zipPath string) (launchBoxSnapshotCache
 		return launchBoxSnapshotCache{}, err
 	}
 	return launchBoxSnapshotCache{
-		SchemaVersion:      6,
+		SchemaVersion:      7,
 		ZipPath:            relativePath,
 		ZipSize:            info.Size(),
 		ZipModTimeUnixNano: info.ModTime().UnixNano(),
@@ -1946,15 +1956,14 @@ func catalogGameFromCached(cached catalogcache.Game) catalogGame {
 		})
 	}
 	return catalogGame{
-		ArcadePlatform:   cached.ArcadePlatform,
-		Platform:         cached.Platform,
-		Folder:           cached.Folder,
-		Path:             cached.Path,
-		Title:            cached.Title,
-		Aliases:          cached.Aliases,
-		Releases:         releases,
-		Sources:          cached.Sources,
-		PreservedSources: cached.PreservedSources,
+		ArcadePlatform: cached.ArcadePlatform,
+		Platform:       cached.Platform,
+		Folder:         cached.Folder,
+		Path:           cached.Path,
+		Title:          cached.Title,
+		Aliases:        cached.Aliases,
+		Releases:       releases,
+		Sources:        cached.Sources,
 	}
 }
 
@@ -2004,8 +2013,8 @@ func launchboxPlatformName(name string, available []string, registry *platformna
 	return platformnames.ResolveForSource(name, platformnames.SourceLaunchBox, available)
 }
 
-// Compact keys are derived from primary names only. Provider alternate names
-// remain descriptive evidence and cannot silently become a different game's title.
+// Compact keys come from primary names only. Region-labelled names have a
+// separate index requiring exact regional evidence; unscoped aliases stay descriptive.
 func addCompactPrimaryTitleKeys(index snapshotIndex) snapshotIndex {
 	for _, metadata := range index.byID {
 		primary := index.byPlatformTitle[metadata.Platform]
@@ -2015,6 +2024,14 @@ func addCompactPrimaryTitleKeys(index snapshotIndex) snapshotIndex {
 		for _, key := range titleMatchKeys(metadata.Title) {
 			compact := compactPrimaryTitleKey(key)
 			primary[compact] = appendLaunchBoxMetadata(primary[compact], metadata)
+		}
+		for _, title := range metadata.TitleCandidates {
+			if len(normalizedRegionAliases(title.Region)) == 0 {
+				continue
+			}
+			for _, key := range titleMatchKeys(title.Title) {
+				primary["regional:"+key] = appendLaunchBoxMetadata(primary["regional:"+key], metadata)
+			}
 		}
 	}
 	return index
@@ -2065,26 +2082,7 @@ func moveTrailingArticle(value string) string {
 	return value
 }
 
-func looseTitleKey(value string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
-	if value == "" {
-		return ""
-	}
-	var b strings.Builder
-	for _, r := range value {
-		switch {
-		case unicode.IsLetter(r) || unicode.IsDigit(r):
-			b.WriteRune(r)
-		case r == '&':
-			b.WriteString(" and ")
-		case r == '+':
-			b.WriteString(" plus ")
-		default:
-			b.WriteByte(' ')
-		}
-	}
-	return strings.TrimSpace(repeatedSpace.ReplaceAllString(b.String(), " "))
-}
+func looseTitleKey(value string) string { return titlematch.Key(value) }
 
 func normalizeAssetKind(value string) string {
 	value = strings.TrimSpace(value)
@@ -2218,3 +2216,26 @@ func parseScalar(value string) string {
 var tagPattern = regexp.MustCompile(`\s*[\(\[].*?[\)\]]\s*`)
 var repeatedSpace = regexp.MustCompile(`\s+`)
 var repeatedDash = regexp.MustCompile(`-+`)
+
+func regionalTitleMatches(release catalogRelease, metadata releaseMetadata, key string) bool {
+	for _, title := range metadata.TitleCandidates {
+		for _, candidateKey := range titleMatchKeys(title.Title) {
+			if candidateKey != key {
+				continue
+			}
+			for _, actual := range release.Regions {
+				for _, region := range normalizedRegionAliases(actual) {
+					if region == "World" {
+						continue
+					}
+					for _, available := range normalizedRegionAliases(title.Region) {
+						if region == available {
+							return true
+						}
+					}
+				}
+			}
+		}
+	}
+	return false
+}

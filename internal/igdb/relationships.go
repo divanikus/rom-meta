@@ -90,13 +90,6 @@ func refreshRelationships(options ImportOptions) (ImportResult, error) {
 			return relationshipFile{}, err
 		}
 		item := relationshipFile{Path: path}
-		item.Preserved, err = catalogyaml.SourcePreserved(doc.Root(), "igdb")
-		if err != nil {
-			return item, err
-		}
-		if item.Preserved {
-			return item, nil
-		}
 		for _, match := range relationMatches(doc) {
 			if needsRelationships(match, options.ForceOverwrite) {
 				item.IDs = append(item.IDs, relationID(match))
@@ -108,10 +101,6 @@ func refreshRelationships(options ImportOptions) (ImportResult, error) {
 		return result, err
 	}
 	for _, file := range scanned {
-		if file.Preserved {
-			result.SkippedPreservedCount++
-			continue
-		}
 		if len(file.IDs) == 0 {
 			result.SkippedExistingCount++
 			continue
@@ -219,13 +208,6 @@ func updateRelationships(data []byte, records map[int]apiGame, force bool) ([]by
 	if err != nil {
 		return nil, false, 0, err
 	}
-	preserved, err := catalogyaml.SourcePreserved(doc.Root(), "igdb")
-	if err != nil {
-		return nil, false, 0, err
-	}
-	if preserved {
-		return data, false, 0, nil
-	}
 	changed := false
 	missing := 0
 	for _, match := range relationMatches(doc) {
@@ -312,9 +294,8 @@ func queryRelationships(client *http.Client, cache *queryCache, limiter *rateLim
 }
 
 type relationshipFile struct {
-	Preserved bool
-	Path      string
-	IDs       []int
+	Path string
+	IDs  []int
 }
 type relationshipWrite struct {
 	Path    string

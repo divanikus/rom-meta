@@ -1,7 +1,6 @@
 package sourceyaml
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
@@ -13,10 +12,7 @@ import (
 // Samba can persist Hidden on dot-prefixed temporary files after their rename.
 const metadataTempPattern = atomicfile.TempPattern
 
-// ErrSourcePreserved prevents a late/direct writer from replacing owner-reviewed data.
-var ErrSourcePreserved = errors.New("source metadata is preserved by fetch.preserve_sources")
-
-// WriteSourceMetadata atomically inserts or replaces one unpreserved source stanza.
+// WriteSourceMetadata atomically inserts or replaces one sources.<source> stanza.
 func WriteSourceMetadata(path, source, body string) error {
 	contents := "{}\n"
 	if existing, err := catalogfs.ReadFile(path); err == nil {
@@ -27,13 +23,6 @@ func WriteSourceMetadata(path, source, body string) error {
 	document, err := catalogyaml.Parse([]byte(contents))
 	if err != nil {
 		return fmt.Errorf("parse %s: %w", path, err)
-	}
-	preserved, err := catalogyaml.SourcePreserved(document.Root(), source)
-	if err != nil {
-		return err
-	}
-	if preserved {
-		return fmt.Errorf("%s: %w", source, ErrSourcePreserved)
 	}
 	fragment, err := catalogyaml.Parse([]byte(fmt.Sprintf("sources:\n  %s:\n%s", source, body)))
 	if err != nil {

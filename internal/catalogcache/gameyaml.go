@@ -19,9 +19,7 @@ func parseGameYAML(contents []byte) (Game, error) {
 	if _, err := catalogyaml.Variants(document.Root()); err != nil {
 		return Game{}, err
 	}
-	game := gameFromDocument(document)
-	game.PreservedSources, err = catalogyaml.PreservedSources(document.Root())
-	return game, err
+	return gameFromDocument(document), nil
 }
 
 func gameFromDocument(document *catalogyaml.Document) Game {

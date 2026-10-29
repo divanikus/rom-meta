@@ -178,10 +178,6 @@ Rules:
 - Aggressive auto-folding is out of scope for the first MVP.
 - Explicitly known same-game regional titles should be supported from the beginning.
 
-Reviewed acquisition decisions can be kept with per-card
-[`fetch.preserve_sources`](fetch.md#preserve-reviewed-source-decisions). These
-owner controls live outside generated provider stanzas and survive forced refresh.
-
 ## Derived Variants
 
 Fan translations, ROM hacks, restorations, bugfixes, and similar derived works use

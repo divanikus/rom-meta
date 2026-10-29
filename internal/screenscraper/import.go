@@ -26,6 +26,7 @@ import (
 	"rommeta/internal/sourceyaml"
 	"rommeta/internal/store"
 	"rommeta/internal/taskprogress"
+	"rommeta/internal/titlematch"
 )
 
 // ImportOptions controls ScreenScraper metadata enrichment.
@@ -55,29 +56,28 @@ type ImportProgress struct {
 
 // ImportResult describes a dry-run or applied ScreenScraper enrichment.
 type ImportResult struct {
-	DataRoot              string
-	APIBaseURL            string
-	PlatformCount         int
-	GameBundleCount       int
-	SelectedGameCount     int
-	SkippedByLimitCount   int
-	PlannedSearchCount    int
-	QueriedSearchCount    int
-	MatchedGameCount      int
-	GameFileCount         int
-	NotFoundGameCount     int
-	WrittenFileCount      int
-	SkippedPreservedCount int
-	SkippedExistingCount  int
-	FailedSearchCount     int
-	SkippedUnmappedCount  int
-	UnmappedPlatforms     map[string]int
-	Failures              []ImportFailure
-	RateLimitPerSecond    int
-	PlatformListCount     int
-	UsedCachedPlatforms   bool
-	Limit                 int
-	Apply                 bool
+	DataRoot             string
+	APIBaseURL           string
+	PlatformCount        int
+	GameBundleCount      int
+	SelectedGameCount    int
+	SkippedByLimitCount  int
+	PlannedSearchCount   int
+	QueriedSearchCount   int
+	MatchedGameCount     int
+	GameFileCount        int
+	NotFoundGameCount    int
+	WrittenFileCount     int
+	SkippedExistingCount int
+	FailedSearchCount    int
+	SkippedUnmappedCount int
+	UnmappedPlatforms    map[string]int
+	Failures             []ImportFailure
+	RateLimitPerSecond   int
+	PlatformListCount    int
+	UsedCachedPlatforms  bool
+	Limit                int
+	Apply                bool
 }
 
 // ImportFailure is a failed ScreenScraper search that did not stop the whole run.
@@ -88,19 +88,18 @@ type ImportFailure struct {
 }
 
 type catalogGame struct {
-	PreservedSources []string
-	MAMEReleases     []catalogcache.Release
-	Platform         string
-	Folder           string
-	Path             string
-	Title            string
-	DefaultRelease   string
-	Releases         []string
-	ReleaseTitles    []string
-	Aliases          []string
-	Sources          []string
-	Fingerprints     []catalogcache.Fingerprint
-	UnofficialOnly   bool
+	MAMEReleases   []catalogcache.Release
+	Platform       string
+	Folder         string
+	Path           string
+	Title          string
+	DefaultRelease string
+	Releases       []string
+	ReleaseTitles  []string
+	Aliases        []string
+	Sources        []string
+	Fingerprints   []catalogcache.Fingerprint
+	UnofficialOnly bool
 }
 
 type sourceSettings struct {
@@ -266,10 +265,6 @@ func Import(options ImportOptions) (ImportResult, error) {
 		}
 	})
 	platformCount, gameCount, err := streamCatalogGames(dataRoot, options.Platform, "screenscraper", options.ForceOverwrite, streamProgress, func(game catalogGame) error {
-		if catalogcache.HasSource(game.PreservedSources, "screenscraper") {
-			result.SkippedPreservedCount++
-			return nil
-		}
 		if !options.ForceOverwrite && catalogcache.HasSource(game.Sources, "screenscraper") {
 			result.SkippedExistingCount++
 			return nil
@@ -1421,15 +1416,14 @@ func streamCatalogGames(dataRoot, platform, source string, forceOverwrite bool, 
 
 func catalogGameFromCached(cached catalogcache.Game) catalogGame {
 	game := catalogGame{
-		Platform:         cached.Platform,
-		Folder:           cached.Folder,
-		Path:             cached.Path,
-		Title:            cached.Title,
-		DefaultRelease:   cached.DefaultRelease,
-		Aliases:          cached.Aliases,
-		Sources:          cached.Sources,
-		PreservedSources: cached.PreservedSources,
-		Fingerprints:     cached.Fingerprints,
+		Platform:       cached.Platform,
+		Folder:         cached.Folder,
+		Path:           cached.Path,
+		Title:          cached.Title,
+		DefaultRelease: cached.DefaultRelease,
+		Aliases:        cached.Aliases,
+		Sources:        cached.Sources,
+		Fingerprints:   cached.Fingerprints,
 	}
 	releaseCount := 0
 	unofficialReleaseCount := 0
@@ -1672,24 +1666,7 @@ func moveTrailingArticle(value string) string {
 	return value
 }
 
-func looseTitleKey(value string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
-	if value == "" {
-		return ""
-	}
-	var b strings.Builder
-	for _, r := range value {
-		switch {
-		case unicode.IsLetter(r) || unicode.IsDigit(r):
-			b.WriteRune(r)
-		case r == '&':
-			b.WriteString(" and ")
-		default:
-			b.WriteByte(' ')
-		}
-	}
-	return strings.TrimSpace(repeatedSpace.ReplaceAllString(b.String(), " "))
-}
+func looseTitleKey(value string) string { return titlematch.Key(value) }
 
 func compactTitleKey(value string) string {
 	return strings.ReplaceAll(looseTitleKey(value), " ", "")

@@ -123,9 +123,6 @@ func automaticFetchEvidenceReason(out io.Writer, job fetchJob, options fetchOpti
 	_, _, err := catalogcache.ForEachGameWithOptions(options.DataRoot,
 		catalogcache.MetadataReadOptions([]string{options.Platform}, "hasheous", options.ForceOverwrite),
 		update, func(game catalogcache.Game) error {
-			if catalogcache.HasSource(game.PreservedSources, "hasheous") {
-				return nil
-			}
 			if !options.ForceOverwrite && catalogcache.HasSource(game.Sources, "hasheous") {
 				return nil
 			}

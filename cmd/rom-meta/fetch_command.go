@@ -933,7 +933,6 @@ func runFetchOpenVGDB(args []string, progress taskprogress.Func, registry *platf
 
 func printOpenVGDBResult(result openvgdb.ImportResult) {
 	fmt.Println("OpenVGDB metadata summary")
-	printPreservedSources(result.SkippedPreservedCount)
 	if result.Snapshot.Checked {
 		if result.Snapshot.Downloaded {
 			fmt.Printf("Snapshot: downloaded from %s\n", result.Snapshot.URL)
@@ -976,7 +975,6 @@ func printOpenVGDBAssetResult(result openvgdb.AssetResult) {
 
 func printLaunchBoxResult(result launchbox.ImportResult) {
 	fmt.Println("LaunchBox metadata summary")
-	printPreservedSources(result.SkippedPreservedCount)
 	if result.Snapshot.Checked {
 		if result.Snapshot.Downloaded {
 			fmt.Printf("Snapshot: downloaded from %s\n", result.Snapshot.URL)
@@ -1019,7 +1017,6 @@ func printLaunchBoxAssetResult(result launchbox.AssetResult) {
 
 func printHasheousResult(result hasheous.ImportResult, causes ...error) {
 	fmt.Println("Hasheous metadata summary")
-	printPreservedSources(result.SkippedPreservedCount)
 	fmt.Printf("API: %s\n", result.APIBaseURL)
 	fmt.Printf("Workers: %d; request limit: %d/s (shared)\n", result.Concurrency, result.RateLimitPerSecond)
 	if result.GameBundleCount == 0 && result.SelectedGameCount > 0 {
@@ -1071,7 +1068,6 @@ func printIGDBResult(result igdb.ImportResult, causes ...error) {
 		return
 	}
 	fmt.Println("IGDB metadata summary")
-	printPreservedSources(result.SkippedPreservedCount)
 	fmt.Printf("API: %s\n", result.APIBaseURL)
 	fmt.Printf("Scanned: %d platforms, %d games\n", result.PlatformCount, result.GameBundleCount)
 	fmt.Printf("Pass: %d/%d/%d games (matched/not found/total)\n", result.GameFileCount, result.NotFoundGameCount, result.GameBundleCount)
@@ -1117,7 +1113,6 @@ func printIGDBResult(result igdb.ImportResult, causes ...error) {
 
 func printScreenScraperResult(result screenscraper.ImportResult, causes ...error) {
 	fmt.Println("ScreenScraper metadata summary")
-	printPreservedSources(result.SkippedPreservedCount)
 	fmt.Printf("API: %s\n", result.APIBaseURL)
 	if result.PlatformListCount > 0 {
 		source := "fetched"
@@ -1305,7 +1300,7 @@ Options:
   --plan <path>            Write a portable external downloader plan.
   --plan-format <format>   Plan format: jsonl or aria2.
   --apply                  Download/import instead of dry-run planning.
-  --force-overwrite        Refresh source metadata except fetch.preserve_sources.
+  --force-overwrite        Refresh source metadata that already exists in game.yaml.
   --refresh-relations      Update only relationships on existing IGDB metadata matches.
   --refresh-links          Query reviewed known IDs; fill minimal identity links only.
   --link-review <path>     Scoped SHA-bound review JSON (required by refresh-links).
@@ -1325,8 +1320,7 @@ Config:
   Hasheous metadata workers share sources.hasheous.api.rate_limit_per_second.
 
   Metadata fetch skips games that already have that source stanza in game.yaml.
-  Use --force-overwrite to refresh existing source metadata.
-  Per-card fetch.preserve_sources always keeps reviewed source stanzas.`)
+  Use --force-overwrite to refresh existing source metadata.`)
 }
 
 func printEmuMoviesSkippedPlatforms(skipped map[string]string) {
@@ -1358,11 +1352,5 @@ func printDownloadReport(path string, count, failed int) {
 	fmt.Printf("Download report: %s (jsonl, %d items)\n", path, count)
 	if failed > 0 {
 		fmt.Println("Retry: rerun the same fetch command; existing files are skipped")
-	}
-}
-
-func printPreservedSources(count int) {
-	if count > 0 {
-		fmt.Printf("Preserved: %d source stanzas (fetch.preserve_sources)\n", count)
 	}
 }

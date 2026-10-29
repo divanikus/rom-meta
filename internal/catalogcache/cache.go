@@ -26,20 +26,19 @@ const schemaVersion = 5
 
 // Game is the cached subset of game.yaml used by fetchers.
 type Game struct {
-	ArcadePlatform   string                `json:"arcade_platform,omitempty"`
-	Platform         string                `json:"platform"`
-	Folder           string                `json:"folder"`
-	Path             string                `json:"-"`
-	Title            string                `json:"title,omitempty"`
-	DefaultRelease   string                `json:"default_release,omitempty"`
-	Variants         []catalogyaml.Variant `json:"variants,omitempty"`
-	Releases         []Release             `json:"releases,omitempty"`
-	Aliases          []string              `json:"aliases,omitempty"`
-	Sources          []string              `json:"sources,omitempty"`
-	PreservedSources []string              `json:"preserved_sources,omitempty"`
-	SourceStats      []SourceStat          `json:"source_stats,omitempty"`
-	MediaURLs        []MediaURL            `json:"media,omitempty"`
-	Fingerprints     []Fingerprint         `json:"fingerprints,omitempty"`
+	ArcadePlatform string                `json:"arcade_platform,omitempty"`
+	Platform       string                `json:"platform"`
+	Folder         string                `json:"folder"`
+	Path           string                `json:"-"`
+	Title          string                `json:"title,omitempty"`
+	DefaultRelease string                `json:"default_release,omitempty"`
+	Variants       []catalogyaml.Variant `json:"variants,omitempty"`
+	Releases       []Release             `json:"releases,omitempty"`
+	Aliases        []string              `json:"aliases,omitempty"`
+	Sources        []string              `json:"sources,omitempty"`
+	SourceStats    []SourceStat          `json:"source_stats,omitempty"`
+	MediaURLs      []MediaURL            `json:"media,omitempty"`
+	Fingerprints   []Fingerprint         `json:"fingerprints,omitempty"`
 }
 
 // Release is the cached release subset used for source matching.
@@ -225,10 +224,6 @@ func ReadGameDocument(dataRoot, platform, folder string) (Game, *catalogyaml.Doc
 		return Game{}, nil, err
 	}
 	game := gameFromDocument(document)
-	game.PreservedSources, err = catalogyaml.PreservedSources(document.Root())
-	if err != nil {
-		return Game{}, nil, err
-	}
 	game.Platform = platform
 	game.Folder = folder
 	game.Path = filepath.Dir(gamePath)
@@ -320,8 +315,10 @@ CREATE TABLE IF NOT EXISTS catalog_cache_meta (
 			return err
 		}
 	}
-	if version > 0 && version < 5 {
-		if err := c.migratePreservedSources(); err != nil {
+	// Version 5 briefly stored fetch preservation controls. Its unused extra
+	// column is harmless; retain provider snapshots while retiring that policy.
+	if version > 0 && version < schemaVersion {
+		if _, err := c.db.Exec("UPDATE catalog_cache_meta SET schema_version = ? WHERE id = 1", schemaVersion); err != nil {
 			return err
 		}
 	}
@@ -341,14 +338,13 @@ CREATE TABLE IF NOT EXISTS catalog_games (
 	releases_json TEXT NOT NULL,
 	aliases_json TEXT NOT NULL,
 	sources_json TEXT NOT NULL,
- preserved_sources_json TEXT NOT NULL DEFAULT '[]',
 	source_stats_json TEXT NOT NULL,
 	media_urls_json TEXT NOT NULL,
 	fingerprints_json TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_catalog_games_platform_folder ON catalog_games(platform, folder);
 CREATE INDEX IF NOT EXISTS idx_catalog_games_mtime ON catalog_games(mtime_ns);
-CREATE INDEX IF NOT EXISTS idx_catalog_games_resume ON catalog_games(path, size, mtime_ns, fingerprint_size, fingerprint_mtime_ns, title, sources_json, preserved_sources_json);
+CREATE INDEX IF NOT EXISTS idx_catalog_games_resume ON catalog_games(path, size, mtime_ns, fingerprint_size, fingerprint_mtime_ns, title, sources_json);
 `)
 	return err
 }
@@ -638,11 +634,11 @@ func (c *cache) readGame(path, platform, folder string, options ReadOptions) (Ga
 
 func (c *cache) cachedGame(key, path, platform, folder string, stamp bundleStamp) (Game, bool, error) {
 	row := c.tx.QueryRow(`
-SELECT title, default_release, arcade_platform, variants_json, releases_json, aliases_json, sources_json, source_stats_json, media_urls_json, fingerprints_json, preserved_sources_json
+SELECT title, default_release, arcade_platform, variants_json, releases_json, aliases_json, sources_json, source_stats_json, media_urls_json, fingerprints_json
 FROM catalog_games
 WHERE path = ? AND size = ? AND mtime_ns = ? AND fingerprint_size = ? AND fingerprint_mtime_ns = ?`, key, stamp.size, stamp.mtimeNS, stamp.fingerprintSize, stamp.fingerprintMTimeNS)
-	var title, defaultRelease, arcadePlatform, variantsJSON, releasesJSON, aliasesJSON, sourcesJSON, sourceStatsJSON, mediaURLsJSON, fingerprintsJSON, preservedSourcesJSON string
-	if err := row.Scan(&title, &defaultRelease, &arcadePlatform, &variantsJSON, &releasesJSON, &aliasesJSON, &sourcesJSON, &sourceStatsJSON, &mediaURLsJSON, &fingerprintsJSON, &preservedSourcesJSON); err != nil {
+	var title, defaultRelease, arcadePlatform, variantsJSON, releasesJSON, aliasesJSON, sourcesJSON, sourceStatsJSON, mediaURLsJSON, fingerprintsJSON string
+	if err := row.Scan(&title, &defaultRelease, &arcadePlatform, &variantsJSON, &releasesJSON, &aliasesJSON, &sourcesJSON, &sourceStatsJSON, &mediaURLsJSON, &fingerprintsJSON); err != nil {
 		if err == sql.ErrNoRows {
 			return Game{}, false, nil
 		}
@@ -674,9 +670,6 @@ WHERE path = ? AND size = ? AND mtime_ns = ? AND fingerprint_size = ? AND finger
 	if err := decodeJSON(mediaURLsJSON, &game.MediaURLs); err != nil {
 		return Game{}, false, err
 	}
-	if err := decodeJSON(preservedSourcesJSON, &game.PreservedSources); err != nil {
-		return Game{}, false, err
-	}
 	if err := decodeJSON(fingerprintsJSON, &game.Fingerprints); err != nil {
 		return Game{}, false, err
 	}
@@ -684,15 +677,15 @@ WHERE path = ? AND size = ? AND mtime_ns = ? AND fingerprint_size = ? AND finger
 }
 
 const cachedExistingSourceSQL = `
-SELECT title, sources_json, preserved_sources_json FROM catalog_games INDEXED BY idx_catalog_games_resume
+SELECT title, sources_json FROM catalog_games INDEXED BY idx_catalog_games_resume
 WHERE path = ? AND size = ? AND mtime_ns = ? AND fingerprint_size = ? AND fingerprint_mtime_ns = ?`
 
 func (c *cache) cachedExistingSource(key, path, platform, folder string, stamp bundleStamp, source string) (Game, bool, error) {
 	// This covering index avoids fetching media/fingerprint overflow pages from
 	// SQLite, which is particularly expensive when the cache itself is on SMB.
 	row := c.tx.QueryRow(cachedExistingSourceSQL, key, stamp.size, stamp.mtimeNS, stamp.fingerprintSize, stamp.fingerprintMTimeNS)
-	var title, sourcesJSON, preservedSourcesJSON string
-	if err := row.Scan(&title, &sourcesJSON, &preservedSourcesJSON); err != nil {
+	var title, sourcesJSON string
+	if err := row.Scan(&title, &sourcesJSON); err != nil {
 		if err == sql.ErrNoRows {
 			return Game{}, false, nil
 		}
@@ -705,11 +698,7 @@ func (c *cache) cachedExistingSource(key, path, platform, folder string, stamp b
 	if !HasSource(sources, source) {
 		return Game{}, false, nil
 	}
-	var preserved []string
-	if err := decodeJSON(preservedSourcesJSON, &preserved); err != nil {
-		return Game{}, false, err
-	}
-	return Game{Platform: platform, Folder: folder, Path: filepath.Dir(path), Title: title, Sources: sources, PreservedSources: preserved}, true, nil
+	return Game{Platform: platform, Folder: folder, Path: filepath.Dir(path), Title: title, Sources: sources}, true, nil
 }
 
 func (c *cache) storeGame(key string, stamp bundleStamp, game Game) error {
@@ -737,10 +726,6 @@ func (c *cache) storeGame(key string, stamp bundleStamp, game Game) error {
 	if err != nil {
 		return err
 	}
-	preservedSourcesJSON, err := encodeJSON(game.PreservedSources)
-	if err != nil {
-		return err
-	}
 	fingerprintsJSON, err := encodeJSON(game.Fingerprints)
 	if err != nil {
 		return err
@@ -748,8 +733,8 @@ func (c *cache) storeGame(key string, stamp bundleStamp, game Game) error {
 	_, err = c.tx.Exec(`
 INSERT INTO catalog_games (
 	path, size, mtime_ns, fingerprint_size, fingerprint_mtime_ns, platform, folder, title, default_release, arcade_platform,
-	variants_json, releases_json, aliases_json, sources_json, source_stats_json, media_urls_json, fingerprints_json, preserved_sources_json
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	variants_json, releases_json, aliases_json, sources_json, source_stats_json, media_urls_json, fingerprints_json
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(path) DO UPDATE SET
 	size = excluded.size,
 	mtime_ns = excluded.mtime_ns,
@@ -764,12 +749,11 @@ ON CONFLICT(path) DO UPDATE SET
 	releases_json = excluded.releases_json,
 	aliases_json = excluded.aliases_json,
 	sources_json = excluded.sources_json,
- preserved_sources_json = excluded.preserved_sources_json,
 	source_stats_json = excluded.source_stats_json,
 	media_urls_json = excluded.media_urls_json,
 	fingerprints_json = excluded.fingerprints_json`,
 		key, stamp.size, stamp.mtimeNS, stamp.fingerprintSize, stamp.fingerprintMTimeNS, game.Platform, game.Folder, game.Title, game.DefaultRelease, game.ArcadePlatform,
-		variantsJSON, releasesJSON, aliasesJSON, sourcesJSON, sourceStatsJSON, mediaURLsJSON, fingerprintsJSON, preservedSourcesJSON)
+		variantsJSON, releasesJSON, aliasesJSON, sourcesJSON, sourceStatsJSON, mediaURLsJSON, fingerprintsJSON)
 	return err
 }
 

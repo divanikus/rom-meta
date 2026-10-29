@@ -85,25 +85,6 @@ Partial fetch appends matches only for successful new downloads, preserving prio
 matches, custom fields and recovery evidence. Failed/zero downloads add no match;
 existing files resume by presence. These rules do not retroactively verify old media.
 
-## Preserve reviewed source decisions
-
-In a card's `game.yaml`, list source stanzas that acquisition must keep:
-
-```yaml
-fetch:
-  preserve_sources: [igdb, openvgdb]
-```
-
-This keeps accepted matches or reviewed `not_found` decisions even with
-`--force-overwrite`. Other sources refresh normally. Protected metadata is skipped
-before searches and limits; the summary reports `Preserved`. Notes alone do not
-activate preservation. Saved media candidates can still be downloaded.
-
-Remove a source from this list to refresh it again. IGDB relationship refresh and
-reviewed link writes also respect preservation. Malformed controls fail instead
-of silently unlocking a source. The disposable catalog cache migrates automatically;
-catalog documents, provider snapshots and ROMs are retained.
-
 ## Progress, partial results and resume
 
 Catalog discovery and file transfers have separate counters. Applied media fetch
@@ -132,10 +113,18 @@ processed candidates, not unseen work after a quota stop or forced termination.
 
 ## Primary spellings and saved negative results
 
-LaunchBox tries exact primary names, then one compatible word-boundary variant
-such as BattleCity/Battle City. Collisions, incompatible editions and known
-regions stay unmatched; alternate names are not primary identities. Bounded hash
+LaunchBox tries primary names, then a unique region-labelled provider name for
+the release's known region, then a compatible primary word-boundary variant such
+as BattleCity/Battle City. Unscoped alternate names are descriptive. Collisions,
+incompatible editions and known disjoint regions remain unmatched. Bounded hash
 lookup and new defaults prefer official releases, retaining all-unofficial order.
+
+LaunchBox, IGDB and ScreenScraper name comparisons retain `+` and a terminal prime
+(`Zero 2'`); formatting apostrophes inside words remain flexible. OpenVGDB rejects
+rows whose numbered title/edition contradicts a shared external reference when
+another row agrees with that reference's URL title. This check runs before name
+or hash selection; opaque references do not establish a conflict. It cannot detect
+arbitrary incorrect prose or artwork without contradictory identity evidence.
 
 Saved `not_found` results are skipped on normal resume. After a matcher/snapshot
 fix, deliberately refresh the affected provider:

@@ -39,19 +39,18 @@ type ImportOptions struct {
 
 // ImportResult describes a dry-run or applied OpenVGDB enrichment.
 type ImportResult struct {
-	DataRoot              string
-	DBPath                string
-	Snapshot              SnapshotResult
-	PlatformCount         int
-	GameBundleCount       int
-	ReleaseCount          int
-	MatchedReleaseCount   int
-	GameFileCount         int
-	NotFoundGameCount     int
-	WrittenFileCount      int
-	SkippedPreservedCount int
-	SkippedExistingCount  int
-	Apply                 bool
+	DataRoot             string
+	DBPath               string
+	Snapshot             SnapshotResult
+	PlatformCount        int
+	GameBundleCount      int
+	ReleaseCount         int
+	MatchedReleaseCount  int
+	GameFileCount        int
+	NotFoundGameCount    int
+	WrittenFileCount     int
+	SkippedExistingCount int
+	Apply                bool
 }
 
 // SnapshotResult describes the OpenVGDB snapshot used by a fetch.
@@ -127,15 +126,14 @@ func ensureSnapshot(dataRoot, url string, progressCallbacks ...taskprogress.Func
 }
 
 type catalogGame struct {
-	PreservedSources []string
-	MAMESets         map[string]string
-	Platform         string
-	Folder           string
-	Path             string
-	Title            string
-	Releases         []string
-	Sources          []string
-	Fingerprints     []catalogcache.Fingerprint
+	MAMESets     map[string]string
+	Platform     string
+	Folder       string
+	Path         string
+	Title        string
+	Releases     []string
+	Sources      []string
+	Fingerprints []catalogcache.Fingerprint
 }
 
 type releaseMetadata struct {
@@ -215,10 +213,6 @@ func Import(options ImportOptions) (ImportResult, error) {
 		}
 	})
 	platformCount, gameCount, err := streamCatalogGames(dataRoot, options.Platform, "openvgdb", options.ForceOverwrite, streamProgress, func(game catalogGame) error {
-		if catalogcache.HasSource(game.PreservedSources, "openvgdb") {
-			result.SkippedPreservedCount++
-			return nil
-		}
 		if !options.ForceOverwrite && catalogcache.HasSource(game.Sources, "openvgdb") {
 			result.SkippedExistingCount++
 			return nil
@@ -498,6 +492,12 @@ where sys.systemName = ?
 		byName: map[string]releaseMetadata{},
 		byHash: map[string][]releaseMetadata{},
 	}
+	type namedMetadata struct {
+		name     string
+		metadata releaseMetadata
+	}
+	var records []namedMetadata
+	references := map[string][]releaseMetadata{}
 	for rows.Next() {
 		var record nullableReleaseMetadata
 		if err := rows.Scan(
@@ -548,13 +548,24 @@ where sys.systemName = ?
 			ReferenceURL:      record.ReferenceURL.String,
 			ReferenceImageURL: record.ReferenceImageURL.String,
 		}
-		result.byName[normalizeKey(name)] = metadata
-		for _, hashKey := range releaseHashKeys(metadata) {
-			result.byHash[hashKey] = append(result.byHash[hashKey], metadata)
+		records = append(records, namedMetadata{name, metadata})
+		key := referenceKey(metadata.ReferenceURL)
+		if key != "" {
+			references[key] = append(references[key], metadata)
 		}
 	}
 	if err := rows.Err(); err != nil {
 		return platformReleaseIndex{}, err
+	}
+	for _, record := range records {
+		metadata := record.metadata
+		if conflictingReference(metadata, references[referenceKey(metadata.ReferenceURL)]) {
+			continue
+		}
+		result.byName[normalizeKey(record.name)] = metadata
+		for _, hashKey := range releaseHashKeys(metadata) {
+			result.byHash[hashKey] = append(result.byHash[hashKey], metadata)
+		}
 	}
 	cache[key] = result
 	return result, nil
@@ -597,15 +608,14 @@ func catalogGameFromCached(cached catalogcache.Game) catalogGame {
 		}
 	}
 	return catalogGame{
-		MAMESets:         sets,
-		Platform:         cached.Platform,
-		Folder:           cached.Folder,
-		Path:             cached.Path,
-		Title:            cached.Title,
-		Releases:         releases,
-		Sources:          cached.Sources,
-		PreservedSources: cached.PreservedSources,
-		Fingerprints:     cached.Fingerprints,
+		MAMESets:     sets,
+		Platform:     cached.Platform,
+		Folder:       cached.Folder,
+		Path:         cached.Path,
+		Title:        cached.Title,
+		Releases:     releases,
+		Sources:      cached.Sources,
+		Fingerprints: cached.Fingerprints,
 	}
 }
 
