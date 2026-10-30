@@ -350,9 +350,10 @@ func buildLaunchBoxProjection(plan *Plan) (*LaunchBoxProjection, error) {
 	return result, nil
 }
 
-func writeLaunchBoxPlaylists(plan *Plan, staging string) error {
+func launchBoxPlaylistData(plan *Plan) (map[string][]byte, error) {
+	result := map[string][]byte{}
 	if plan.LaunchBox == nil {
-		return nil
+		return result, nil
 	}
 	for _, g := range plan.LaunchBox.Groups {
 		for _, v := range g.Versions {
@@ -363,16 +364,32 @@ func writeLaunchBoxPlaylists(plan *Plan, staging string) error {
 			for _, i := range v.Records {
 				name := filepath.Join(plan.ROMRoot, filepath.FromSlash(launchBoxFile(plan.Records[i])))
 				if strings.ContainsAny(name, "\r\n") {
-					return fmt.Errorf("invalid playlist input")
+					return nil, fmt.Errorf("invalid playlist input")
 				}
 				body.WriteString(name + "\n")
 			}
 			if !ValidInputPath(v.Path) {
-				return fmt.Errorf("invalid generated playlist path")
+				return nil, fmt.Errorf("invalid generated playlist path")
 			}
-			if err := writeOutput(filepath.Join(staging, filepath.FromSlash(v.Path)), []byte(body.String())); err != nil {
-				return err
-			}
+			result[v.Path] = []byte(body.String())
+		}
+	}
+	return result, nil
+}
+
+func writeLaunchBoxPlaylists(plan *Plan, staging string) error {
+	files, err := launchBoxPlaylistData(plan)
+	if err != nil {
+		return err
+	}
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if err = writeOutput(filepath.Join(staging, filepath.FromSlash(name)), files[name]); err != nil {
+			return err
 		}
 	}
 	return nil

@@ -199,8 +199,8 @@ Commands:
   validate   Check catalog layout and metadata; usage: validate [root].
   catalog    Inspect status, prune placeholders, label media, fold or split cards.
   serve      Start one catalog browser, API and OpenAPI/Swagger service.
-  export     Generate a staged offline ES-DE or LaunchBox package.
-  launchbox  Merge an exported package into a LaunchBox library.
+  export     Add/enrich ES-DE or LaunchBox entries; optionally generate a package.
+  launchbox  Compatibility alias for LaunchBox package installation.
   romm       JSON protocol helpers for the RomM server importer example.
   version    Print the build version.
 

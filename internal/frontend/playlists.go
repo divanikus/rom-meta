@@ -1,4 +1,4 @@
-package launchbox
+package frontend
 
 import (
 	"os"
@@ -31,25 +31,29 @@ func (p *Plan) launchIdentity(raw string, fromPackage bool) string {
 		if err != nil {
 			return result
 		}
+		body, err = p.read(p.Package, relative, false)
+		if err != nil {
+			return result
+		}
 	} else {
 		name = filepath.FromSlash(relative)
 		if !filepath.IsAbs(name) {
 			name = filepath.Join(p.Root, name)
 		}
-	}
-	info, err := os.Stat(name)
-	if err != nil || info.Size() > 1024*1024 || !info.Mode().IsRegular() {
-		return result
-	}
-	body, err = os.ReadFile(name)
-	if err != nil {
-		return result
-	}
-	proof := fingerprint{true, hashBytes(body)}
-	if inside(p.Package, name) || inside(p.Root, name) {
-		p.guards[name] = proof
-	} else {
-		p.external[name] = proof
+		info, err := os.Stat(name)
+		if err != nil || info.Size() > 1024*1024 || !info.Mode().IsRegular() {
+			return result
+		}
+		body, err = os.ReadFile(name)
+		if err != nil {
+			return result
+		}
+		proof := fingerprint{true, hashBytes(body)}
+		if inside(p.Root, name) {
+			p.guards[name] = proof
+		} else {
+			p.external[name] = proof
+		}
 	}
 	var paths []string
 	seen := map[string]bool{}

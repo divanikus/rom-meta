@@ -18,6 +18,7 @@ func runExport(args []string) error {
 	flags.SetOutput(os.Stdout)
 	target, selected := "es-de", ""
 	api := ""
+	var destination, packageRoot, mediaRoot, report string
 	all, list := false, false
 	flags.StringVar(&api, "api", "", "Catalog HTTP(S) origin; reads local ROMs without a local catalog")
 	flags.StringVar(&target, "target", "es-de", "Output target (es-de or launchbox)")
@@ -28,13 +29,17 @@ func runExport(args []string) error {
 	flags.BoolVar(&list, "list-systems", false, "List supported ES-DE launch readers")
 	flags.StringVar(&options.ArcadeSnapshot, "arcade-snapshot", "", "Saved MAME catalog snapshot (auto-select only when exactly one exists)")
 	flags.StringVar(&options.ROMRoot, "rom-root", "", "ROM system directory, or ES-DE root with --all/--platforms")
-	flags.StringVar(&options.Out, "out", "", "New output directory outside catalog/ROM trees")
+	flags.StringVar(&options.Out, "out", "", "Optional new portable package directory instead of direct installation")
+	flags.StringVar(&destination, "destination", "", "Frontend application-data directory to create/enrich entries in place")
+	flags.StringVar(&packageRoot, "package", "", "Optional existing export package instead of catalog/ROM inputs")
+	flags.StringVar(&mediaRoot, "media-root", "", "Optional ES-DE media directory override; otherwise read native settings")
+	flags.StringVar(&report, "report", "", "Optional new JSON destination-plan report (contains private paths)")
 	flags.StringVar(&options.ProfilePath, "profile", "", "Optional YAML export selection profile")
 	flags.StringVar(&options.Match, "match", "", "Select ROM relative paths containing this text")
 	flags.IntVar(&options.Limit, "limit", 0, "Maximum inputs per system in sorted path order (0: all)")
-	flags.BoolVar(&options.Apply, "apply", false, "Write a new staged package after planning")
+	flags.BoolVar(&options.Apply, "apply", false, "Apply the previewed destination update or create the requested package")
 	flags.Usage = func() {
-		fmt.Fprint(os.Stdout, "rom-meta export builds an offline frontend package from existing ROMs.\n\nUse --platform for one system, --platforms for selected folders or --all for the ES-DE root.\nUse --api <origin> for a remote catalog, or --data-root for local files.\nDry-run by default; --apply writes only a new output directory.\nSource ROMs and catalog files stay unchanged. See --list-systems for readers.\n")
+		fmt.Fprint(os.Stdout, "rom-meta export adds games and enriches an existing frontend using one shared workflow.\n\nUse --destination <frontend data directory> for direct export/enrichment.\nUse --out <new directory> only when you want a portable package.\nUse --platform, --platforms or --all with --rom-root and --data-root or --api.\nAlternatively use --package <existing export> with --destination.\nPreview by default; --apply writes changes with backups. ROMs/catalogs stay unchanged.\n")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
@@ -54,6 +59,43 @@ func runExport(args []string) error {
 		fmt.Println("Supported ES-DE systems:", strings.Join(exporter.SupportedSystems(), ", "))
 		fmt.Println("Cartridges: raw/single-payload ZIP. Discs: standalone CHD/ISO. Arcade/MAME: saved set-name bindings for ZIP/7z; no payload/dependency validation.")
 		return nil
+	}
+	if api != "" {
+		var explicit bool
+		flags.Visit(func(f *flag.Flag) {
+			if f.Name == "data-root" {
+				explicit = true
+			}
+		})
+		if explicit {
+			return fmt.Errorf("choose --api or --data-root, not both")
+		}
+	}
+	if destination != "" && options.Out != "" {
+		return fmt.Errorf("choose --destination for direct export or --out for a package")
+	}
+	if packageRoot != "" {
+		if destination == "" {
+			return fmt.Errorf("--package requires --destination")
+		}
+		var invalid string
+		flags.Visit(func(f *flag.Flag) {
+			switch f.Name {
+			case "target", "package", "destination", "media-root", "report", "apply":
+			default:
+				invalid = f.Name
+			}
+		})
+		if invalid != "" {
+			return fmt.Errorf("--package excludes catalog/ROM selection flags: --%s", invalid)
+		}
+		return runPackageDestination(target, packageRoot, destination, mediaRoot, report, options.Apply)
+	}
+	if destination == "" && (mediaRoot != "" || report != "") {
+		return fmt.Errorf("--media-root and --report require --destination")
+	}
+	if options.Out == "" && destination == "" {
+		return fmt.Errorf("--destination or --out is required")
 	}
 	modes := 0
 	if options.Platform != "" {
@@ -78,7 +120,13 @@ func runExport(args []string) error {
 		if explicitRoot {
 			return fmt.Errorf("choose --api or --data-root, not both")
 		}
+		if destination != "" {
+			return runDirectDestination(options, api, selected, all, destination, mediaRoot, report)
+		}
 		return runNetworkExport(options, api, selected, all)
+	}
+	if destination != "" {
+		return runDirectDestination(options, "", selected, all, destination, mediaRoot, report)
 	}
 	progress := newTerminalProgress(os.Stdout)
 	options.Progress = func(stage, name string, current, total int) {
@@ -191,6 +239,6 @@ func runNetworkExport(options exporter.Options, api, selected string, all bool) 
 
 func printLaunchBoxMergeHint(target string) {
 	if target == "launchbox" {
-		fmt.Println("Install: rom-meta launchbox merge --package <this package> --launchbox-root <installation> (preview; add --apply to write).")
+		fmt.Println("Install: rom-meta export --target launchbox --package <this package> --destination <installation> (add --apply to write).")
 	}
 }

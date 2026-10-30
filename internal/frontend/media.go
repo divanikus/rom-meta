@@ -1,4 +1,4 @@
-package launchbox
+package frontend
 
 import (
 	"fmt"
@@ -57,11 +57,7 @@ func (p *Plan) media(platform, sourceID, targetID string, existing, incoming map
 	sort.Strings(kinds)
 	for _, kind := range kinds {
 		relative := "Images/" + platform + "/" + kind
-		dir, err := safeJoin(p.Package, relative)
-		if err != nil {
-			return 0, nil, err
-		}
-		entries, err := os.ReadDir(dir)
+		entries, err := p.packageEntries(relative)
 		if os.IsNotExist(err) {
 			continue
 		}
@@ -123,12 +119,14 @@ func (p *Plan) media(platform, sourceID, targetID string, existing, incoming map
 		if err != nil {
 			return 0, nil, err
 		}
-		input, err := digest(source)
+		input, err := p.packageProof(source)
 		if err != nil {
 			return 0, nil, err
 		}
 		if old.exists && old != input {
 			p.Warnings = append(p.Warnings, "Preserved existing media: "+target)
+			p.guards[name] = old
+			fields[key] = target
 			continue
 		}
 		changed, err := p.write(target, nil, source)

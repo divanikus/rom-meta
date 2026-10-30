@@ -231,8 +231,8 @@ The profile's launchbox kinds/regions/languages lists select the primary version
 Card metadata and native artwork come from that primary input. Alternate selected
 media remain in VersionMedia for review, outside LaunchBox's automatic image scan.
 
-Install with rom-meta launchbox merge --package <this package> --launchbox-root
-<installation>. Preview first; repeat with --apply after closing LaunchBox/Big Box.
+Install with rom-meta export --target launchbox --package <this package>
+--destination <installation>. Preview first; repeat with --apply after closing LaunchBox/Big Box.
 The command matches native IDs, recorded bindings, launch paths and ordered M3U
 member paths. It keeps existing card IDs, nonempty fields, launch settings,
 favorites, history and unknown XML; adds versions and missing media; and backs up

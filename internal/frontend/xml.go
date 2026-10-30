@@ -1,5 +1,5 @@
-// Package launchbox merges reviewed export packages into a local LaunchBox library.
-package launchbox
+// Package frontend plans additive native-library updates for frontend exporters.
+package frontend
 
 import (
 	"bytes"

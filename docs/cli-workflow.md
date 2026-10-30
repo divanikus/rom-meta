@@ -55,17 +55,20 @@ Partitions, release reassignment and explicit primaries use advanced reviewed
 JSON plans. They are not required for ordinary whole-group fold. Source aliases
 alone do not justify an incorrect match.
 
-## 4. Preview and create a frontend package
+## 4. Export and enrich a frontend
 
 ```shell
 rom-meta validate "<catalog>"
-rom-meta export --target es-de --platform gamegear --data-root "<catalog>" --rom-root "<one-system-ROM-directory>" --out "<new-output-directory>"
-rom-meta export --target es-de --platform gamegear --data-root "<catalog>" --rom-root "<one-system-ROM-directory>" --out "<new-output-directory>" --apply
+rom-meta export --target es-de --platform gamegear --data-root "<catalog>" --rom-root "<one-system-ROM-directory>" --destination "<ES-DE-data-directory>"
+rom-meta export --target es-de --platform gamegear --data-root "<catalog>" --rom-root "<one-system-ROM-directory>" --destination "<ES-DE-data-directory>" --apply
 ```
 
 Export is offline and reports exact/name matches, ambiguity, unsupported inputs and
-text/media coverage. Preview creates no output. Apply creates a new package with
-preview/report/XML; it never replaces an existing output or modifies source ROMs.
+text/media coverage. Preview creates no native output or media downloads. Apply
+adds games and fills missing metadata/media with backups, preserving native user
+fields and source ROMs. The same command supports `--target launchbox`. Use
+`--out <new-directory>` instead when a portable package is needed. See the
+[shared frontend interface](frontend-export.md).
 `--profile` is optional; use a reusable profile for language/source/media priorities.
 For an ES-DE root containing system subfolders use `--all` or `--platforms` instead
 of `--platform`. Reader support and game-only evidence remain explicit limits.

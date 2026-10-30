@@ -1,4 +1,4 @@
-package launchbox
+package frontend
 
 import (
 	"crypto/sha256"
@@ -20,8 +20,8 @@ type fingerprint struct {
 	hash   string
 }
 type fileChange struct {
-	path, source, hash string
-	data               []byte
+	root, path, source, hash string
+	data                     []byte
 }
 
 func digest(name string) (fingerprint, error) {
@@ -49,7 +49,7 @@ func digest(name string) (fingerprint, error) {
 func hashBytes(data []byte) string { h := sha256.Sum256(data); return hex.EncodeToString(h[:]) }
 func canonicalRoot(name string) (string, error) {
 	if strings.TrimSpace(name) == "" {
-		return "", fmt.Errorf("package and LaunchBox roots are required")
+		return "", fmt.Errorf("source and destination roots are required")
 	}
 	abs, err := filepath.Abs(name)
 	if err != nil {
@@ -72,9 +72,12 @@ func safeJoin(root, relative string) (string, error) {
 	if !inside(root, name) {
 		return "", fmt.Errorf("path escapes root")
 	}
-	for current := name; current != root; current = filepath.Dir(current) {
+	for current := name; ; current = filepath.Dir(current) {
 		info, err := os.Lstat(current)
 		if os.IsNotExist(err) {
+			if current == root {
+				break
+			}
 			continue
 		}
 		if err != nil {
@@ -83,10 +86,29 @@ func safeJoin(root, relative string) (string, error) {
 		if info.Mode()&os.ModeSymlink != 0 {
 			return "", fmt.Errorf("linked package/library paths are unsupported: %s", current)
 		}
+		if current == root {
+			break
+		}
 	}
 	return name, nil
 }
 func (p *Plan) read(root, relative string, optional bool) ([]byte, error) {
+	if root == p.Package && p.source != nil {
+		if _, err := safeJoin(root, relative); err != nil {
+			return nil, err
+		}
+		file, ok := p.source.Files[relative]
+		if !ok {
+			if optional {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("missing generated file: %s", relative)
+		}
+		if file.Data == nil {
+			return nil, fmt.Errorf("generated metadata bytes missing: %s", relative)
+		}
+		return file.Data, nil
+	}
 	name, err := safeJoin(root, relative)
 	if err != nil {
 		return nil, err
@@ -103,7 +125,10 @@ func (p *Plan) read(root, relative string, optional bool) ([]byte, error) {
 	return data, nil
 }
 func (p *Plan) write(relative string, data []byte, source string) (bool, error) {
-	name, err := safeJoin(p.Root, relative)
+	return p.writeTo(p.Root, relative, data, source)
+}
+func (p *Plan) writeTo(root, relative string, data []byte, source string) (bool, error) {
+	name, err := safeJoin(root, relative)
 	if err != nil {
 		return false, err
 	}
@@ -114,14 +139,16 @@ func (p *Plan) write(relative string, data []byte, source string) (bool, error) 
 	p.guards[name] = old
 	want := hashBytes(data)
 	if source != "" {
-		f, err := digest(source)
+		f, err := p.packageProof(source)
 		if err != nil {
 			return false, err
 		}
 		if !f.exists {
 			return false, fmt.Errorf("missing package asset: %s", source)
 		}
-		p.guards[source] = f
+		if p.source == nil {
+			p.guards[source] = f
+		}
 		want = f.hash
 	}
 	if old.exists && old.hash == want {
@@ -131,15 +158,19 @@ func (p *Plan) write(relative string, data []byte, source string) (bool, error) 
 		return false, fmt.Errorf("existing asset differs; refusing overwrite: %s", name)
 	}
 	for _, change := range p.files {
-		if strings.EqualFold(change.path, relative) {
+		if change.root == root && strings.EqualFold(change.path, relative) {
 			if change.hash != want {
 				return false, fmt.Errorf("conflicting planned output: %s", relative)
 			}
 			return false, nil
 		}
 	}
-	p.files = append(p.files, fileChange{relative, source, want, data})
-	p.Files = append(p.Files, relative)
+	p.files = append(p.files, fileChange{root: root, path: relative, source: source, hash: want, data: data})
+	display := relative
+	if root != p.Root {
+		display = filepath.Join(root, filepath.FromSlash(relative))
+	}
+	p.Files = append(p.Files, display)
 	return true, nil
 }
 func (p *Plan) validate() error {
@@ -156,6 +187,8 @@ func (p *Plan) validate() error {
 		root := p.Root
 		if inside(p.Package, name) {
 			root = p.Package
+		} else if p.MediaRoot != "" && inside(p.MediaRoot, name) {
+			root = p.MediaRoot
 		}
 		relative, err := filepath.Rel(root, name)
 		if err != nil {
@@ -174,25 +207,63 @@ func (p *Plan) validate() error {
 	}
 	return nil
 }
-func checkProcesses() error {
-	if runtime.GOOS != "windows" {
-		return nil
-	}
-	body, err := exec.Command("tasklist", "/FO", "CSV", "/NH").Output()
-	if err != nil {
-		return fmt.Errorf("cannot check LaunchBox/Big Box processes: %w", err)
-	}
-	rows, err := csv.NewReader(strings.NewReader(string(body))).ReadAll()
-	if err != nil {
-		return err
-	}
-	for _, row := range rows {
-		if len(row) > 0 && (strings.EqualFold(row[0], "LaunchBox.exe") || strings.EqualFold(row[0], "BigBox.exe")) {
-			return fmt.Errorf("close LaunchBox and Big Box before applying the merge")
+func checkProcesses(target string) error {
+	if runtime.GOOS == "windows" {
+		body, err := exec.Command("tasklist", "/FO", "CSV", "/NH").Output()
+		if err != nil {
+			return fmt.Errorf("cannot check frontend processes: %w", err)
+		}
+		rows, err := csv.NewReader(strings.NewReader(string(body))).ReadAll()
+		if err != nil {
+			return err
+		}
+		names := []string{"LaunchBox.exe", "BigBox.exe"}
+		if target == "es-de" {
+			names = []string{"ES-DE.exe", "emulationstation.exe"}
+		}
+		for _, row := range rows {
+			for _, name := range names {
+				if len(row) > 0 && strings.EqualFold(row[0], name) {
+					return fmt.Errorf("close %s before applying the export", name)
+				}
+			}
+		}
+	} else if target == "es-de" && runtime.GOOS == "linux" {
+		entries, err := os.ReadDir("/proc")
+		if err != nil {
+			return fmt.Errorf("cannot check ES-DE processes: %w", err)
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() || entry.Name() == "" || entry.Name()[0] < '0' || entry.Name()[0] > '9' {
+				continue
+			}
+			comm, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "comm"))
+			if err != nil {
+				continue
+			}
+			name := strings.TrimSpace(string(comm))
+			if name == "ES-DE" || name == "es-de" || name == "emulationstatio" {
+				return fmt.Errorf("close ES-DE before applying the export")
+			}
 		}
 	}
 	return nil
 }
+
+// Check validates a reviewed native plan before expensive staging/downloads.
+func (p *Plan) Check() error {
+	if len(p.Conflicts) > 0 {
+		return fmt.Errorf("export has %d conflicts; no destination changes applied", len(p.Conflicts))
+	}
+	if len(p.files) == 0 {
+		return nil
+	}
+	if err := checkProcesses(p.Target); err != nil {
+		return err
+	}
+	return p.validate()
+}
+
 func exclusiveCopy(source, target string) error {
 	in, err := os.Open(source)
 	if err != nil {
@@ -219,17 +290,14 @@ func exclusiveCopy(source, target string) error {
 // Apply checks the reviewed inputs again and backs up every file it replaces.
 // Failures report the backup; automatic rollback never overwrites newer data.
 func (p *Plan) Apply() (backup string, err error) {
-	if len(p.Conflicts) > 0 {
-		return "", fmt.Errorf("merge has %d conflicts; no library changes applied", len(p.Conflicts))
+	if err = p.Check(); err != nil {
+		return "", err
 	}
 	if len(p.files) == 0 {
 		return "", nil
 	}
-	if err = checkProcesses(); err != nil {
-		return "", err
-	}
-	if err = p.validate(); err != nil {
-		return "", err
+	if p.source != nil {
+		return "", fmt.Errorf("generated preview must be materialized before apply")
 	}
 	stage, err := os.MkdirTemp(p.Root, ".rommeta-merge-")
 	if err != nil {
@@ -237,6 +305,9 @@ func (p *Plan) Apply() (backup string, err error) {
 	}
 	defer os.RemoveAll(stage)
 	for i, c := range p.files {
+		if p.Progress != nil {
+			p.Progress("prepare", c.path, i+1, len(p.files))
+		}
 		target := filepath.Join(stage, fmt.Sprint(i))
 		if c.source != "" {
 			err = exclusiveCopy(c.source, target)
@@ -274,15 +345,16 @@ func (p *Plan) Apply() (backup string, err error) {
 		}
 	}()
 	type receiptFile struct {
+		Root   string `json:"root"`
 		Path   string `json:"path"`
 		New    bool   `json:"new"`
 		SHA256 string `json:"sha256"`
 	}
 	var receipt []receiptFile
 	for _, c := range p.files {
-		name, _ := safeJoin(p.Root, c.path)
+		name, _ := safeJoin(c.root, c.path)
 		old := p.guards[name]
-		receipt = append(receipt, receiptFile{c.path, !old.exists, c.hash})
+		receipt = append(receipt, receiptFile{c.root, c.path, !old.exists, c.hash})
 		if old.exists {
 			target := filepath.Join(backup, filepath.FromSlash(c.path))
 			if err = os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
@@ -302,7 +374,10 @@ func (p *Plan) Apply() (backup string, err error) {
 	}
 	// Assets first; platform XML and identity map are published afterwards.
 	for i, c := range p.files {
-		target, e := safeJoin(p.Root, c.path)
+		if p.Progress != nil {
+			p.Progress("install", c.path, i+1, len(p.files))
+		}
+		target, e := safeJoin(c.root, c.path)
 		if e != nil {
 			return backup, e
 		}

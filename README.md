@@ -44,8 +44,8 @@ See [source setup](docs/source-setup.md) for accounts/credentials and
 
 | Target | Integration | Output |
 | --- | --- | --- |
-| ES-DE | Built-in `export --target es-de`, with a local catalog or `--api` | Gamelists, selected media, preview and provenance reports |
-| LaunchBox | Built-in [export --target launchbox](docs/launchbox-export.md), local or over API | Native platform XML/media and reports; `launchbox merge` installs/enriches a library |
+| ES-DE | Built-in [export --target es-de](docs/frontend-export.md), local or over API | Direct creation/enrichment of gamelists and media; optional portable package |
+| LaunchBox | Built-in [export --target launchbox](docs/launchbox-export.md), local or over API | Direct creation/enrichment of cards, versions and media; optional portable package |
 | RomM | Separate [server importer example](examples/romm-importer/README.md) | Metadata and media for already-scanned games in the pinned RomM runtime |
 
 See [supported input formats and export scenarios](docs/export-scenarios.md).
@@ -127,45 +127,32 @@ The same `serve` exposes catalog metadata and media:
 
 ## Export to a frontend
 
-**ES-DE:** generate metadata for your existing ROM files from a prepared catalog:
+ES-DE and LaunchBox use the same [export/enrichment interface](docs/frontend-export.md):
 
 ```shell
-rom-meta export --target es-de --platform nes --data-root "/path/to/catalog" --rom-root "/path/to/roms/nes" --out "/path/to/new-package"
+rom-meta export --target es-de --platform nes --data-root "/path/to/catalog" --rom-root "/path/to/roms/nes" --destination "/home/player/ES-DE"
+rom-meta export --target launchbox --platform nes --data-root "D:\Catalog" --rom-root "D:\ROMs\nes" --destination "D:\LaunchBox"
 ```
 
-Review the printed recognition/coverage summary, then repeat with `--apply`.
-The new package contains `preview.html`, reports, `gamelists/nes/gamelist.xml`
-and selected `downloaded_media/nes/`. ROMs and catalog stay unchanged.
-[Profiles](examples/export-es-de-library.yaml) control
-[display names](docs/offline-export.md#display-names), languages, sources and media.
-Use `--all` or `--platforms` against a parent ROM directory for multiple systems.
+Review recognition, coverage and destination changes, then repeat with `--apply`.
+The command adds missing entries and fills empty metadata/media, preserving
+favorites, statistics, emulator choices and existing nonempty fields. Close the
+frontend before applying; replaced files are backed up automatically. ROMs and
+the catalog remain unchanged. Preview does not copy or download media.
 
-For a remote catalog, run the server there:
+Use `--api "http://catalog-host:8787"` instead of `--data-root` for a remote catalog,
+`--platforms`/`--all` for several systems, and an optional `--profile` for language,
+source and media priorities. To create a portable package, use `--out <new-directory>`
+instead of `--destination`. Install a prepared package through the same command
+with `--package <directory> --destination <frontend-directory>`.
 
-```shell
-rom-meta serve --data-root "/path/to/catalog" --addr "192.168.1.10:8787"
-```
-
-On the ES-DE machine:
-
-```shell
-rom-meta export --api "http://192.168.1.10:8787" --all --rom-root "/games/roms" --out "/exports/new-package"
-```
-
-Review, then repeat with `--apply`. Local and network export share readers and
-confidence rules, including MAME. ROM bytes stay on the client; no catalog share
-is needed. See the [ES-DE guide](docs/offline-export.md#quick-start-existing-es-de-roms)
-and [network details](docs/offline-export.md#export-from-a-remote-catalog).
-
-Close ES-DE before installation. Back up existing metadata and merge by launch
-path to preserve favorites, play statistics and emulator overrides. The CLI
-creates packages; installation/merge is manual.
+See [ES-DE details](docs/offline-export.md), [LaunchBox versions/discs](docs/launchbox-export.md)
+and [input formats](docs/export-scenarios.md).
 
 **RomM:** the [server importer example](examples/romm-importer/README.md) fills
 already-scanned games through native RomM 5.4.1 handlers and Resources. It requires
-administrator setup and is version-specific and experimental.
-See [export scenarios](docs/export-scenarios.md) for formats, confidence and gaps.
-ES-DE is the only built-in `export --target`.
+administrator setup and is version-specific and experimental; it remains a
+separate server-side integration.
 
 ## Boundaries
 

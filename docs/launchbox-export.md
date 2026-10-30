@@ -5,14 +5,14 @@ revisions, prepared translations and hacks become **Additional Versions** under
 that card, including its primary launch. Grouping uses catalog game identity,
 never similar display titles. Unknown/ambiguous inputs remain independent cards.
 
-## Preview and create
+## Export and enrich the installation
 
 Run the client on the Windows machine that will launch the games, using paths
 available there. ROMs and catalogs are never copied or changed.
 
 ```powershell
-rom-meta export --target launchbox --platform n64 --data-root "D:\Catalog" --rom-root "D:\Games\n64" --profile "D:\Profiles\launchbox.yaml" --out "D:\Exports\n64-check"
-rom-meta export --target launchbox --platform n64 --data-root "D:\Catalog" --rom-root "D:\Games\n64" --profile "D:\Profiles\launchbox.yaml" --out "D:\Exports\n64-check" --apply
+rom-meta export --target launchbox --platform n64 --data-root "D:\Catalog" --rom-root "D:\Games\n64" --profile "D:\Profiles\launchbox.yaml" --destination "D:\LaunchBox"
+rom-meta export --target launchbox --platform n64 --data-root "D:\Catalog" --rom-root "D:\Games\n64" --profile "D:\Profiles\launchbox.yaml" --destination "D:\LaunchBox" --apply
 ```
 
 Copy [the example profile](../examples/export-launchbox.yaml) to set preferences.
@@ -37,10 +37,17 @@ input. Its ApplicationPath points to the same launch as the primary version.
 Every version stores its own path, region, label, emulator setting and stable ID.
 Current native records use `AdditionalApplication` with `Section=Version`.
 
-Preview creates no package. Apply creates a new directory and refuses existing
-output. Inspect `preview.html`, `report.txt` and `manifest.json`: they show groups,
-all versions, primary decisions, omissions and media provenance. Manifests include
-private absolute paths. Input totals remain ROM counts rather than card counts.
+The command uses the [shared ES-DE/LaunchBox interface](frontend-export.md).
+Preview shows recognition and native changes without creating temporary output,
+copying media or downloading assets. Close LaunchBox/Big Box and add `--apply` to
+add cards and enrich existing ones with backups. Nonempty native metadata/main
+launches remain even when the profile ranks another primary. Use `--report` for
+an optional new JSON destination plan. An unchanged apply writes nothing.
+
+For portable output, replace `--destination` with `--out <new-directory>`.
+That optional package contains `preview.html`, `report.txt` and `manifest.json`
+with grouping, input, primary, omission and provenance details. Manifests/reports
+include private paths. Input totals remain ROM counts rather than card counts.
 
 ## Network and batch export
 
@@ -51,7 +58,7 @@ it restores that policy locally before rendering. New API responses include the
 catalog title; older responses fall back to the primary regional display title.
 
 ```powershell
-rom-meta export --target launchbox --api "http://catalog-host:8787" --platforms nes,snes,psx --rom-root "D:\Games" --profile "D:\Profiles\launchbox.yaml" --out "D:\Exports\library-check" --apply
+rom-meta export --target launchbox --api "http://catalog-host:8787" --platforms nes,snes,psx --rom-root "D:\Games" --profile "D:\Profiles\launchbox.yaml" --destination "D:\LaunchBox" --apply
 ```
 
 `--platforms` and `--all` use the shared system-directory IDs. `--list-systems`
@@ -100,7 +107,7 @@ Disc changing, core/format support and save compatibility need actual emulator
 checks. Keep an established M3U launch path when migrating saves. CHD header or
 name evidence does not become verified Redump disc evidence.
 
-## Package and installation
+## Optional package layout
 
 | Package path | Purpose |
 | --- | --- |
@@ -119,15 +126,15 @@ scan to avoid mixing regional/modified artwork on the main card.
 
 ## Merge into the installed library
 
-The export command creates a package; it does not install it. Use the same
-merge command for new platforms and existing libraries:
+Direct export with `--destination` already uses the installed-library adapter.
+When starting from a separately prepared package, use the same export command:
 
 ```powershell
-rom-meta launchbox merge --package "D:\Exports\library-check" --launchbox-root "D:\LaunchBox"
-rom-meta launchbox merge --package "D:\Exports\library-check" --launchbox-root "D:\LaunchBox" --apply
+rom-meta export --target launchbox --package "D:\Exports\library-check" --destination "D:\LaunchBox"
+rom-meta export --target launchbox --package "D:\Exports\library-check" --destination "D:\LaunchBox" --apply
 ```
 
-Preview lists each card as `add`, `enrich`, `unchanged` or `conflict`, with field,
+The shared destination plan lists each card as `add`, `enrich`, `unchanged` or `conflict`, with field,
 version, media and changed-file counts. Optional `--report "D:\Exports\merge.json"`
 writes that plan to a new JSON file, including private paths. Close LaunchBox and
 Big Box before applying; on Windows the command checks their processes.
@@ -140,7 +147,7 @@ favorites and history. A small `Data/RomMeta.launchbox.json` map remembers that
 binding when later exports contain moved ROM paths. A missing previously bound
 card is a conflict rather than an instruction to recreate it.
 
-The merge fills empty title, description, release date, developer, publisher,
+The destination adapter fills empty title, description, release date, developer, publisher,
 genre and player-count fields. It adds missing playable versions and fills their
 empty metadata. Existing nonempty values, main launch path, emulator settings,
 command lines, manual/version choices, custom fields and unknown XML survive.
@@ -151,7 +158,7 @@ Review emulator/core/BIOS settings before playing.
 
 Missing primary artwork is installed under the retained card ID. Existing native
 GUID/title/database-ID artwork in the same category is kept, including region
-subfolders. Existing video/manual links and files are preserved. The merge never
+subfolders. Existing video/manual links and files are preserved. The adapter never
 replaces media with different bytes. Custom native image/video/manual folder
 overrides are rejected rather than guessed. Alternate `VersionMedia` sidecars
 stay in the export package for review, outside native media discovery.
@@ -180,7 +187,7 @@ no backup. The first merge can write only the identity map even when all native
 records are already complete. Do not manually replace an existing platform XML with the package XML.
 
 Use the Platform sidebar if category grouping hides a newly added platform.
-After a successful merge the package can be archived; installed launch/media paths
+After package installation the package can be archived; native launch/media paths
 do not depend on it. Keep source ROM/network mappings available.
 
 ## ScummVM

@@ -3,7 +3,7 @@ package exporter
 import (
 	"os"
 	"path/filepath"
-	"rommeta/internal/launchbox"
+	launchbox "rommeta/internal/frontend"
 	"testing"
 )
 
@@ -22,7 +22,7 @@ func TestLaunchBoxExportPackageMergesIntoLibrary(t *testing.T) {
 	if err = os.MkdirAll(filepath.Join(library, "Data", "Platforms"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	merged, err := launchbox.Build(launchbox.Options{PackageRoot: plan.Out, LaunchBoxRoot: library})
+	merged, err := launchbox.Build(launchbox.Options{Target: "launchbox", PackageRoot: plan.Out, Destination: library})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestLaunchBoxExportPackageMergesIntoLibrary(t *testing.T) {
 	if len(native.Games) != 1 || len(native.Versions) != 1 {
 		t.Fatal(native)
 	}
-	again, err := launchbox.Build(launchbox.Options{PackageRoot: plan.Out, LaunchBoxRoot: library})
+	again, err := launchbox.Build(launchbox.Options{Target: "launchbox", PackageRoot: plan.Out, Destination: library})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,4 +1,4 @@
-package launchbox
+package frontend
 
 import (
 	"bytes"
@@ -12,29 +12,6 @@ import (
 	"strings"
 )
 
-type Options struct{ PackageRoot, LaunchBoxRoot string }
-type Change struct {
-	Platform  string   `json:"platform"`
-	Title     string   `json:"title"`
-	ID        string   `json:"id"`
-	Action    string   `json:"action"`
-	Fields    []string `json:"filled_fields,omitempty"`
-	Versions  int      `json:"added_versions"`
-	Media     int      `json:"added_media"`
-	Playlists int      `json:"added_playlists"`
-}
-type Plan struct {
-	Package    string   `json:"package"`
-	Root       string   `json:"launchbox_root"`
-	Changes    []Change `json:"games"`
-	Conflicts  []string `json:"conflicts"`
-	Warnings   []string `json:"warnings"`
-	Files      []string `json:"changed_files"`
-	files      []fileChange
-	guards     map[string]fingerprint
-	external   map[string]fingerprint
-	identities map[string]string
-}
 type identityMap struct {
 	Schema int               `json:"schema_version"`
 	Cards  map[string]string `json:"cards"`
@@ -132,62 +109,34 @@ func orderedGames(games map[string]native) []string {
 	return keys
 }
 
-// Build plans additive enrichment. It never matches by a display title or folds
-// existing native cards: their play history, curation and references belong to users.
-func Build(options Options) (*Plan, error) {
-	root, err := canonicalRoot(options.LaunchBoxRoot)
-	if err != nil {
-		return nil, err
-	}
-	pkg, err := canonicalRoot(options.PackageRoot)
-	if err != nil {
-		return nil, err
-	}
-	if inside(root, pkg) || inside(pkg, root) {
-		return nil, fmt.Errorf("package and LaunchBox directories must not overlap")
-	}
-	p := &Plan{Root: root, Package: pkg, guards: map[string]fingerprint{}, external: map[string]fingerprint{}, identities: map[string]string{}, Changes: []Change{}, Conflicts: []string{}, Warnings: []string{}, Files: []string{}}
+// buildLaunchBox preserves native card identity and owner curation.
+func buildLaunchBox(p *Plan) error {
+	root, pkg := p.Root, p.Package
 	if info, err := os.Stat(filepath.Join(root, "Data", "Platforms")); err != nil || !info.IsDir() {
-		return nil, fmt.Errorf("LaunchBox root must contain Data/Platforms")
+		return fmt.Errorf("LaunchBox destination must contain Data/Platforms")
 	}
-	body, err := p.read(pkg, "manifest.json", false)
-	if err != nil {
-		return nil, err
-	}
-	var header struct {
-		Schema int    `json:"schema_version"`
-		Target string `json:"target"`
-	}
-	if err = json.Unmarshal(body, &header); err != nil {
-		return nil, err
-	}
-	if header.Schema != 1 || header.Target != "launchbox" {
-		return nil, fmt.Errorf("expected a version-1 LaunchBox export package")
-	}
+	var body []byte
+	var err error
 	state := identityMap{Schema: 1, Cards: map[string]string{}}
 	body, err = p.read(root, statePath, true)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if body != nil {
 		if err = json.Unmarshal(body, &state); err != nil {
-			return nil, err
+			return err
 		}
 		if state.Schema != 1 || state.Cards == nil {
-			return nil, fmt.Errorf("unsupported LaunchBox identity map")
+			return fmt.Errorf("unsupported LaunchBox identity map")
 		}
 	}
 	folders, err := p.read(root, "Data/Platforms.xml", true)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	dir, err := safeJoin(pkg, "Data/Platforms")
+	entries, err := p.packageEntries("Data/Platforms")
 	if err != nil {
-		return nil, err
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
+		return err
 	}
 	count := 0
 	for _, entry := range entries {
@@ -197,15 +146,15 @@ func Build(options Options) (*Plan, error) {
 		relative := "Data/Platforms/" + entry.Name()
 		body, err = p.read(pkg, relative, false)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		incoming, err := parse(body, "LaunchBox")
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", relative, err)
+			return fmt.Errorf("%s: %w", relative, err)
 		}
 		games, apps, err := records(incoming)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if len(games) == 0 {
 			continue
@@ -214,26 +163,26 @@ func Build(options Options) (*Plan, error) {
 		platform := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
 		for _, game := range games {
 			if game.fields["Platform"] != platform {
-				return nil, fmt.Errorf("platform XML/name mismatch")
+				return fmt.Errorf("platform XML/name mismatch")
 			}
 		}
 		if err = checkFolders(folders, platform); err != nil {
-			return nil, err
+			return err
 		}
 		old, err := p.read(root, relative, true)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if old == nil {
 			old = []byte("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<LaunchBox>\n</LaunchBox>\n")
 		}
 		library, err := parse(old, "LaunchBox")
 		if err != nil {
-			return nil, err
+			return err
 		}
 		existing, versions, err := records(library)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		replacements := map[int][]byte{}
 		var additions [][]byte
@@ -310,7 +259,7 @@ func Build(options Options) (*Plan, error) {
 					continue
 				}
 				if v.fields["Section"] != "Version" {
-					return nil, fmt.Errorf("package contains a non-version additional app")
+					return fmt.Errorf("package contains a non-version additional app")
 				}
 				matches := 0
 				for _, oldVersion := range versions {
@@ -362,7 +311,7 @@ func Build(options Options) (*Plan, error) {
 			}
 			addedMedia, mediaFields, err := p.media(platform, game, target, mediaExisting, g.fields)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			change.Media = addedMedia
 			for key, value := range mediaFields {
@@ -370,7 +319,7 @@ func Build(options Options) (*Plan, error) {
 			}
 			if !found {
 				if err = p.playlist(g.fields["ApplicationPath"]); err != nil {
-					return nil, err
+					return err
 				}
 			}
 			for key := range updates {
@@ -383,14 +332,14 @@ func Build(options Options) (*Plan, error) {
 				if len(updates) > 0 {
 					raw, err := setFields(oldGame.node, updates)
 					if err != nil {
-						return nil, err
+						return err
 					}
 					replacements[oldGame.index] = raw
 				}
 			} else {
 				raw, err := setFields(g.node, updates)
 				if err != nil {
-					return nil, err
+					return err
 				}
 				additions = append(additions, raw)
 			}
@@ -409,7 +358,7 @@ func Build(options Options) (*Plan, error) {
 				if matching != nil {
 					if keyPath(root, matching.fields["ApplicationPath"]) == keyPath(root, v.fields["ApplicationPath"]) {
 						if err = p.playlist(v.fields["ApplicationPath"]); err != nil {
-							return nil, err
+							return err
 						}
 					}
 					patch := fill(matching.fields, v.fields, versionFields)
@@ -419,7 +368,7 @@ func Build(options Options) (*Plan, error) {
 						}
 						raw, err := setFields(matching.node, patch)
 						if err != nil {
-							return nil, err
+							return err
 						}
 						replacements[matching.index] = raw
 					}
@@ -431,11 +380,11 @@ func Build(options Options) (*Plan, error) {
 					patch["ApplicationPath"] = fields["ApplicationPath"]
 					if keyPath(root, fields["ApplicationPath"]) == keyPath(root, v.fields["ApplicationPath"]) {
 						if err = p.playlist(v.fields["ApplicationPath"]); err != nil {
-							return nil, err
+							return err
 						}
 					}
 				} else if err = p.playlist(v.fields["ApplicationPath"]); err != nil {
-					return nil, err
+					return err
 				}
 				if found && guidPattern.MatchString(fields["Emulator"]) && id(fields["Emulator"]) != zeroGUID {
 					patch["EmulatorId"] = fields["Emulator"]
@@ -443,7 +392,7 @@ func Build(options Options) (*Plan, error) {
 				}
 				raw, err := setFields(v.node, patch)
 				if err != nil {
-					return nil, err
+					return err
 				}
 				additions = append(additions, raw)
 				change.Versions++
@@ -463,29 +412,18 @@ func Build(options Options) (*Plan, error) {
 		result := library.edit(replacements, additions)
 		if !bytes.Equal(result, old) {
 			if _, err = p.write(relative, result, ""); err != nil {
-				return nil, err
+				return err
 			}
 		}
 	}
 	if count == 0 {
-		return nil, fmt.Errorf("package contains no LaunchBox game cards")
+		return fmt.Errorf("package contains no LaunchBox game cards")
 	}
 	data, _ := json.MarshalIndent(state, "", "  ")
 	if _, err = p.write(statePath, append(data, '\n'), ""); err != nil {
-		return nil, err
+		return err
 	}
-	// Publish assets before XML and keep the identity map last.
-	rank := func(name string) int {
-		if name == statePath {
-			return 2
-		}
-		if strings.HasPrefix(name, "Data/") {
-			return 1
-		}
-		return 0
-	}
-	sort.SliceStable(p.files, func(i, j int) bool { return rank(p.files[i].path) < rank(p.files[j].path) })
-	return p, nil
+	return nil
 }
 
 func checkFolders(body []byte, platform string) error {

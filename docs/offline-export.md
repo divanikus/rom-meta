@@ -8,77 +8,63 @@ For native LaunchBox XML/media, use the [LaunchBox exporter](launchbox-export.md
 
 ## Quick start: existing ES-DE ROMs
 
-Prepare/import/fetch the catalog once. Export then generates metadata for the
-files you supply, without selecting or copying ROMs.
-
-### 1. Identify the inputs and frontend paths
-
-Find the actual system directory ES-DE launches, e.g. `/games/roms/nes`, plus its
-configured gamelist and media locations. These may be on different disks; batch
-mode does not infer custom nested system roots. The catalog must contain that
-platform's metadata/media. Check the [input formats](export-scenarios.md#es-de-input-coverage).
-
-### 2. Preview one system
-
-Use a new output directory outside both catalog and ROM trees. `--limit 10`
-selects a sample:
+Use the [shared export/enrichment interface](frontend-export.md). Prepare the
+catalog once, then point at the actual system ROM directory and ES-DE application
+data/home directory:
 
 ```shell
-rom-meta export --target es-de --platform nes --data-root "/path/to/catalog" --rom-root "/games/roms/nes" --out "/exports/nes-check" --limit 10
+rom-meta export --target es-de --platform nes --data-root "/path/to/catalog" --rom-root "/games/roms/nes" --destination "/home/player/ES-DE"
+rom-meta export --target es-de --platform nes --data-root "/path/to/catalog" --rom-root "/games/roms/nes" --destination "/home/player/ES-DE" --apply
 ```
 
-Preview creates no package. Review match confidence, ambiguous/unmatched/
-unsupported inputs, description/cover coverage and selected media bytes.
+Review recognition, coverage and `add`/`enrich`/`unchanged`/`conflict` actions.
+Preview creates no output and copies/downloads no media. Close ES-DE before apply.
+New entries are added; empty metadata and missing media are filled. Existing
+nonempty fields, favorites, play counts, hidden flags, emulator overrides,
+folder entries, unknown fields and unrelated entries remain. The native
+`alternativeEmulator` sibling beside `gameList` is retained. Replaced files are
+backed up under `<destination>/Backups/RomMeta`; unchanged repeats write nothing.
+ROMs and catalog files stay unchanged.
 
-### 3. Create and inspect a package
+`--destination` identifies ES-DE's data directory, normally containing `settings`,
+`gamelists` and `downloaded_media`. The media path is read from modern
+`settings/es_settings.xml` or legacy `es_settings.xml`; absent/empty MediaDirectory
+uses `<destination>/downloaded_media`. Use `--media-root <directory>` for an
+explicit external media location or unresolved media-path variables. Settings
+are not changed. ROMDirectory and selected custom-system paths, when configured,
+must agree with `--rom-root`; unresolved ROM path variables and legacy gamelists
+beside ROMs are rejected. See the [official directory/settings guide](https://gitlab.com/es-de/emulationstation-de/-/blob/master/USERGUIDE.md#installation-and-first-startup).
 
-Repeat with `--apply`:
+Use `--match` or `--limit` for a bounded sample; omit them for a full system.
+Copy [the profile](../examples/export-es-de-library.yaml) for metadata/media
+priorities. Profiles do not fetch missing provider content.
+
+For multiple immediate system folders use the same destination:
 
 ```shell
-rom-meta export --target es-de --platform nes --data-root "/path/to/catalog" --rom-root "/games/roms/nes" --out "/exports/nes-check" --limit 10 --apply
+rom-meta export --target es-de --platforms nes,snes,megadrive --data-root "/path/to/catalog" --rom-root "/games/roms" --destination "/home/player/ES-DE" --apply
 ```
 
-Open `preview.html`; inspect `report.txt`, `manifest.json`, `gamelists/nes/gamelist.xml`
-and media. The manifest records recognition and source/language/media evidence;
-`README.txt` explains installation. Check actual display in ES-DE separately.
-
-For the full system, omit `--limit` and use a new output directory. For priorities,
-copy [the library profile](../examples/export-es-de-library.yaml) and pass
-`--profile "/path/to/profile.yaml"` on preview/apply. Export never fetches missing
-provider content.
-
-### 4. Install into ES-DE
-
-Close ES-DE and back up existing metadata/media before copying reviewed output:
-
-| Package path | Frontend destination |
-| --- | --- |
-| `gamelists/nes/gamelist.xml` | `<ES-DE-home>/gamelists/nes/gamelist.xml` |
-| Contents of `downloaded_media/nes/` | `<configured-media-root>/nes/` |
-
-Keep ROM names/subdirectories used by `./` launch paths. Use ES-DE's configured
-locations; XML next to ROMs requires separate legacy configuration.
-
-For existing gamelists, merge by launch path to preserve favorites, playcounts,
-emulator overrides and unrelated entries. Replacing XML loses these values.
-The CLI does not install or merge output. Reload ES-DE and check paths/display.
-
-### 5. Export several systems
-
-Use the parent ROM directory with immediate folders such as `nes/` and `snes/`:
-
-```shell
-rom-meta export --target es-de --platforms nes,snes,megadrive --data-root "/path/to/catalog" --rom-root "/games/roms" --profile "/path/to/profile.yaml" --out "/exports/three-systems"
-```
-
-Review, then repeat with `--apply`. `--all` discovers supported folders;
-`--platforms` selects named ones. Use a separate `--platform` export for custom
-nested system paths, including custom Xbox 360 roots.
-
+`--all` discovers supported immediate folders. Custom nested ROM paths need a
+separate `--platform` invocation, using the same export/enrichment workflow.
 Related disc/digital catalogs are searched together for one hardware system,
-including `--all` and `--api`. PS3 disc and PSN records can therefore share one
-ES-DE system folder. Exact names/hashes still select a card; conflicting matches
-are reported. This does not add readers for Wii/Wii U or unsupported containers.
+including API mode. Ambiguities and unsupported readers remain explicit.
+
+### Optional package review or transport
+
+To produce a portable package instead, replace `--destination` with
+`--out <new-directory>`. Apply creates `preview.html`, reports, a manifest,
+`gamelists/<system>/gamelist.xml` and selected `downloaded_media/<system>/` files.
+Existing outputs are never overwritten. To install it, use the same command:
+
+```shell
+rom-meta export --target es-de --package "/exports/nes" --destination "/home/player/ES-DE"
+rom-meta export --target es-de --package "/exports/nes" --destination "/home/player/ES-DE" --apply
+```
+
+Do not replace an existing gamelist with a package XML by copying; native state
+is preserved by the same destination adapter as direct export. Source ROM paths
+must still correspond to the configured frontend system paths.
 
 ## Prepared translations
 
@@ -98,9 +84,9 @@ rom-meta serve --data-root "/catalog" --addr "192.168.1.10:8787"
 On the machine holding the ES-DE ROMs:
 
 ```shell
-rom-meta export --api "http://192.168.1.10:8787" --platform nes --rom-root "/games/roms/nes" --out "/exports/nes-package"
-rom-meta export --api "http://192.168.1.10:8787" --all --rom-root "/games/roms" --profile "/path/to/profile.yaml" --out "/exports/all-package"
-rom-meta export --api "http://192.168.1.10:8787" --all --rom-root "/games/roms" --profile "/path/to/profile.yaml" --out "/exports/all-package" --apply
+rom-meta export --api "http://192.168.1.10:8787" --platform nes --rom-root "/games/roms/nes" --destination "/home/player/ES-DE"
+rom-meta export --api "http://192.168.1.10:8787" --all --rom-root "/games/roms" --profile "/path/to/profile.yaml" --destination "/home/player/ES-DE"
+rom-meta export --api "http://192.168.1.10:8787" --all --rom-root "/games/roms" --profile "/path/to/profile.yaml" --destination "/home/player/ES-DE" --apply
 ```
 
 `--platforms nes,gba,psx,mame` selects immediate folders. `--api` excludes
@@ -122,11 +108,13 @@ Remote readers match local ones, including PS3 descriptors, directory playlists
 and MAME ZIP/7z. `--arcade-snapshot` selects saved server bindings; unresolved
 snapshot selection skips a batch system or fails a single-system export.
 
-Apply downloads selected assets, verifies size/SHA-256, rechecks ROMs and stages
-one package. Revision/source drift, failures or cancellation abort publication.
-Collections have no total ceiling. Retry failures with the same unused output
-path; successful exports require a new path. Temporary downloads are not a
-persistent resume cache. Installation/merge remains manual.
+For `--destination`, apply validates the native plan before transfers, downloads
+selected assets, verifies size/SHA-256 and ROM freshness, then merges validated
+output into the frontend with backups. Preparation is internal and temporary.
+An unchanged destination apply skips asset transfers. `--out` remains available
+for a separate portable package and still requires a new output path. Temporary
+downloads are not a persistent resume cache; failed preparation leaves the
+installed metadata unchanged.
 
 ## Export an ES-DE ROM root
 
@@ -225,8 +213,8 @@ sidecars and installation notes live in `reports/<system>/`. Single-system expor
 keep sidecars at the root. Preview media links are relative.
 
 Launch paths use `./`; ROMs are not copied/renamed. Source launches are rehashed
-before publication and copied assets carry SHA-256. Installation is manual:
-[back up and merge](#4-install-into-es-de) into ES-DE's configured locations.
+before publication and copied assets carry SHA-256. Install through the
+[apply through the shared destination adapter](frontend-export.md) in ES-DE's configured locations.
 Keep private reports/paths and licensed media outside Git. See ES-DE's
 [gamelist reference](https://gitlab.com/es-de/emulationstation-de/-/blob/master/INSTALL.md#gamelistxml)
 and [media naming guide](https://gitlab.com/es-de/emulationstation-de/-/blob/master/USERGUIDE.md#manually-copying-game-media-files).
