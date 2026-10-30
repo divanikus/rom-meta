@@ -70,6 +70,11 @@ func runCommand() (code int) {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			return 2
 		}
+	case "launchbox":
+		if err := runLaunchBox(args[1:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
 	case "export":
 		if err := runExport(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
@@ -194,7 +199,8 @@ Commands:
   validate   Check catalog layout and metadata; usage: validate [root].
   catalog    Inspect status, prune placeholders, label media, fold or split cards.
   serve      Start one catalog browser, API and OpenAPI/Swagger service.
-  export     Generate a staged offline ES-DE package.
+  export     Generate a staged offline ES-DE or LaunchBox package.
+  launchbox  Merge an exported package into a LaunchBox library.
   romm       JSON protocol helpers for the RomM server importer example.
   version    Print the build version.
 

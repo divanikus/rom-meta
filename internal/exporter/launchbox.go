@@ -231,21 +231,22 @@ The profile's launchbox kinds/regions/languages lists select the primary version
 Card metadata and native artwork come from that primary input. Alternate selected
 media remain in VersionMedia for review, outside LaunchBox's automatic image scan.
 
-Close LaunchBox and Big Box; back up Data before installation.
-For NEW platforms, copy Data/Platforms/*.xml into LaunchBox/Data/Platforms/.
-Copy Images, Videos, Manuals and Playlists into their matching installation folders.
-Do not overwrite an existing platform XML: it contains other games, owner fields,
-favorites, statistics, emulator choices and version bindings. In-place merging
-is not implemented. Card IDs now follow catalog identity rather than individual
-launch paths; migration from the first ungrouped exporter requires deliberate review.
+Install with rom-meta launchbox merge --package <this package> --launchbox-root
+<installation>. Preview first; repeat with --apply after closing LaunchBox/Big Box.
+The command matches native IDs, recorded bindings, launch paths and ordered M3U
+member paths. It keeps existing card IDs, nonempty fields, launch settings,
+favorites, history and unknown XML; adds versions and missing media; and backs up
+replaced files. Conflicting existing cards require reviewed native consolidation.
+Do not manually overwrite an existing platform XML. See docs/launchbox-export.md.
 Use the Platform sidebar filter if a category view does not show new platforms.
-Custom media-folder overrides need adjusted destinations.
+Custom media-folder overrides are not supported by the merge command.
 
-Emulators remain unassigned on both the card and all versions. Configure a
-platform default or review every version's emulator before playing.
+Exported emulator IDs are unassigned. During merge, newly added versions inherit
+an assigned existing main-card emulator. Configure emulators for new cards and
+review every version before playing.
 ROMs/catalogs are never copied or changed. Supplied files and M3Us use original
 absolute paths. Generated M3Us live in Playlists and reference absolute disc paths;
-copy that folder too and keep network mappings available.
+the merge installs that folder when needed. Keep network mappings available.
 Each M3U belongs to one region/revision/modified version. Versions deliberately
 have no global Disc number: automatic LaunchBox M3U generation could mix editions.
 The selected emulator receives an existing M3U. Disc control and save compatibility

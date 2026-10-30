@@ -116,6 +116,7 @@ func runExport(args []string) error {
 			return err
 		}
 		fmt.Printf("Created %s\nOpen preview.html for all systems.\n", batch.Out)
+		printLaunchBoxMergeHint(target)
 		return nil
 	}
 	plan, err := exporter.Build(options)
@@ -133,6 +134,7 @@ func runExport(args []string) error {
 		return err
 	}
 	fmt.Printf("Created %s\nOpen preview.html, report.txt and README.txt there.\n", plan.Out)
+	printLaunchBoxMergeHint(target)
 	return nil
 }
 func printExportSummary(plan *exporter.Plan) {
@@ -183,5 +185,12 @@ func runNetworkExport(options exporter.Options, api, selected string, all bool) 
 		return err
 	}
 	fmt.Printf("Created %s\nOpen preview.html before installing in the frontend.\n", job.Batch.Out)
+	printLaunchBoxMergeHint(options.Target)
 	return nil
+}
+
+func printLaunchBoxMergeHint(target string) {
+	if target == "launchbox" {
+		fmt.Println("Install: rom-meta launchbox merge --package <this package> --launchbox-root <installation> (preview; add --apply to write).")
+	}
 }

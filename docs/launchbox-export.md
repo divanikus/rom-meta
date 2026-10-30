@@ -117,22 +117,71 @@ Title and Fanart - Background. Formats are copied unchanged; frontend support
 needs separate verification. Alternate media stays outside the automatic image
 scan to avoid mixing regional/modified artwork on the main card.
 
-Close LaunchBox/Big Box and back up Data. For new platforms copy platform XML and
-the Images, Videos, Manuals and Playlists trees into matching installation folders.
-Use the Platform sidebar if category grouping hides new platforms. Custom media
-roots need corresponding destination adjustments.
+## Merge into the installed library
 
-Do not replace existing platform XML: favorites, statistics, manual metadata,
-other games and version bindings need a deliberate merge. No generic in-place
-merger is provided. The first ungrouped exporter used input-path game IDs; grouped
-cards now use native platform plus catalog game key. Primary/version selection
-and moving ROMs no longer change a known card's ID. Version IDs follow launch
-paths/members; renaming catalog keys still changes card identity. Review migration
-from old output instead of assuming the IDs or game counts are unchanged.
+The export command creates a package; it does not install it. Use the same
+merge command for new platforms and existing libraries:
 
-Emulators are unassigned on cards and versions. Configure a platform default or
-review every version's emulator; changing just the main card may leave alternate
-versions unassigned. Export installs no emulators, cores or BIOS.
+```powershell
+rom-meta launchbox merge --package "D:\Exports\library-check" --launchbox-root "D:\LaunchBox"
+rom-meta launchbox merge --package "D:\Exports\library-check" --launchbox-root "D:\LaunchBox" --apply
+```
+
+Preview lists each card as `add`, `enrich`, `unchanged` or `conflict`, with field,
+version, media and changed-file counts. Optional `--report "D:\Exports\merge.json"`
+writes that plan to a new JSON file, including private paths. Close LaunchBox and
+Big Box before applying; on Windows the command checks their processes.
+
+Matching uses native card IDs, previously recorded bindings, main/version launch
+paths, or identical ordered absolute disc paths in available M3Us. Windows path
+case and slash differences are normalized. Titles are never matching evidence.
+An adopted card retains its existing native ID, including playlist references,
+favorites and history. A small `Data/RomMeta.launchbox.json` map remembers that
+binding when later exports contain moved ROM paths. A missing previously bound
+card is a conflict rather than an instruction to recreate it.
+
+The merge fills empty title, description, release date, developer, publisher,
+genre and player-count fields. It adds missing playable versions and fills their
+empty metadata. Existing nonempty values, main launch path, emulator settings,
+command lines, manual/version choices, custom fields and unknown XML survive.
+Default year-0001 dates and zero player counts count as empty. Changing export
+primary preferences does not replace an installed card's working primary launch.
+New versions inherit an assigned main-card emulator; new cards remain unassigned.
+Review emulator/core/BIOS settings before playing.
+
+Missing primary artwork is installed under the retained card ID. Existing native
+GUID/title/database-ID artwork in the same category is kept, including region
+subfolders. Existing video/manual links and files are preserved. The merge never
+replaces media with different bytes. Custom native image/video/manual folder
+overrides are rejected rather than guessed. Alternate `VersionMedia` sidecars
+stay in the export package for review, outside native media discovery.
+
+Generated M3Us are copied to the installation's `Playlists` tree only when a new
+launch needs them. An equivalent existing main M3U remains the new version's
+launch path too, preserving its established save identity. Source ROMs, discs,
+playlists and catalog data are never rewritten or copied. Disc/core/save behavior
+still needs emulator verification.
+
+If paths or IDs point to multiple existing cards, multiple catalog games point to
+one native card, or version IDs/paths conflict, apply refuses the entire merge.
+Existing separate cards are not automatically deleted or folded: their history,
+playlist memberships and curation need a deliberate native consolidation first.
+See LaunchBox's [bulk-editing and combining guidance](https://launchbox.featurebase.app/help/articles/8922784-bulk-editing-and-auditing-a-large-launchbox-library).
+The first ungrouped exporter used per-launch card IDs; exact launch/M3U evidence
+allows adoption when it identifies one existing card unambiguously.
+
+Before writing, the command rechecks the package, affected native files, selected
+assets and compared M3Us. It backs up every replaced file under
+`Backups/RomMeta/<run>/` and records changed/new paths in `changes.json`. Assets
+are staged before publishing platform XML. This is not a multi-file transaction:
+an I/O failure can require reviewed manual recovery using that backup. No automatic
+restoration overwrites later edits. An unchanged repeat writes nothing and creates
+no backup. The first merge can write only the identity map even when all native
+records are already complete. Do not manually replace an existing platform XML with the package XML.
+
+Use the Platform sidebar if category grouping hides a newly added platform.
+After a successful merge the package can be archived; installed launch/media paths
+do not depend on it. Keep source ROM/network mappings available.
 
 ## ScummVM
 
