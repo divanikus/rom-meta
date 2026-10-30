@@ -161,6 +161,9 @@ func versionRank(r Record, p LaunchBoxPolicy) []int {
 func launchBoxVersionName(r Record) string {
 	if r.Variant != "" {
 		variant := r.Variant
+		if r.VariantInfo != nil && r.VariantInfo.Title != "" {
+			variant = r.VariantInfo.Title
+		}
 		if len(r.Playlist) > 0 {
 			variant = withoutTitleDisc(variant)
 		}

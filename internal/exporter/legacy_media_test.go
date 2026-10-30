@@ -33,7 +33,7 @@ func TestLegacyMediaSelectionGolden(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				count := len(roles)
+				count := len(sortedRoles())
 				if mode == "default" {
 					count = 4
 				}
@@ -84,7 +84,7 @@ func roleFormat(role string) string {
 }
 func sortedRoles() []string {
 	var names []string
-	for role := range roles {
+	for _, role := range []string{"cover", "screenshot", "logo", "video", "title-screen", "box-3d", "back-cover", "fanart", "manual"} {
 		names = append(names, role)
 	}
 	sort.Strings(names)

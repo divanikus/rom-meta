@@ -75,6 +75,8 @@ var launchBoxImages = map[string]string{
 	"cover": "Box - Front", "back-cover": "Box - Back", "box-3d": "Box - 3D",
 	"screenshot": "Screenshot - Gameplay", "title-screen": "Screenshot - Game Title",
 	"logo": "Clear Logo", "fanart": "Fanart - Background",
+	"box-spine": "Box - Spine", "cart-front": "Cart - Front", "cart-back": "Cart - Back",
+	"cart-3d": "Cart - 3D", "disc": "Disc", "banner": "Banner", "icon": "Icon",
 }
 
 // ProjectTarget changes only the frontend layout after local/API identity and
@@ -86,6 +88,9 @@ func ProjectTarget(plan *Plan, target string) error {
 	}
 	if !validSystemID(plan.System) {
 		return fmt.Errorf("unknown export system: %s", plan.System)
+	}
+	if err := ValidateTargetMedia(plan.Profile, target); err != nil {
+		return err
 	}
 	plan.Target = target
 	plan.LaunchBox = nil

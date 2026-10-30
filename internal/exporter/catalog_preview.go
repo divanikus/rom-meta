@@ -18,6 +18,7 @@ type CatalogPreview struct {
 	Fields   map[string]Value `json:"fields"`
 	Media    map[string]Media `json:"media"`
 	Warnings []string         `json:"warnings,omitempty"`
+	record   Record
 }
 
 // PreviewCatalog reuses export selection for one already-read catalog document.
@@ -91,5 +92,5 @@ func PreviewCatalog(ctx context.Context, root, gamePath string, node *yaml.Node,
 	if err := ctx.Err(); err != nil {
 		return CatalogPreview{}, err
 	}
-	return CatalogPreview{Release: record.MetadataRelease, Variant: record.Variant, Fields: record.Fields, Media: record.Media, Warnings: record.Warnings}, nil
+	return CatalogPreview{Release: record.MetadataRelease, Variant: record.Variant, Fields: record.Fields, Media: record.Media, Warnings: record.Warnings, record: record}, nil
 }

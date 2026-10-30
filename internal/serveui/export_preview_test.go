@@ -210,3 +210,61 @@ func TestExportSourceOptionsAndExplicitEmptySources(t *testing.T) {
 		t.Fatal("empty source lists reverted to defaults", p)
 	}
 }
+
+func TestExportRegistryDiscoveryCustomMediaAndRaw(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "source-policies.yaml"), "schema_version: 0\nsources:\n  gamelist.synthetic: {redistribution: private}\n  launchbox: {media: {scope: personal}}\n")
+	card := filepath.Join(root, "platforms", "Test", "Card")
+	writeTestFile(t, filepath.Join(card, "game.yaml"), "title: Example & safe\nsources:\n  gamelist.synthetic:\n    matches:\n      - descriptions: {en: Selected imported prose}\n        media:\n          cart_front:\n            - {url: media/cart-front.world.gamelist.synthetic.png}\n")
+	writeTestFile(t, filepath.Join(card, "media", "cart-front.world.gamelist.synthetic.png"), "synthetic")
+	h, err := Handler(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var options exportSourceOptions
+	requestJSON(t, h, "/api/export-options", &options)
+	if len(options.Available) != 2 || options.Available[0] != "gamelist.synthetic" || len(options.MediaRoles["launchbox"]) != 16 || strings.Contains(strings.Join(options.Metadata, ","), "gamelist.synthetic") {
+		t.Fatal(options)
+	}
+	settings := exportSettings{Target: "launchbox", Language: "en", Media: "custom", MediaRoles: []string{"cart-front"}, MetadataSources: []string{"gamelist.synthetic"}, ArtworkSources: []string{"gamelist.synthetic"}}
+	input := exportPreviewRequest{Platform: "Test", Settings: settings, Games: []previewGameRequest{{Folder: "Card"}}, IncludeRaw: true}
+	response := postPreview(t, h, input)
+	game := response.Games[0]
+	if game.Error != "" || game.Raw == nil || game.Preview.Fields["description"].Value != "Selected imported prose" || !strings.Contains(game.Raw.XML, "Selected imported prose") || !strings.Contains(game.Raw.MediaPaths["cart-front"], "/Cart - Front/") {
+		t.Fatalf("error=%s preview=%+v raw=%+v", game.Error, game.Preview, game.Raw)
+	}
+	p, err := exporter.ExportProfile(root, response.ProfileYAML)
+	if err != nil || len(p.Selection.Media) != 1 {
+		t.Fatal(p, err)
+	}
+	input.IncludeRaw = false
+	response = postPreview(t, h, input)
+	if response.Games[0].Raw != nil {
+		t.Fatal("list preview includes Raw")
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("POST", "/api/export-preview", strings.NewReader(`{"settings":{"target":"launchbox","language":"en","media":"custom","media_roles":[]}}`)))
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	p, err = exporter.ExportProfile(root, response.ProfileYAML)
+	if err != nil || len(p.Selection.Media) != 0 {
+		t.Fatal("explicit empty media roles restored defaults", p, err)
+	}
+
+	for _, bad := range []string{
+		`{"settings":{"target":"es-de","language":"en","media":"custom","media_roles":["disc"]}}`,
+		`{"settings":{"target":"launchbox","language":"en","media":"custom","media_roles":["unknown"]}}`,
+		`{"settings":{"target":"launchbox","language":"en","media":"custom","media_roles":["disc","disc"]}}`,
+		`{"settings":{"language":"en","media":"custom"}}`,
+	} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("POST", "/api/export-preview", strings.NewReader(bad)))
+		if w.Code != 400 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+	}
+}

@@ -126,8 +126,25 @@ name evidence does not become verified Redump disc evidence.
 | `VersionMedia/<platform>/<input UUID>/<role>.<ext>` | Alternate selected media for review |
 | Reports, preview and manifest | Grouping, inputs, evidence and installation notes |
 
-Image roles include Box - Front/Back/3D, Clear Logo, Screenshot - Gameplay/Game
-Title and Fanart - Background. Formats are copied unchanged; frontend support
+Image roles map selection keys to native folders:
+
+| Profile role | LaunchBox image type |
+| --- | --- |
+| `cover`, `back-cover`, `box-3d`, `box-spine` | Box - Front, Box - Back, Box - 3D, Box - Spine |
+| `cart-front`, `cart-back`, `cart-3d` | Cart - Front, Cart - Back, Cart - 3D |
+| `disc` | Disc |
+| `screenshot`, `title-screen` | Screenshot - Gameplay, Screenshot - Game Title |
+| `logo`, `fanart`, `banner`, `icon` | Clear Logo, Fanart - Background, Banner, Icon |
+
+Use `selection.media.<role>: {}` to enable a role with catalog defaults; optional
+source/scope/format rules use the same shared selector. Defaults still select
+cover, screenshot, logo and video. The web browser offers these roles under
+Advanced, plus an All supported media preset. The seven added spine/cartridge/
+disc/banner/icon roles require LaunchBox; ES-DE rejects them rather than writing
+unrecognized media directories. Only available eligible local assets are copied.
+LaunchBox supports further native categories beyond this adapter's current roles;
+see its [image standards](https://feedback.launchbox-app.com/en/help/articles/3748363-image-standards-and-requirements).
+ Formats are copied unchanged; frontend support
 needs separate verification. Alternate media stays outside the automatic image
 scan to avoid mixing regional/modified artwork on the main card.
 

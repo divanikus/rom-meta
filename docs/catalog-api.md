@@ -29,7 +29,7 @@ badges/filter still describe provider coverage, not all available metadata.
 ### Browse with an export profile
 
 Choose **Export preview** beside **Library** in the same browser. Choose ES-DE or
-LaunchBox, description language (with English fallback), and images/video, images, cover only or no media.
+LaunchBox, description language (with English fallback), and images/video, images, cover only, no media or all supported media.
 The same draft settings affect the visible game list and opened cards across
 platforms. Returning to ordinary browsing restores stored values without losing
 the draft. Settings last for this page session; reload starts a new draft.
@@ -38,19 +38,36 @@ Export preview shows one selected description with its source/language and only
 selected media. Original provider descriptions and evidence are shown in Library
 mode, outside the export result.
 
-**Advanced** contains title mode, description/media scope and visual source lists.
+**Advanced** contains title mode, description/media scope, media type checkboxes
+and visual source lists. Media types reflect the chosen frontend; LaunchBox also
+offers cartridges, discs, box spines, banners and icons. A checked role needs an
+eligible local asset; it does not download missing artwork. Switching to ES-DE
+removes LaunchBox-only roles from a custom draft. Default presets are unchanged.
 Checkboxes enable sources; up/down buttons set priority. Defaults come from the
-catalog, with relevant sources observed on the opened card also offered. Reset
+catalog. Names registered in root `source-policies.yaml`, discovered in already-read
+platform summaries or observed on the opened card are also offered, including
+`gamelist.<collection>` with a readable collection label. Discovery does not
+automatically enable a source. Reload after a new import to refresh the registry. Reset
 restores catalog order. Disabling every source deliberately disables automatic
 provider selection; explicit saved catalog overrides still take priority.
 
 **Release for this preview** selects a release or variant for the opened card;
-this does not create a per-card policy. The result says which fields/media changed,
+this does not create a per-card policy. Variants show title, language, author and
+version; identical labels get a short ID suffix, while selection retains the full
+stable catalog key. The result says which fields/media changed,
 or explicitly reports equal selected output. Whole-game descriptions, shared
 artwork and saved overrides can legitimately stay the same between releases.
 A declared default or sole release is selected initially. Multiple releases without an explicit default remain game-scoped until
 an edition is chosen. Selected fields expose source/language/donor provenance;
 missing local media remain visible. IBM PC/ScummVM retain their export exclusions.
+
+The card has **Preview** and **Raw** tabs. Raw renders a single-card XML template
+with the native ES-DE/LaunchBox renderer and the same selected metadata. `ROM_FILE`,
+`/ROM_ROOT` and `SYSTEM` stand in for unavailable launch inputs. Native IDs,
+paths, additional versions and merge results depend on actual ROMs/destination.
+Selected media destinations appear separately: LaunchBox discovers images by
+folder, not XML image tags. Raw is a template for inspection, not an installable
+export package.
 
 **Save profile** downloads a new neutral version-1 YAML profile. The usage dialog
 shows a CLI preview command with placeholder paths; review that preview and add
@@ -62,7 +79,8 @@ This is a catalog metadata/media projection using the actual Go export selectors
 It does not verify ROM identity, input-specific title disambiguation, existing
 native metadata/merges, emulator readiness or final packages. CLI export with the
 actual ROMs/destination remains the exact preview/apply workflow. Frontend choice
-sets CLI usage; the displayed selection policy is shared between both adapters.
+sets supported media roles, native Raw layout and CLI usage. Selection rules remain
+shared; LaunchBox-only roles require that adapter.
 
 The browser computes only the displayed list page and opened card. Requests are
 cancellable; mode/profile changes do not trigger a whole-catalog media scan. Return
@@ -73,15 +91,20 @@ and video opens only on explicit play.
 `POST /api/export-preview` is a read-only computation (64 KiB maximum JSON body).
 It accepts `platform`, up to 32 explicit `games` objects (`folder`, optional
 `release` or `variant`) and `settings`. Required settings are `language` and
-`media` (`all`, `images`, `cover`, `none`); `target` defaults to ES-DE. Optional
+`media` (`all`, `images`, `cover`, `none`, `expanded`, `custom`); `target` defaults to ES-DE. Optional
 `title_mode`, `description_scope`, `media_scope`, `metadata_sources`,
-`artwork_sources` and `video_sources` match the compact controls. The response
+`artwork_sources`, `video_sources` and `media_roles` match the compact controls.
+`media_roles` replaces the preset roles when supplied; `[]` excludes all media.
+`custom` requires this array. Unknown/duplicate/frontend-incompatible roles fail
+validation. Top-level `include_raw: true` adds per-card `raw.xml` and
+`raw.media_paths`; list requests omit it. The response
 contains `target`, `profile_yaml` and per-card `preview` or `error`. Omitting games
 returns only the profile. Invalid requests/policy return 400; malformed/missing
 cards are isolated. No server paths, output jobs or filesystem writes are accepted.
 Omitted source lists use catalog defaults; explicit empty source lists disable
 automatic providers for that category. `GET /api/export-options` returns actual
-catalog defaults for the visual source chooser without scanning games or media.
+catalog defaults, `available_sources` from the source registry and `media_roles`
+per frontend without scanning games or media.
 The endpoints and wire schemas are also documented at `/docs`.
 
 `GET /v1/platforms` returns actual catalog folders, `schema_version: 1`,

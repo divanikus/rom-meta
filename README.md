@@ -119,8 +119,9 @@ show progress and support cancellation. HDD/network scans can take minutes.
 Video loads on playback. The ordinary view includes saved game fields and source
 evidence. Choose **Export preview** to adjust one shared frontend/language/media
 profile while browsing, then **Save profile** to download YAML for CLI export.
-Advanced preferences stay collapsed; no catalog/frontend writes occur in the web
-UI. See [the browser guide](docs/catalog-api.md#browse-with-an-export-profile).
+Advanced offers discovered sources and frontend-supported media types. Cards
+include a Raw XML template tab; variants use readable translation labels.
+No catalog/frontend writes occur in the web UI. See [the browser guide](docs/catalog-api.md#browse-with-an-export-profile).
 
 ## HTTP API
 

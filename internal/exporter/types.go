@@ -93,6 +93,7 @@ type PlaylistInput struct {
 
 // VariantInfo retains modification identity separately from inherited metadata.
 type VariantInfo struct {
+	Title     string                `json:"title,omitempty"`
 	Kind      string                `json:"kind"`
 	BasedOn   string                `json:"based_on,omitempty"`
 	Chain     []string              `json:"chain"`
@@ -175,7 +176,10 @@ var roles = map[string]struct{ Kind, Dir string }{
 	"logo": {"logo", "marquees"}, "video": {"gameplay-video", "videos"},
 	"title-screen": {"title-screen", "titlescreens"}, "box-3d": {"box-3d", "3dboxes"},
 	"back-cover": {"box-back", "backcovers"}, "fanart": {"fanart", "fanart"},
-	"manual": {"manual", "manuals"},
+	"manual":     {"manual", "manuals"},
+	"cart-front": {"cart-front", "cartfronts"}, "cart-back": {"cart-back", "cartbacks"},
+	"cart-3d": {"cart-3d", "3dcarts"}, "disc": {"disc", "discs"},
+	"box-spine": {"box-spine", "boxspines"}, "banner": {"banner", "banners"}, "icon": {"icon", "icons"},
 }
 
 func loadProfile(root, name string) (Profile, error) {

@@ -48,7 +48,7 @@ func attachFingerprintRecord(root string, fp fingerprint, record *Record, profil
 	}
 	record.Release, record.Variant = "", fp.variant
 	node := catalogyaml.Value(catalogyaml.Value(g.root, "variants"), fp.variant)
-	info := &VariantInfo{Kind: field(node, "kind"), BasedOn: field(node, "based_on"), Chain: chain, Group: field(node, "group"), Version: field(node, "version")}
+	info := &VariantInfo{Title: field(node, "title"), Kind: field(node, "kind"), BasedOn: field(node, "based_on"), Chain: chain, Group: field(node, "group"), Version: field(node, "version")}
 	allVariants, err := catalogyaml.Variants(g.root)
 	if err != nil {
 		return err

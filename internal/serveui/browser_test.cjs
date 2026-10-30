@@ -285,3 +285,58 @@ test('release inspection says what changed and explains equal shared output', as
   assert.equal(b.element('export-edition').value,'release:USA');
   assert.match(b.element('detail-body').innerHTML,/Shared game data can be reused/);
 });
+
+
+test('translation labels use title, language, author and version while duplicate identities remain selectable', () => {
+ const b=browser(async()=>json({}));
+ b.run(`state.game={game:{folder:'Card',variants:[
+  {name:'translation-1111111111111111111111111111111111111111',kind:'translation',title:'Translated title',languages:['en'],group:'Test team',version:'1.1'},
+  {name:'translation-2222222222222222222222222222222222222222',kind:'translation',title:'Translated title',languages:['en'],group:'Test team',version:'1.1'},
+  {name:'translation-3333333333333333333333333333333333333333',kind:'translation',title:'Other translation',languages:['ru'],group:'Another team',version:'2.0'}
+ ]}}; state.detailPreview={variant:state.game.game.variants[0].name};`);
+ const labels=b.run('state.game.game.variants.map((v)=>variantLabel(v,state.game.game.variants))');
+ assert.match(labels[0],/Translation · EN · Test team · v1.1 · Translated title · 11111111/);
+ assert.notEqual(labels[0],labels[1]); assert.doesNotMatch(labels[2],/33333333/);
+ const html=b.run('renderExportEdition(state.game)');
+ assert.match(html,/value="variant:translation-1111111111111111111111111111111111111111"/);
+ assert.match(html,/Translation · EN · Test team/);
+});
+
+test('registered and newly observed gamelists appear unchecked without knowing their names in advance', async () => {
+ const b=browser(async()=>json({metadata_sources:['launchbox'],artwork_sources:['emumovies'],video_sources:['emumovies'],available_sources:['gamelist.registered'],media_roles:{}}));
+ await b.run('loadExportSources()');
+ assert.match(b.element('export-source-controls').innerHTML,/Imported gamelist: registered/);
+ assert.doesNotMatch(b.element('export-source-controls').innerHTML,/data-source-id="gamelist.registered" checked/);
+ b.run('state.games=[{folder:"Card"}]; state.platformRequestID=4');
+ b.context.fetch=async()=>json({games:[{folder:'Card',sources:['gamelist.fresh'],source_stats:[{source:'gamelist.fresh'}]}]});
+ await b.run('loadGameSummaries("Test",4,new AbortController().signal)');
+ assert.match(b.element('export-source-controls').innerHTML,/Imported gamelist: fresh/);
+ assert.equal(b.run('sourcePreference("metadata_sources").join(",")'),'launchbox');
+});
+
+test('media checkboxes preserve explicit empty selection and filter frontend-only roles on target change', () => {
+ const b=browser(async()=>json({}));
+ b.run(`state.sourceDefaults={media_roles:{'es-de':[{id:'cover',label:'Box front'}],launchbox:[{id:'cover',label:'Box front'},{id:'cart-front',label:'Cartridge front'}]}}; state.exportSettings.target='launchbox';state.exportSettings.media='expanded'; renderMediaControls()`);
+ assert.match(b.element('export-media-roles').innerHTML,/data-media-role="cart-front" checked/);
+ b.run(`state.exportSettings.media_roles=['cover','cart-front']; state.exportSettings.media='custom'`);
+ b.element('export-target').value='es-de'; b.run('updateExportSettings({target:{id:"export-target"}})');
+ assert.equal(b.run('state.exportSettings.media_roles.join(",")'),'cover');
+ b.run(`state.exportSettings.media_roles=[]; renderMediaControls()`);
+ assert.doesNotMatch(b.element('export-media-roles').innerHTML,/ checked/);
+ b.element('export-media').value='cover';b.run('updateExportSettings({target:{id:"export-media"}})');
+ assert.equal(b.run('state.exportSettings.media_roles'),undefined);
+});
+
+test('Raw uses server XML, escapes markup and follows edition changes without stale XML', async () => {
+ const pending=[];
+ const b=browser(async(path,options)=>new Promise(resolve=>pending.push({resolve,input:JSON.parse(options.body)})));
+ b.run(`state.exportMode=true;state.detailTab='raw';state.platform='Test';state.selectedFolder='Card';state.game={game:{folder:'Card',releases:[{name:'USA'},{name:'Europe'}]}}`);
+ const old=b.run('loadDetailPreview()'); b.run('state.edition="release:Europe"'); const current=b.run('loadDetailPreview()');
+ assert.equal(pending[0].input.include_raw,true);
+ pending[1].resolve(json({games:[{preview:{fields:{title:{value:'Europe'}},media:{}},raw:{xml:'<game><desc>A &amp; B</desc></game>',media_paths:{cover:'Images/Example/Box - Front/example.png'}}}]})); await current;
+ assert.match(b.element('detail-body').innerHTML,/&lt;game&gt;/);assert.doesNotMatch(b.element('detail-body').innerHTML,/<game>/);
+ assert.match(b.element('detail-body').innerHTML,/ROM_FILE/); assert.match(b.element('detail-body').innerHTML,/Box - Front/);
+ pending[0].resolve(json({games:[{preview:{fields:{title:{value:'Old'}},media:{}},raw:{xml:'Old XML'}}]}));await old;
+ assert.doesNotMatch(b.element('detail-body').innerHTML,/Old XML/);
+ b.run('state.detailTab="preview";renderDetails()');assert.match(b.element('detail-body').innerHTML,/Selected export description/);
+});

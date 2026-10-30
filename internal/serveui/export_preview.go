@@ -5,7 +5,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
+
+	"rommeta/internal/catalogfs"
+	"rommeta/internal/catalogyaml"
 
 	"gopkg.in/yaml.v3"
 
@@ -18,6 +24,7 @@ type exportSettings struct {
 	Target           string   `json:"target,omitempty"`
 	Language         string   `json:"language"`
 	Media            string   `json:"media"`
+	MediaRoles       []string `json:"media_roles,omitempty"`
 	MetadataSources  []string `json:"metadata_sources,omitempty"`
 	ArtworkSources   []string `json:"artwork_sources,omitempty"`
 	VideoSources     []string `json:"video_sources,omitempty"`
@@ -33,15 +40,17 @@ type previewGameRequest struct {
 }
 
 type exportPreviewRequest struct {
-	Platform string               `json:"platform,omitempty"`
-	Settings exportSettings       `json:"settings"`
-	Games    []previewGameRequest `json:"games,omitempty"`
+	Platform   string               `json:"platform,omitempty"`
+	Settings   exportSettings       `json:"settings"`
+	Games      []previewGameRequest `json:"games,omitempty"`
+	IncludeRaw bool                 `json:"include_raw,omitempty"`
 }
 
 type previewGame struct {
-	Folder  string                   `json:"folder"`
-	Preview *exporter.CatalogPreview `json:"preview,omitempty"`
-	Error   string                   `json:"error,omitempty"`
+	Folder  string                      `json:"folder"`
+	Preview *exporter.CatalogPreview    `json:"preview,omitempty"`
+	Error   string                      `json:"error,omitempty"`
+	Raw     *exporter.CatalogPreviewXML `json:"raw,omitempty"`
 }
 
 type exportPreviewResponse struct {
@@ -87,8 +96,20 @@ func (s *server) exportProfile(settings exportSettings) (exporter.Profile, strin
 			p.Selection.Fields[key] = rule
 		}
 	}
+	artworkRule, videoRule := p.Selection.Media["cover"], p.Selection.Media["video"]
 	switch settings.Media {
 	case "all":
+	case "expanded":
+		if settings.MediaRoles == nil {
+			settings.MediaRoles = []string{}
+			for _, role := range exporter.ExportMediaRoles(target) {
+				settings.MediaRoles = append(settings.MediaRoles, role.ID)
+			}
+		}
+	case "custom":
+		if settings.MediaRoles == nil {
+			return p, "", "", fmt.Errorf("custom media selection requires media_roles")
+		}
 	case "images":
 		delete(p.Selection.Media, "video")
 	case "cover":
@@ -101,6 +122,25 @@ func (s *server) exportProfile(settings exportSettings) (exporter.Profile, strin
 		p.Selection.Media = map[string]exporter.Rule{}
 	default:
 		return p, "", "", fmt.Errorf("unsupported media preset")
+	}
+	if settings.MediaRoles != nil {
+		p.Selection.Media = map[string]exporter.Rule{}
+		for _, role := range settings.MediaRoles {
+			if _, exists := p.Selection.Media[role]; exists {
+				return p, "", "", fmt.Errorf("duplicate media role: %s", role)
+			}
+			rule := artworkRule
+			if role == "video" {
+				rule = videoRule
+			}
+			if role == "manual" {
+				rule.Formats = []string{"pdf"}
+			}
+			p.Selection.Media[role] = rule
+		}
+	}
+	if err := exporter.ValidateTargetMedia(p, target); err != nil {
+		return p, "", "", err
 	}
 	for role, rule := range p.Selection.Media {
 		if settings.MediaScope != "" {
@@ -199,6 +239,13 @@ func (s *server) exportPreview(w http.ResponseWriter, r *http.Request) {
 			preview, err = exporter.PreviewCatalog(r.Context(), s.root, found.Path, document.Root(), p, input.Release, input.Variant)
 			if err == nil {
 				item.Preview = &preview
+				if request.IncludeRaw {
+					var raw exporter.CatalogPreviewXML
+					raw, err = exporter.RenderCatalogPreviewXML(preview, p, target, request.Platform, input.Folder)
+					if err == nil {
+						item.Raw = &raw
+					}
+				}
 			}
 		}
 		if err != nil {
@@ -212,7 +259,8 @@ func (s *server) exportPreview(w http.ResponseWriter, r *http.Request) {
 }
 
 // exportOptions returns actual catalog defaults without enumerating games/media.
-// The UI adds sources observed on the opened card to these selectable choices.
+// Registered source namespaces augment defaults; platform summaries supply more
+// observations in the browser. Discovery never enables a provider automatically.
 func (s *server) exportOptions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		methodNotAllowed(w)
@@ -223,11 +271,27 @@ func (s *server) exportOptions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, exportSourceOptions{Metadata: p.Selection.Description.Sources, Artwork: p.Selection.Media["cover"].Sources, Video: p.Selection.Media["video"].Sources})
+	options := exportSourceOptions{Metadata: p.Selection.Description.Sources, Artwork: p.Selection.Media["cover"].Sources, Video: p.Selection.Media["video"].Sources, Available: []string{}, MediaRoles: map[string][]exporter.MediaRole{"es-de": exporter.ExportMediaRoles("es-de"), "launchbox": exporter.ExportMediaRoles("launchbox")}}
+	content, err := catalogfs.ReadFile(filepath.Join(s.root, "source-policies.yaml"))
+	if err == nil {
+		var document *catalogyaml.Document
+		document, err = catalogyaml.Parse(content)
+		if err == nil {
+			err = catalogyaml.Mapping(catalogyaml.Value(document.Root(), "sources"), func(key string, _ *yaml.Node) error { options.Available = append(options.Available, key); return nil })
+		}
+	}
+	if err != nil && !os.IsNotExist(err) {
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("read source registry: %w", err))
+		return
+	}
+	sort.Strings(options.Available)
+	writeJSON(w, options)
 }
 
 type exportSourceOptions struct {
-	Metadata []string `json:"metadata_sources"`
-	Artwork  []string `json:"artwork_sources"`
-	Video    []string `json:"video_sources"`
+	Metadata   []string                        `json:"metadata_sources"`
+	Artwork    []string                        `json:"artwork_sources"`
+	Video      []string                        `json:"video_sources"`
+	Available  []string                        `json:"available_sources"`
+	MediaRoles map[string][]exporter.MediaRole `json:"media_roles"`
 }
