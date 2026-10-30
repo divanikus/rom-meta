@@ -21,7 +21,9 @@ Windows for both targets and on Linux for ES-DE.
 
 Platforms use [generic ROM-set handling](romset-export.md); new catalog headers
 need no Go registration. IBM PC and ScummVM are currently excluded. Catalog
-coverage and native emulator readiness are reported separately.
+coverage and native emulator readiness are reported separately. Preview counts
+source sets that still need extraction/installation and launch setup; matching
+a package does not make it ready to play.
 
 ## Common options and behavior
 
@@ -39,6 +41,12 @@ coverage and native emulator readiness are reported separately.
 | `--apply` | Apply; omission always means preview |
 | `--out <new directory>` | Optional portable package instead of a destination update |
 | `--package <existing directory>` | Optional prepared package as the source for a destination update |
+
+Selection profiles are shared by both targets. New profiles can omit `target`:
+`--target` on the command line chooses the native layout. Existing profiles with
+`target: es-de` or `target: launchbox` are accepted and reusable with either target;
+that optional marker does not override the command. API clients translate it to
+the existing version-1 wire format automatically.
 
 The same destination operation creates new entries and fills missing metadata,
 versions and media on existing ones. Nonempty metadata and existing media are
@@ -77,6 +85,9 @@ Use `ROMMETA_API_TOKEN` if the server requires it. ROM bytes remain on the clien
 A batch uses one shared destination plan; source reading, provenance and native
 preservation rules match single-system and local mode. See [input coverage](export-scenarios.md)
 and [API transport](offline-export.md#export-from-a-remote-catalog).
+If every system is skipped or empty, preview and apply both return an error with
+no destination/package output. Review the printed skip reasons and select a
+folder containing supported inputs before repeating.
 
 ## Optional portable packages
 

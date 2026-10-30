@@ -54,19 +54,22 @@ func ClientExportProfile(content string) (string, LaunchBoxPolicy, error) {
 	if err != nil {
 		return "", LaunchBoxPolicy{}, err
 	}
-	var doc yaml.Node
-	if err = yaml.Unmarshal([]byte(content), &doc); err != nil {
+	var fields map[string]any
+	if err = yaml.Unmarshal([]byte(content), &fields); err != nil {
 		return "", p.LaunchBox, err
 	}
-	node := doc.Content[0]
-	for i := 0; i < len(node.Content); i += 2 {
-		if node.Content[i].Value == "launchbox" {
-			node.Content = append(node.Content[:i], node.Content[i+2:]...)
-			data, err := yaml.Marshal(&doc)
-			return string(data), p.LaunchBox, err
-		}
+	// Expand root merges/aliases before removing client-only options. This also
+	// avoids leaving references to anchors owned by a removed rendering section.
+	_, changed := fields["launchbox"]
+	delete(fields, "launchbox")
+	if target, exists := fields["target"]; exists && target != "es-de" {
+		fields["target"], changed = "es-de", true
 	}
-	return content, p.LaunchBox, nil
+	if !changed {
+		return content, p.LaunchBox, nil
+	}
+	data, err := yaml.Marshal(fields)
+	return string(data), p.LaunchBox, err
 }
 
 type LaunchBoxVersion struct {

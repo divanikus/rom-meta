@@ -1,6 +1,5 @@
 schema_version: 1
-# Shared selection-policy schema; choose --target launchbox on the command line.
-target: es-de
+# Shared selection policy; choose --target launchbox on the command line.
 launchbox:
   kinds: [original, translation, hack]
   regions: [USA, Europe, Japan]

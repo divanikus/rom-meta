@@ -363,7 +363,7 @@ func report(plan *Plan) string {
 	fmt.Fprintf(&b, "RomMeta offline %s export\nPlatform: %s\nROMs: %d\nMatched: %d\nAmbiguous: %d\nUnmatched: %d\nUnsupported: %d\nMedia files: %d\nMedia bytes: %d\nScope: local/personal\n\n", plan.Target, plan.Platform, len(plan.Records), plan.Matched, plan.Ambiguous, plan.Unmatched, plan.Unsupported, plan.MediaFiles, plan.MediaBytes)
 	fmt.Fprintf(&b, "Bindings: %d hash / %d release/set-name / %d game-name\n\n", plan.HashMatches, plan.NameMatches, plan.GameOnly)
 	if plan.LaunchBox != nil {
-		fmt.Fprintf(&b, "LaunchBox: %d game cards / %d playable versions\n", len(plan.LaunchBox.Groups), plan.LaunchBox.VersionCount)
+		fmt.Fprintf(&b, "LaunchBox: %d game cards / %d versions\n", len(plan.LaunchBox.Groups), plan.LaunchBox.VersionCount)
 		for _, group := range plan.LaunchBox.Groups {
 			fmt.Fprintf(&b, "Game: %s | %s\n", group.Title, group.Game)
 			for _, version := range group.Versions {
@@ -380,6 +380,9 @@ func report(plan *Plan) string {
 		b.WriteString("\n")
 	}
 	c := Coverage(plan)
+	if c.SourceSets > 0 {
+		fmt.Fprintf(&b, "Source sets requiring extraction/installation and launch setup: %d\n", c.SourceSets)
+	}
 	fmt.Fprintf(&b, "Matched display coverage: %d/%d descriptions / %d/%d covers\n", c.Descriptions, c.Matched, c.Covers, c.Matched)
 	fmt.Fprintf(&b, "Game-scope descriptions: %d | Unknown artwork variants: %d\n\n", c.GameDescriptions, c.UnknownVariants)
 	for _, record := range plan.Records {

@@ -237,9 +237,15 @@ func loadProfileReader(root string, input io.Reader) (Profile, error) {
 			return p, fmt.Errorf("export profile must contain one YAML document")
 		}
 	}
-	if p.SchemaVersion != 1 || p.Target != "es-de" {
-		return p, fmt.Errorf("profile requires schema_version: 1 and target: es-de")
+	if p.SchemaVersion != 1 {
+		return p, fmt.Errorf("profile requires schema_version: 1")
 	}
+	if _, err := NormalizeTarget(p.Target); err != nil {
+		return p, fmt.Errorf("profile target: %w", err)
+	}
+	// Selection is shared. Retain the version-1 policy marker internally; only
+	// Options.Target selects the native projection.
+	p.Target = "es-de"
 	var err error
 	p.LaunchBox, err = normalizeLaunchBoxPolicy(p.LaunchBox)
 	if err != nil {

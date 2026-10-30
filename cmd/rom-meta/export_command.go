@@ -40,7 +40,7 @@ func runExport(args []string) error {
 	flags.IntVar(&options.Limit, "limit", 0, "Maximum inputs per system in sorted path order (0: all)")
 	flags.BoolVar(&options.Apply, "apply", false, "Apply the previewed destination update or create the requested package")
 	flags.Usage = func() {
-		fmt.Fprint(os.Stdout, "rom-meta export adds games and enriches an existing frontend using one shared workflow.\n\nUse --destination <frontend data directory> for direct export/enrichment.\nUse --out <new directory> only when you want a portable package.\nUse --platform, --platforms or --all with --rom-root and --data-root or --api.\nAlternatively use --package <existing export> with --destination.\nPreview by default; --apply writes changes with backups. ROMs/catalogs stay unchanged.\n")
+		fmt.Fprint(os.Stdout, "rom-meta export adds games and enriches an existing frontend using one shared workflow.\n\nUse --destination <frontend data directory> for direct export/enrichment.\nUse --out <new directory> only when you want a portable package.\nUse --platform, --platforms or --all with --rom-root and --data-root or --api.\nAlternatively use --package <existing export> with --destination.\nPreview by default; --apply writes changes with backups. ROMs/catalogs stay unchanged.\nProfiles share selection policy; --target selects layout, not the optional profile target.\nListing cannot be combined with export selection/write flags.\n")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
@@ -52,10 +52,11 @@ func runExport(args []string) error {
 	if flags.NArg() != 0 {
 		return fmt.Errorf("unexpected positional export arguments")
 	}
-	if _, err := exporter.NormalizeTarget(target); err != nil {
+	normalizedTarget, err := exporter.NormalizeTarget(target)
+	if err != nil {
 		return err
 	}
-	options.Target = target
+	target, options.Target = normalizedTarget, normalizedTarget
 	if api != "" {
 		var explicit bool
 		flags.Visit(func(f *flag.Flag) {
@@ -68,6 +69,9 @@ func runExport(args []string) error {
 		}
 	}
 	if list {
+		if err := validateExportModeFlags(flags, "--list-platforms", "target", "api", "data-root", "rom-root", "list-platforms", "list-systems"); err != nil {
+			return err
+		}
 		args := []string{}
 		if api != "" {
 			args = append(args, "--api", api)
@@ -86,18 +90,13 @@ func runExport(args []string) error {
 		if destination == "" {
 			return fmt.Errorf("--package requires --destination")
 		}
-		var invalid string
-		flags.Visit(func(f *flag.Flag) {
-			switch f.Name {
-			case "target", "package", "destination", "media-root", "report", "apply":
-			default:
-				invalid = f.Name
-			}
-		})
-		if invalid != "" {
-			return fmt.Errorf("--package excludes catalog/ROM selection flags: --%s", invalid)
+		if err := validateExportModeFlags(flags, "--package", "target", "package", "destination", "media-root", "report", "apply"); err != nil {
+			return err
 		}
 		return runPackageDestination(target, packageRoot, destination, mediaRoot, report, options.Apply)
+	}
+	if mediaRoot != "" && target != "es-de" {
+		return fmt.Errorf("--media-root is only supported for ES-DE")
 	}
 	if destination == "" && (mediaRoot != "" || report != "") {
 		return fmt.Errorf("--media-root and --report require --destination")
@@ -118,23 +117,21 @@ func runExport(args []string) error {
 	if modes != 1 {
 		return fmt.Errorf("exactly one of --platform, --platforms or --all is required")
 	}
-	if api != "" {
-		explicitRoot := false
-		flags.Visit(func(f *flag.Flag) {
-			if f.Name == "data-root" {
-				explicitRoot = true
-			}
-		})
-		if explicitRoot {
-			return fmt.Errorf("choose --api or --data-root, not both")
-		}
-		if destination != "" {
-			return runDirectDestination(options, api, selected, all, destination, mediaRoot, report)
-		}
-		return runNetworkExport(options, api, selected, all)
+	if options.ROMRoot == "" {
+		return fmt.Errorf("--rom-root is required")
+	}
+	if options.Limit < 0 {
+		return fmt.Errorf("--limit must be non-negative")
+	}
+	systems, err := selectedSystems(selected)
+	if err != nil {
+		return err
 	}
 	if destination != "" {
-		return runDirectDestination(options, "", selected, all, destination, mediaRoot, report)
+		return runDirectDestination(options, api, systems, all, destination, mediaRoot, report)
+	}
+	if api != "" {
+		return runNetworkExport(options, api, systems, all)
 	}
 	progress := newTerminalProgress(os.Stdout)
 	options.Progress = func(stage, name string, current, total int) {
@@ -142,16 +139,6 @@ func runExport(args []string) error {
 	}
 	defer progress.Done()
 	if all || selected != "" {
-		var systems []string
-		if selected != "" {
-			for _, name := range strings.Split(selected, ",") {
-				name = strings.TrimSpace(name)
-				if name == "" {
-					return fmt.Errorf("empty system in --platforms")
-				}
-				systems = append(systems, name)
-			}
-		}
 		batch, err := exporter.BuildBatch(exporter.BatchOptions{Options: options, All: all, Systems: systems})
 		progress.Done()
 		if err != nil {
@@ -163,6 +150,9 @@ func runExport(args []string) error {
 		}
 		for _, skip := range batch.Skipped {
 			fmt.Printf("Skipped %s: %s\n", skip.System, skip.Reason)
+		}
+		if len(batch.Plans) == 0 {
+			return fmt.Errorf("no systems with selected inputs; no package created")
 		}
 		if !options.Apply {
 			fmt.Println("Preview only. Repeat with --apply to create this new package.")
@@ -198,14 +188,17 @@ func printExportSummary(plan *exporter.Plan) {
 		fmt.Printf("Platform %q => %s (%s); reader %s\nROM folder: %s; %s\n", selection.Requested, selection.Code, selection.Name, selection.System, selection.Folder, selection.MatchedBy)
 	}
 	if plan.LaunchBox != nil {
-		fmt.Printf("%s: %d LaunchBox game cards | %d playable versions\n", plan.System, len(plan.LaunchBox.Groups), plan.LaunchBox.VersionCount)
+		fmt.Printf("%s: %d LaunchBox game cards | %d versions\n", plan.System, len(plan.LaunchBox.Groups), plan.LaunchBox.VersionCount)
 	}
 	c := exporter.Coverage(plan)
-	fmt.Printf("%s display: descriptions %d/%d | covers %d/%d | game-scope prose %d | unknown artwork categories %d\n", plan.System, c.Descriptions, c.Matched, c.Covers, c.Matched, c.GameDescriptions, c.UnknownVariants)
+	if c.SourceSets > 0 {
+		fmt.Printf("Source sets requiring extraction/installation and launch setup: %d\n", c.SourceSets)
+	}
+	fmt.Printf("%s coverage: descriptions %d/%d | covers %d/%d | shared descriptions %d | uncategorized artwork %d\n", plan.System, c.Descriptions, c.Matched, c.Covers, c.Matched, c.GameDescriptions, c.UnknownVariants)
 	fmt.Printf("%s / %s: %d ROMs | matched: %d (%d hash / %d release or set name / %d game-name) | ambiguous: %d | unmatched: %d | unsupported: %d | media: %d files / %.1f MiB\n", plan.System, plan.Platform, len(plan.Records), plan.Matched, plan.HashMatches, plan.NameMatches, plan.GameOnly, plan.Ambiguous, plan.Unmatched, plan.Unsupported, plan.MediaFiles, float64(plan.MediaBytes)/(1024*1024))
 }
 
-func runNetworkExport(options exporter.Options, api, selected string, all bool) error {
+func runNetworkExport(options exporter.Options, api string, systems []string, all bool) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	progress := newTerminalProgress(os.Stdout)
@@ -213,16 +206,7 @@ func runNetworkExport(options exporter.Options, api, selected string, all bool) 
 	options.Progress = func(stage, name string, current, total int) {
 		progress.UpdateTask("export", stage, current, total, name)
 	}
-	batch := exporter.BatchOptions{Options: options, All: all}
-	if selected != "" {
-		for _, value := range strings.Split(selected, ",") {
-			value = strings.TrimSpace(value)
-			if value == "" {
-				return fmt.Errorf("empty system in --platforms")
-			}
-			batch.Systems = append(batch.Systems, value)
-		}
-	}
+	batch := exporter.BatchOptions{Options: options, All: all, Systems: systems}
 	job, err := exportclient.Build(ctx, exportclient.Options{BatchOptions: batch, API: api, Token: os.Getenv("ROMMETA_API_TOKEN")})
 	progress.Done()
 	if err != nil {
@@ -236,6 +220,9 @@ func runNetworkExport(options exporter.Options, api, selected string, all bool) 
 		fmt.Printf("Skipped %s: %s\n", skip.System, skip.Reason)
 	}
 	fmt.Printf("Output: %s\n", job.Batch.Out)
+	if len(job.Batch.Plans) == 0 {
+		return fmt.Errorf("no systems with selected inputs; no package created")
+	}
 	if !options.Apply {
 		fmt.Println("Preview only. Repeat with --apply to download selected media and create this new package.")
 		return nil
@@ -252,4 +239,37 @@ func printLaunchBoxMergeHint(target string) {
 	if target == "launchbox" {
 		fmt.Println("Install: rom-meta export --target launchbox --package <this package> --destination <installation> (add --apply to write).")
 	}
+}
+
+func selectedSystems(selected string) ([]string, error) {
+	var systems []string
+	if selected == "" {
+		return systems, nil
+	}
+	for _, name := range strings.Split(selected, ",") {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return nil, fmt.Errorf("empty system in --platforms")
+		}
+		systems = append(systems, name)
+	}
+	return systems, nil
+}
+
+// Listing and package installation must not silently ignore selection/write flags.
+func validateExportModeFlags(flags *flag.FlagSet, mode string, allowed ...string) error {
+	accepted := map[string]bool{}
+	for _, name := range allowed {
+		accepted[name] = true
+	}
+	var invalid []string
+	flags.Visit(func(f *flag.Flag) {
+		if !accepted[f.Name] {
+			invalid = append(invalid, "--"+f.Name)
+		}
+	})
+	if len(invalid) > 0 {
+		return fmt.Errorf("%s excludes these options: %s", mode, strings.Join(invalid, ", "))
+	}
+	return nil
 }

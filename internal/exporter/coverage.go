@@ -1,6 +1,6 @@
 package exporter
 
-type DisplayCoverage struct{ Matched, Descriptions, Covers, GameDescriptions, UnknownVariants int }
+type DisplayCoverage struct{ Matched, Descriptions, Covers, GameDescriptions, UnknownVariants, SourceSets int }
 
 func Coverage(plan *Plan) DisplayCoverage {
 	var result DisplayCoverage
@@ -9,6 +9,9 @@ func Coverage(plan *Plan) DisplayCoverage {
 			continue
 		}
 		result.Matched++
+		if r.SourceOnly {
+			result.SourceSets++
+		}
 		if v := r.Fields["description"]; v.Value != "" {
 			result.Descriptions++
 			if v.Selection == "game" {

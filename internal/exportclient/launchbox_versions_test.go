@@ -59,7 +59,7 @@ func TestLaunchBoxGroupedVersionNetworkParityAndLegacyProfile(t *testing.T) {
 	}
 	put(t, filepath.Join(path, "fingerprints.yaml"), []byte(fingerprints.String()))
 	profile := filepath.Join(t.TempDir(), "profile.yaml")
-	put(t, profile, []byte("schema_version: 1\ntarget: es-de\nlaunchbox:\n  kinds: [translation, original, hack]\n  languages: [ru, en]\n  regions: [USA, Japan]\n"))
+	put(t, profile, []byte("schema_version: 1\ntarget: launchbox\nlaunchbox:\n  kinds: [translation, original, hack]\n  languages: [ru, en]\n  regions: [USA, Japan]\n"))
 	requests := 0
 	api := server(t, root, func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -74,8 +74,8 @@ func TestLaunchBoxGroupedVersionNetworkParityAndLegacyProfile(t *testing.T) {
 					t.Error(err)
 					return
 				}
-				if strings.Contains(input.Profile, "launchbox:") {
-					t.Error("client-only profile section sent to legacy server")
+				if strings.Contains(input.Profile, "launchbox:") || !strings.Contains(input.Profile, "target: es-de") {
+					t.Error("incompatible profile sent to legacy server:", input.Profile)
 				}
 				r.Body = io.NopCloser(strings.NewReader(string(data)))
 				requests++

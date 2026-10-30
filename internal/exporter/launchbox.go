@@ -16,6 +16,7 @@ import (
 // NormalizeTarget validates the local rendering choice. Catalog/API resolution
 // and selection profiles retain the existing shared export contract.
 func NormalizeTarget(target string) (string, error) {
+	target = strings.ToLower(strings.TrimSpace(target))
 	if target == "" {
 		return "es-de", nil
 	}

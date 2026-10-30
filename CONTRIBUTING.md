@@ -14,6 +14,10 @@ python -m unittest discover -s scripts -p 'test_*.py'
 python -m unittest discover -s examples/romm-importer -p 'test_*.py'
 ```
 
+Run full checks from a clean source checkout. Go also scans Git-ignored scratch
+directories under a module; keep temporary Go experiments in dot-prefixed
+directories or outside the source tree.
+
 The separate variant preparation helper is covered by `go test ./scripts/prepare-variants`.
 Its export regressions use only synthetic catalog/payload/media fixtures.
 

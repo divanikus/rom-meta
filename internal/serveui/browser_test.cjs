@@ -146,3 +146,25 @@ test('stats defaults to the selected platform; a whole catalog scan is explicit'
  assert.equal(calls.length,1); assert.match(calls[0],/platform=Two/);
  assert.match(b.element('stats-pane').innerHTML,/Platform scan complete/);
 });
+
+
+test('empty platform and filtered-out games have distinct guidance', () => {
+ const b=browser(async()=>json({}));
+ b.run('state.platform=""; state.games=[]; renderGames()');
+ assert.match(b.element('game-list').innerHTML,/Select a platform to browse games/);
+ b.run('state.platform="Empty"; renderGames()');
+ assert.match(b.element('game-list').innerHTML,/No games in this platform/);
+ b.run('state.games=[{folder:"Example"}]');
+ b.element('game-search').value='absent';
+ b.run('renderGames()');
+ assert.match(b.element('game-list').innerHTML,/No games match the filter/);
+});
+
+test('browser labels source coverage separately from resolved export metadata', () => {
+ const b=browser(async()=>json({}));
+ b.run('state.game={game:{folder:"Example",releases:[]},profile:{},source_blocks:[],local_media:[],has_metadata:false}; renderDetails()');
+ assert.match(b.element('detail-chips').innerHTML,/no source metadata found/);
+ assert.match(b.element('detail-body').innerHTML,/Source overview/);
+ b.run('state.game.has_metadata=true; renderDetails()');
+ assert.match(b.element('detail-chips').innerHTML,/source metadata matched/);
+});

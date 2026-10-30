@@ -20,6 +20,12 @@ Catalog mode needs no ROM mount, token, profile or `--all`. Default address:
 The browser (`/`), API index (`/api`) and documentation (`/docs`, `/openapi.json`)
 share this process.
 
+The browser and `/api/game` show a source overview and provider-match coverage,
+not the resolved fields of an export. They currently do not apply explicit local
+metadata overrides or export selection profiles. Source coverage therefore does
+not measure all available catalog metadata. Use `export` preview (and an optional
+package preview) to review frontend output; `/v1/export` applies the export policy.
+
 `GET /v1/platforms` returns actual catalog folders, `schema_version: 1`,
 `mode: catalog`, `system`, `supported`, `aliases` and optional `reason`/
 `game_binding`/`name_binding`. `name_binding` advertises metadata lookup by a

@@ -93,6 +93,8 @@ func TestUnifiedDirectExportLocalAndAPI(t *testing.T) {
 	for _, target := range []string{"es-de", "launchbox"} {
 		t.Run(target, func(t *testing.T) {
 			root, roms := exportFixture(t)
+			profile := filepath.Join(t.TempDir(), "profile.yaml")
+			exportPut(t, profile, "schema_version: 1\ntarget: "+target+"\n")
 			stageParent := t.TempDir()
 			reports := t.TempDir()
 			local := exportDestination(t, target)
@@ -120,7 +122,7 @@ func TestUnifiedDirectExportLocalAndAPI(t *testing.T) {
 					destination = remote
 					sourceArgs = []string{"--api", server.URL}
 				}
-				args := append([]string{"--target", target, "--platform", "n64", "--rom-root", roms, "--destination", destination}, sourceArgs...)
+				args := append([]string{"--target", target, "--platform", "n64", "--rom-root", roms, "--destination", destination, "--profile", profile}, sourceArgs...)
 				before := exportTree(t, destination)
 				previewReport := filepath.Join(reports, source+"-preview.json")
 				if err := runExport(append(append([]string{}, args...), "--report", previewReport)); err != nil {

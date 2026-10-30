@@ -52,8 +52,9 @@ include private paths. Input totals remain ROM counts rather than card counts.
 ## Network and batch export
 
 Use `--api "http://catalog-host:8787"` instead of `--data-root`. Recognition and
-asset validation remain shared. The client removes only the `launchbox` rendering
-section before sending profile bytes, allowing existing version-1 catalog APIs;
+asset validation remain shared. The client removes the `launchbox` rendering
+section and normalizes any optional target marker before sending profile bytes,
+allowing existing version-1 catalog APIs;
 it restores that policy locally before rendering. New API responses include the
 catalog title; older responses fall back to the primary regional display title.
 
@@ -64,8 +65,9 @@ rom-meta export --target launchbox --api "http://catalog-host:8787" --platforms 
 `--platform` and `--platforms` accept the same codes, full names and aliases;
 `--all` recognizes short or long registered folder names. `--list-platforms` lists
 codes, aliases, export support and catalog availability; see
-[platform selection](platform-selection.md). Profiles keep their shared `target: es-de` header; the command's
-`--target launchbox` selects the native layout. ES-DE retains its existing layout.
+[platform selection](platform-selection.md). Profiles can omit the `target` header.
+Legacy `target: es-de` and `target: launchbox` markers are both accepted;
+`--target launchbox` on the command line selects the native layout.
 
 See [generic ROM-set export](romset-export.md) for automatic platform coverage,
 opaque archives/modern formats, source-set versions and installed directories.

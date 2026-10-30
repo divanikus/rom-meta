@@ -78,7 +78,8 @@ Set ROMMETA_API_TOKEN (32+ characters) only to enable optional shared protection
 Clients use Bearer; browsers use HTTP Basic (user rommeta, password the same token).
 There are no user accounts, roles or sessions. Use TLS outside a trusted network.
 
-Catalog writes remain CLI operations: dat import, fetch, catalog fold, export.
+Catalog writes remain CLI operations: dat import, fetch and catalog fold.
+Export writes frontend output while preserving the catalog and source ROMs.
 Stats reports progress and cancels on navigation. Video opens only on explicit play.
 
 Additional options:

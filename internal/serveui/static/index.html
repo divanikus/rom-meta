@@ -869,7 +869,7 @@
         <input class="search" id="game-search" type="search" placeholder="Filter games">
         <label class="toggle-row">
           <input type="checkbox" id="missing-only">
-          Missing metadata only
+          Missing source metadata only
         </label>
         <div class="secondary" id="game-progress"></div>
       </div>
@@ -1231,7 +1231,9 @@
       const visible = filtered.slice(0, state.listLimit);
       const more = filtered.length > visible.length
         ? '<button class="game-item" type="button" data-more-games>Show more (' + formatNumber(filtered.length - visible.length) + ' remaining)</button>' : '';
-      $("game-list").innerHTML = visible.map(renderGameListItem).join("") + more || '<div class="empty">No games match the filter.</div>';
+      const emptyMessage = !state.platform ? "Select a platform to browse games."
+        : state.games.length === 0 ? "No games in this platform." : "No games match the filter.";
+      $("game-list").innerHTML = visible.map(renderGameListItem).join("") + more || '<div class="empty">' + emptyMessage + '</div>';
     }
 
     function renderGameListItem(game) {
@@ -1275,7 +1277,7 @@
       const profile = response.profile || {};
       $("detail-title").textContent = profile.title || game.title || game.folder;
       $("detail-chips").innerHTML = [
-        response.has_metadata ? '<span class="chip good">metadata matched</span>' : '<span class="chip bad">no metadata found</span>',
+        response.has_metadata ? '<span class="chip good">source metadata matched</span>' : '<span class="chip bad">no source metadata found</span>',
         profile.release_date ? '<span class="chip">' + escapeHTML(yearOf(profile.release_date)) + '</span>' : '',
         chips((profile.genres || []).slice(0, 3), ''),
         '<span class="chip">' + escapeHTML(profile.platform || game.platform) + '</span>',
@@ -1327,7 +1329,7 @@
       return '<div class="profile-layout">' +
         '<div class="cover-panel">' + coverHTML + '</div>' +
         '<div class="profile-content">' +
-          '<div class="section"><h3>Overview</h3>' + description + '</div>' +
+          '<div class="section"><h3>Source overview</h3>' + description + '</div>' +
           (lists ? '<div class="profile-lists">' + lists + '</div>' : '') +
         '</div>' +
         '<aside class="side-panel"><div class="fact-list">' + (factRows || fact("Folder", game.folder)) + '</div></aside>' +
@@ -1641,9 +1643,9 @@
         metric(stats.PlatformCount, "platforms") +
         metric(stats.GameCount, "games") +
         metric(stats.ReleaseCount, "releases") +
-        metric(stats.GamesWithSourceMatches, "games with metadata") +
+        metric(stats.GamesWithSourceMatches, "games with source metadata") +
         metric(stats.GamesCheckedNoMatches, "not matched") +
-        metric(stats.EmptyPlaceholderCount, "empty - no metadata found") +
+        metric(stats.EmptyPlaceholderCount, "empty placeholders") +
         metric(stats.LocalMediaFileCount, "local media files") +
         metric(stats.SourceMediaURLCount, "source media URLs") +
         '</div></div>' +

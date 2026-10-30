@@ -87,20 +87,6 @@ func runPackageDestination(target, pkg, destination, mediaRoot, report string, a
 	}
 	return applyDestination(plan)
 }
-func selectedSystems(selected string) ([]string, error) {
-	var systems []string
-	if selected == "" {
-		return systems, nil
-	}
-	for _, name := range strings.Split(selected, ",") {
-		name = strings.TrimSpace(name)
-		if name == "" {
-			return nil, fmt.Errorf("empty system in --platforms")
-		}
-		systems = append(systems, name)
-	}
-	return systems, nil
-}
 func transientOutput(options exporter.Options, destination, api string) (string, error) {
 	entropy := make([]byte, 12)
 	if _, err := rand.Read(entropy); err != nil {
@@ -135,7 +121,7 @@ func transientOutput(options exporter.Options, destination, api string) (string,
 	}
 	return "", fmt.Errorf("cannot select temporary preparation outside the input and destination trees")
 }
-func runDirectDestination(options exporter.Options, api, selected string, all bool, destination, mediaRoot, report string) error {
+func runDirectDestination(options exporter.Options, api string, systems []string, all bool, destination, mediaRoot, report string) error {
 	if mediaRoot != "" && options.Target != "es-de" {
 		return fmt.Errorf("--media-root is only supported for ES-DE")
 	}
@@ -151,10 +137,6 @@ func runDirectDestination(options exporter.Options, api, selected string, all bo
 	defer progress.Done()
 	options.Progress = func(stage, name string, current, total int) {
 		progress.UpdateTask("export", stage, current, total, name)
-	}
-	systems, err := selectedSystems(selected)
-	if err != nil {
-		return err
 	}
 	single := options.Platform != ""
 	var plans []*exporter.Plan

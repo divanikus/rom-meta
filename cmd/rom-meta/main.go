@@ -195,7 +195,7 @@ Commands:
   gamelist   Import private ES-DE metadata and referenced media.
   fetch      Collect configured metadata, artwork and video.
   sources    Inspect configuration, credentials readiness and coverage.
-  platforms  List platform aliases and source mappings.
+  platforms  List codes, aliases, catalog availability and export support.
   validate   Check catalog layout and metadata; usage: validate [root].
   catalog    Inspect status, prune placeholders, label media, fold or split cards.
   serve      Start one catalog browser, API and OpenAPI/Swagger service.

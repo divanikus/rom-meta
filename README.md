@@ -75,6 +75,10 @@ go build -o bin/rom-meta ./cmd/rom-meta
 
 On Windows use `-o bin/rom-meta.exe`. Prebuilt binaries do not require Go.
 
+If you already have a prepared catalog, go directly to [frontend export](#export-to-a-frontend).
+DAT imports and provider accounts are needed to prepare or extend the catalog,
+not to export from an existing local library.
+
 ## Import, enrich and review
 
 Keep the catalog outside the source checkout and ROM directories. Replace example

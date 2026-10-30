@@ -20,6 +20,9 @@ availability as not checked. With a catalog, the default list shows its platform
 `--full` includes registry platforms absent from that catalog. JSON includes codes,
 names, accepted aliases, reader/target support, catalog status and optional folder
 explanations. `--format yaml` retains the editable registry configuration format.
+`export --list-platforms` accepts source/ROM-root options and an optional target;
+export selection/write flags are rejected instead of silently ignored. Use
+`platforms list` for `--full`, machine-readable formats and detailed source mappings.
 Listing/discovery reads directory names, configuration and catalog platform headers;
 it does not hash ROMs, inspect archives, index game cards or download media.
 
