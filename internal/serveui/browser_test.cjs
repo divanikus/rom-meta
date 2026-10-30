@@ -13,12 +13,14 @@ function browser(fetch) {
     if (!elements.has(id)) elements.set(id, {
       value: '', checked: false, textContent: '', innerHTML: '', scrollTop: 0,
       addEventListener() {}, querySelectorAll() { return []; },
+      focus() {}, click() { this.clicked = true; },
       classList: {toggle() {}, add() {}, remove() {}}
     });
     return elements.get(id);
   };
   const context = vm.createContext({
-    fetch, AbortController, URLSearchParams, Map, console, TextDecoder,
+    fetch, AbortController, URLSearchParams, Map, console, TextDecoder, Blob,
+    URL: {createObjectURL: () => "blob:test-profile", revokeObjectURL() {}},
     document: {getElementById: element, addEventListener() {}, querySelectorAll() {return [];}}
   });
   vm.runInContext(script, context);
@@ -164,7 +166,69 @@ test('browser labels source coverage separately from resolved export metadata', 
  const b=browser(async()=>json({}));
  b.run('state.game={game:{folder:"Example",releases:[]},profile:{},source_blocks:[],local_media:[],has_metadata:false}; renderDetails()');
  assert.match(b.element('detail-chips').innerHTML,/no source metadata found/);
- assert.match(b.element('detail-body').innerHTML,/Source overview/);
+ assert.match(b.element('detail-body').innerHTML,/Library metadata/);
  b.run('state.game.has_metadata=true; renderDetails()');
  assert.match(b.element('detail-chips').innerHTML,/source metadata matched/);
+});
+
+
+test('export mode projects only visible cards in bounded batches and keeps one policy across navigation', async () => {
+  const previewCalls=[];
+  const b=browser(async(path,options)=>{
+    if(path==='/api/export-preview') {
+      const input=JSON.parse(options.body); previewCalls.push(input);
+      return json({games:input.games.map(game=>({folder:game.folder,preview:{fields:{title:{value:'Projected '+game.folder},description:{value:'Selected description',source:'local'}},media:{}}}))});
+    }
+    if(path.includes('names=1')) return json({games:Array.from({length:150},(_,i)=>({folder:'Card '+i}))});
+    if(path.startsWith('/api/game?')) return json({game:{folder:'Card 0',title:'Stored title',platform:'New'},profile:{title:'Stored title'},source_blocks:[],local_media:[]});
+    return json({games:[]});
+  });
+  await b.run('state.exportMode=true; state.exportSettings.language="ru"; state.platform="Old"; state.games=Array.from({length:2000},(_,i)=>({folder:"Card "+i})); renderGames()');
+  for(let i=0;i<8;i++) await tick();
+  assert.equal(previewCalls.reduce((sum,input)=>sum+input.games.length,0),100);
+  assert.ok(previewCalls.every(input=>input.games.length<=32 && input.settings.language==='ru'));
+  assert.match(b.element('game-list').innerHTML,/Projected Card 0/);
+  b.element('game-search').value='Projected Card 0'; b.run('filterGames()');
+  assert.match(b.element('game-list').innerHTML,/Projected Card 0/);
+  b.element('game-search').value=''; b.run('filterGames()');
+  await b.run('selectPlatform("New")');
+  for(let i=0;i<10;i++) await tick();
+  assert.ok(previewCalls.filter(input=>input.platform==='New').every(input=>input.settings.language==='ru'));
+  assert.equal(b.run('state.exportSettings.language'),'ru');
+  assert.match(b.element('detail-body').innerHTML,/Export metadata/);
+  b.run('state.exportMode=false; resetPreviews(); renderDetails()');
+  assert.equal(b.element('detail-title').textContent,'Stored title');
+  assert.match(b.element('detail-body').innerHTML,/Library metadata/);
+});
+
+test('stale policy and edition requests cannot overwrite current export view', async () => {
+  const pending=[];
+  const b=browser(async(path,options)=>new Promise(resolve=>pending.push({resolve,signal:options.signal,input:JSON.parse(options.body)})));
+  b.run('state.exportMode=true; state.platform="Test"; state.selectedFolder="Card"; state.game={game:{folder:"Card",releases:[{name:"USA"},{name:"Europe"}]}}');
+  const old=b.run('loadDetailPreview()');
+  b.run('state.edition="release:Europe"');
+  const current=b.run('loadDetailPreview()');
+  assert.equal(pending[0].signal.aborted,true);
+  assert.equal(pending[1].input.games[0].release,'Europe');
+  pending[1].resolve(json({games:[{folder:'Card',preview:{release:'Europe',fields:{title:{value:'European title'}},media:{}}}]})); await current;
+  pending[0].resolve(json({games:[{folder:'Card',preview:{fields:{title:{value:'Stale title'}},media:{}}}]})); await old;
+  assert.equal(b.element('detail-title').textContent,'European title');
+  const obsolete=b.run('loadDetailPreview()');
+  b.run('resetPreviews(); state.exportMode=false; renderDetails()');
+  assert.equal(pending[2].signal.aborted,true);
+  pending[2].resolve(json({games:[{preview:{fields:{title:{value:'Wrong policy'}},media:{}}}]})); await obsolete;
+  assert.equal(b.run('state.detailPreview'),null);
+});
+
+test('saved profile downloads server-validated YAML and keeps paths out of the main view', async () => {
+  let input;
+  const b=browser(async(path,options)=>{ input=JSON.parse(options.body); return json({target:'launchbox',profile_yaml:'schema_version: 1\nselection:\n  media: {}\n',games:[]}); });
+  await b.run('state.exportSettings.target="launchbox"; state.exportSettings.media="none"; saveProfile()');
+  assert.equal(input.games.length,0);
+  assert.equal(input.settings.media,'none');
+  assert.equal(b.element('profile-download').clicked,true);
+  assert.equal(b.element('profile-download').href,'blob:test-profile');
+  assert.match(b.element('profile-yaml').textContent,/media: \{\}/);
+  assert.match(b.element('profile-command').textContent,/--target launchbox/);
+  assert.doesNotMatch(b.element('detail-body').innerHTML,/--rom-root/);
 });

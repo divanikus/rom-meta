@@ -34,6 +34,7 @@
     }
 
     button,
+    select,
     input {
       font: inherit;
     }
@@ -292,6 +293,7 @@
     }
 
     .detail-body {
+      align-content: start;
       padding: 16px 20px 24px;
       overflow: auto;
       display: grid;
@@ -835,6 +837,27 @@
         max-width: 260px;
       }
     }
+
+    .export-bar { order:2; display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:9px 0; width:100%; border-top:1px solid var(--line); }
+    .export-options { display:flex; flex-wrap:wrap; align-items:center; gap:12px; flex:1; }
+    .export-bar label { display:flex; align-items:center; gap:6px; color:var(--muted); }
+    select, .export-bar input[type=text] { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:5px; padding:6px; max-width:100%; }
+    .export-advanced { position:relative; }
+    .export-advanced summary { cursor:pointer; color:var(--muted); }
+    .advanced-fields { position:absolute; z-index:10; top:28px; right:0; width:340px; max-width:85vw; padding:16px; background:var(--panel-2); border:1px solid var(--line); border-radius:8px; box-shadow:0 8px 28px var(--shadow); display:grid; gap:12px; }
+    .advanced-fields label { align-items:stretch; flex-direction:column; }
+    .export-notice { color:var(--muted); font-size:12px; width:100%; }
+    .game-item:has(.list-cover) { grid-template-columns:42px minmax(0,1fr); }
+    .game-item:has(.list-cover) > :not(.list-cover) { grid-column:2; }
+    .game-item .chip { max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+    .list-cover { grid-column:1; grid-row:1 / 4; width:42px; height:56px; object-fit:contain; }
+    .export-edition { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:16px; }
+    .export-warning { margin:8px 0; color:var(--warn); }
+    .profile-dialog { position:fixed; inset:0; z-index:30; background:#0009; display:grid; place-items:center; padding:20px; }
+    .profile-dialog-panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:24px; width:720px; max-width:100%; max-height:90vh; overflow:auto; }
+    .profile-dialog-panel pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+    .profile-dialog-panel h2 { margin-top:0; }
+    .hidden { display:none !important; }
   </style>
 </head>
 <body>
@@ -847,6 +870,25 @@
         <a class="tab-button" href="/api" target="_blank" rel="noopener">API</a>
         <a class="tab-button" href="/docs" target="_blank" rel="noopener">API docs</a>
       </nav>
+      <div class="export-bar" id="export-bar">
+        <label><input type="checkbox" id="export-mode"> Export view</label>
+        <div class="export-options hidden" id="export-controls">
+          <label>Frontend <select id="export-target"><option value="es-de">ES-DE</option><option value="launchbox">LaunchBox</option></select></label>
+          <label>Description <select id="export-language"><option value="en">English</option><option value="ru">Русский → English</option><option value="ja">日本語 → English</option><option value="fr">Français → English</option><option value="de">Deutsch → English</option><option value="es">Español → English</option><option value="it">Italiano → English</option><option value="pt">Português → English</option><option value="zh">中文 → English</option><option value="ko">한국어 → English</option></select></label>
+          <label>Media <select id="export-media"><option value="all">Images + video</option><option value="images">Images</option><option value="cover">Cover only</option><option value="none">None</option></select></label>
+          <details class="export-advanced"><summary>Advanced</summary><div class="advanced-fields">
+            <label>Titles <select id="export-title-mode"><option value="regional">Regional title</option><option value="release">Full release name</option></select></label>
+            <label>Description scope <select id="export-description-scope"><option value="game">Whole game</option><option value="release">Selected release</option></select></label>
+            <label>Media scope <select id="export-media-scope"><option value="release">Selected release</option><option value="game">Whole game</option></select></label>
+            <label>Metadata source order <input id="export-metadata-sources" type="text" placeholder="Catalog priority (comma-separated override)"></label>
+            <label>Artwork source order <input id="export-artwork-sources" type="text" placeholder="Catalog priority (comma-separated override)"></label>
+            <label>Video source order <input id="export-video-sources" type="text" placeholder="Catalog priority (comma-separated override)"></label>
+          </div></details>
+          <button class="tab-button" id="save-profile" type="button">Save profile</button>
+        </div>
+        <div class="export-notice hidden" id="export-notice">Catalog preview · ROM matching and existing frontend data are checked by CLI export.</div>
+        <div class="error hidden" id="export-error" role="status"></div>
+      </div>
       <div class="top-status" id="top-status">Loading...</div>
     </header>
 
@@ -866,7 +908,7 @@
           <span>Games</span>
           <span id="game-count">0</span>
         </div>
-        <input class="search" id="game-search" type="search" placeholder="Filter games">
+        <input class="search" id="game-search" type="search" placeholder="Filter titles / folders" title="Search stored titles/folders and loaded preview titles">
         <label class="toggle-row">
           <input type="checkbox" id="missing-only">
           Missing source metadata only
@@ -897,6 +939,17 @@
     <div class="lightbox-stage" id="lightbox-stage"></div>
   </div>
 
+  <div class="profile-dialog hidden" id="profile-dialog" role="dialog" aria-modal="true" aria-labelledby="profile-dialog-title">
+    <div class="profile-dialog-panel">
+      <h2 id="profile-dialog-title">Export profile</h2>
+      <p>The YAML file contains these selection settings. Use it with CLI export for your ROMs.</p>
+      <a class="tab-button" id="profile-download" download="rommeta-export.yaml">Download YAML</a>
+      <h3>Preview with your paths</h3><pre id="profile-command"></pre>
+      <p>Review the CLI preview, then repeat with <code>--apply</code>. Close the frontend before applying.</p>
+      <details><summary>Profile YAML</summary><pre id="profile-yaml"></pre></details>
+      <p><button class="tab-button" id="profile-close" type="button">Close</button></p>
+    </div>
+  </div>
   <script>
     const state = {
       platforms: [],
@@ -914,10 +967,138 @@
       stats: null,
       statsController: null,
       statsProgress: "",
-      view: "browse"
+      view: "browse",
+      exportMode: false,
+      exportSettings: {target:"es-de", language:"en", media:"all", title_mode:"regional", description_scope:"game", media_scope:"release"},
+      previewRevision: 0,
+      previewController: null,
+      previewLoading: false,
+      visibleGames: [],
+      detailPreviewController: null,
+      detailPreview: null,
+      detailPreviewError: "",
+      edition: "",
+      profileDownloadURL: ""
     };
 
     const $ = (id) => document.getElementById(id);
+
+    $("export-mode").addEventListener("change", () => {
+      state.exportMode = $("export-mode").checked;
+      $("export-controls").classList.toggle("hidden", !state.exportMode);
+      $("export-notice").classList.toggle("hidden", !state.exportMode);
+      resetPreviews(); renderGames(); renderDetails(); loadDetailPreview();
+    });
+    for (const id of ["target","language","media","title-mode","description-scope","media-scope","metadata-sources","artwork-sources","video-sources"]) {
+      $("export-" + id).addEventListener("change", updateExportSettings);
+    }
+    $("save-profile").addEventListener("click", saveProfile);
+    $("profile-close").addEventListener("click", () => { $("profile-dialog").classList.add("hidden"); $("app").inert = false; $("save-profile").focus(); });
+    $("profile-dialog").addEventListener("click", (event) => { if (event.target === $("profile-dialog")) $("profile-close").click(); });
+
+    function resetPreviews() {
+      state.previewController?.abort(); state.detailPreviewController?.abort();
+      state.previewRevision++; state.previewLoading = false;
+      state.detailPreview = null; state.detailPreviewError = "";
+      $("export-error").classList.add("hidden");
+    }
+
+    function updateExportSettings() {
+      const settings = state.exportSettings;
+      for (const key of ["target","language","media","title_mode","description_scope","media_scope"]) settings[key] = $("export-" + key.replaceAll("_","-")).value || settings[key];
+      for (const key of ["metadata_sources","artwork_sources","video_sources"]) settings[key] = $("export-" + key.replaceAll("_","-")).value.split(",").map((value) => value.trim().toLowerCase()).filter(Boolean);
+      resetPreviews(); renderGames(); renderDetails(); loadDetailPreview();
+    }
+
+    async function requestPreview(games, signal, settings = state.exportSettings) {
+      const response = await fetch("/api/export-preview", {method:"POST", signal, headers:{"Content-Type":"application/json", Accept:"application/json"}, body:JSON.stringify({platform:state.platform, settings, games})});
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || response.statusText);
+      return body;
+    }
+
+    async function loadVisiblePreviews() {
+      if (!state.exportMode || state.view !== "browse" || state.previewLoading) return;
+      const revision = state.previewRevision;
+      const controller = new AbortController(); state.previewController = controller;
+      state.previewLoading = true;
+      try {
+        while (!controller.signal.aborted && revision === state.previewRevision) {
+          const pending = state.visibleGames.filter((game) => game.previewRevision !== revision).slice(0,32);
+          if (!pending.length) break;
+          const response = await requestPreview(pending.map((game) => ({folder:game.folder})), controller.signal);
+          if (controller.signal.aborted || revision !== state.previewRevision) return;
+          for (const game of pending) {
+            const result = (response.games || []).find((item) => item.folder === game.folder);
+            game.preview = result?.preview; game.previewError = result?.error || (!result?.preview ? "Preview unavailable" : ""); game.previewRevision = revision;
+          }
+          renderGames();
+        }
+      } catch (error) {
+        if (error.name !== "AbortError" && revision === state.previewRevision) {
+          for (const game of state.visibleGames) if (game.previewRevision !== revision) { game.previewRevision = revision; game.previewError = error.message; game.preview = null; }
+          $("export-error").textContent = error.message; $("export-error").classList.remove("hidden"); renderGames();
+        }
+      } finally { if (revision === state.previewRevision) state.previewLoading = false; }
+    }
+
+    async function loadDetailPreview() {
+      if (!state.exportMode || !state.game || state.view !== "browse") return;
+      state.detailPreviewController?.abort();
+      const controller = new AbortController(); state.detailPreviewController = controller;
+      const revision = state.previewRevision, requestID = state.gameRequestID;
+      state.detailPreview = null; state.detailPreviewError = "";
+      renderDetails();
+      const input = {folder:state.selectedFolder};
+      if (state.edition.startsWith("release:")) input.release = state.edition.slice(8);
+      if (state.edition.startsWith("variant:")) input.variant = state.edition.slice(8);
+      try {
+        const response = await requestPreview([input], controller.signal);
+        if (controller.signal.aborted || revision !== state.previewRevision || requestID !== state.gameRequestID) return;
+        const result = response.games?.[0];
+        state.detailPreview = result?.preview; state.detailPreviewError = result?.error || (!result?.preview ? "Preview unavailable" : "");
+        renderDetails();
+      } catch (error) {
+        if (error.name !== "AbortError" && revision === state.previewRevision && requestID === state.gameRequestID) { state.detailPreviewError = error.message; renderDetails(); }
+      }
+    }
+
+    async function saveProfile() {
+      const button = $("save-profile"); button.disabled = true;
+      try {
+        const settings = {...state.exportSettings};
+        const response = await requestPreview([], undefined, settings);
+        if (state.profileDownloadURL) URL.revokeObjectURL(state.profileDownloadURL);
+        state.profileDownloadURL = URL.createObjectURL(new Blob([response.profile_yaml], {type:"application/yaml"}));
+        $("profile-download").href = state.profileDownloadURL;
+        $("profile-yaml").textContent = response.profile_yaml;
+        $("profile-command").textContent = 'rom-meta export --target ' + response.target + ' --data-root "/path/to/catalog" --rom-root "/path/to/roms" --platform "<platform>" --profile "rommeta-export.yaml" --destination "/path/to/frontend"';
+        $("profile-dialog").classList.remove("hidden"); $("app").inert = true; $("profile-download").focus();
+        $("profile-download").click();
+      } catch (error) { $("export-error").textContent = error.message; $("export-error").classList.remove("hidden"); }
+      finally { button.disabled = false; }
+    }
+
+    function selectedMedia(preview) {
+      return Object.entries(preview.media || {}).map(([role, media]) => ({...media, kind:role, name:media.source_path.split("/").pop(), path:media.source_path, url:"/media?path=" + encodeURIComponent(media.source_path), type:role === "video" ? "video" : "image"}));
+    }
+
+    function exportResponse(response) {
+      const preview = state.detailPreview, fields = preview.fields || {}, profile = {platform:response.game.platform};
+      for (const [key, field] of Object.entries(fields)) profile[key] = key === "genres" ? field.value.split(" / ") : field.value;
+      profile.description_language = fields.description?.language;
+      profile.source = fields.description?.source;
+      return {...response, profile, local_media:selectedMedia(preview), export_preview:preview};
+    }
+
+    function renderExportEdition(response) {
+      const preview = state.detailPreview;
+      const options = ['<option value="">Default edition</option>'];
+      for (const release of response.game.releases || []) options.push('<option value="release:' + escapeAttr(release.name) + '">' + escapeHTML(release.name) + '</option>');
+      for (const variant of response.game.variants || []) options.push('<option value="variant:' + escapeAttr(variant.name) + '">' + escapeHTML(variant.name) + ' · variant</option>');
+      return '<div class="export-context"><div class="export-edition"><label for="export-edition">Edition</label><select id="export-edition">' + options.join("") + '</select><span class="secondary">' + escapeHTML(preview?.variant || preview?.release || "Game-level selection") + '</span></div>' +
+        (preview?.warnings?.length ? '<div class="export-warning">' + preview.warnings.map(escapeHTML).join(' / ') + '</div>' : '') + '</div>';
+    }
 
     $("browse-tab").addEventListener("click", () => setView("browse"));
     $("stats-tab").addEventListener("click", () => setView("stats"));
@@ -949,9 +1130,16 @@
       }
     });
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        closeLightbox();
+      if (!$("profile-dialog").classList.contains("hidden")) {
+        if (event.key === "Escape") { $("profile-close").click(); return; }
+        if (event.key === "Tab") {
+          const focusable = Array.from($("profile-dialog").querySelectorAll("a[href],button,summary"));
+          const first = focusable[0], last = focusable[focusable.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
       }
+      if (event.key === "Escape") closeLightbox();
     });
     document.addEventListener("click", (event) => {
       const trigger = event.target.closest("[data-lightbox-src]");
@@ -962,6 +1150,7 @@
 
     function setView(view) {
       state.view = view;
+      $("export-bar").classList.toggle("hidden", view !== "browse");
       $("browse-tab").classList.toggle("active", view === "browse");
       $("stats-tab").classList.toggle("active", view === "stats");
       $("platform-pane").classList.toggle("hidden", view !== "browse");
@@ -969,6 +1158,7 @@
       $("detail-pane").classList.toggle("hidden", view !== "browse");
       $("stats-pane").classList.toggle("hidden", view !== "stats");
       if (view === "stats") {
+        resetPreviews();
         state.platformController?.abort();
         state.gameController?.abort();
         loadStats();
@@ -1010,6 +1200,7 @@
     }
 
     async function selectPlatform(platform) {
+      resetPreviews();
       state.platformController?.abort();
       state.gameController?.abort();
       const controller = new AbortController();
@@ -1083,6 +1274,7 @@
     }
 
     async function selectGame(folder) {
+      state.detailPreviewController?.abort(); state.detailPreview = null; state.detailPreviewError = ""; state.edition = "";
       state.gameController?.abort();
       const controller = new AbortController();
       state.gameController = controller;
@@ -1106,6 +1298,7 @@
         }
         state.game = response;
         renderDetails();
+        loadDetailPreview();
         setStatus(platform);
       } catch (error) {
         if (error.name === "AbortError") return;
@@ -1219,7 +1412,8 @@
       const filtered = state.games.filter((game) => {
         const title = (game.title || game.folder || "").toLowerCase();
         const folder = (game.folder || "").toLowerCase();
-        if (query && !title.includes(query) && !folder.includes(query)) {
+        const projected = state.exportMode && game.previewRevision === state.previewRevision ? (game.preview?.fields?.title?.value || "").toLowerCase() : "";
+        if (query && !title.includes(query) && !folder.includes(query) && !projected.includes(query)) {
           return false;
         }
         if (missingOnly && (!game.summary_loaded || !game.missing_metadata)) {
@@ -1229,17 +1423,28 @@
       });
       $("game-count").textContent = formatNumber(filtered.length) + "/" + formatNumber(state.games.length);
       const visible = filtered.slice(0, state.listLimit);
+      state.visibleGames = visible;
       const more = filtered.length > visible.length
         ? '<button class="game-item" type="button" data-more-games>Show more (' + formatNumber(filtered.length - visible.length) + ' remaining)</button>' : '';
       const emptyMessage = !state.platform ? "Select a platform to browse games."
         : state.games.length === 0 ? "No games in this platform." : "No games match the filter.";
       $("game-list").innerHTML = visible.map(renderGameListItem).join("") + more || '<div class="empty">' + emptyMessage + '</div>';
+      if (state.exportMode) loadVisiblePreviews();
     }
 
     function renderGameListItem(game) {
       const active = game.folder === state.selectedFolder ? " active" : "";
       const missing = game.missing_metadata ? " missing" : "";
-      const title = game.title || game.folder;
+      const preview = state.exportMode && game.previewRevision === state.previewRevision ? game.preview : null;
+      const title = preview?.fields?.title?.value || game.title || game.folder;
+      if (state.exportMode) {
+        const cover = preview?.media?.cover;
+        const status = game.previewRevision !== state.previewRevision ? "Loading preview…" : game.previewError ? game.previewError : !preview?.fields?.description ? "No description" : "";
+        return '<button class="game-item' + active + '" type="button" data-game="' + escapeAttr(game.folder) + '">' +
+          (cover ? '<img class="list-cover" src="/media?path=' + encodeURIComponent(cover.source_path) + '" alt="" loading="lazy">' : '') +
+          '<span class="primary">' + escapeHTML(title) + '</span><span class="secondary">' + escapeHTML(preview?.release || game.default_release || game.folder) + '</span>' +
+          '<span class="chips">' + (status ? '<span class="chip warn">' + escapeHTML(status) + '</span>' : '') + (preview && !cover && state.exportSettings.media !== "none" ? '<span class="chip warn">No cover</span>' : '') + '</span></button>';
+      }
       const status = metadataStatusChip(game);
       const media = game.source_media_url_count > 0 ? '<span class="chip">' + formatNumber(game.source_media_url_count) + ' media URLs</span>' : "";
       return '<button class="game-item' + active + missing + '" type="button" data-game="' + escapeAttr(game.folder) + '">' +
@@ -1266,25 +1471,37 @@
     }
 
     function renderDetails() {
-      const response = state.game;
+      let response = state.game;
       if (!response) {
         $("detail-title").textContent = "Select a game";
         $("detail-chips").innerHTML = "";
         $("detail-body").innerHTML = '<div class="empty">Choose a platform and game from the lists.</div>';
         return;
       }
+      if (state.exportMode) {
+        if (!state.detailPreview) {
+          $("detail-title").textContent = response.game.title || response.game.folder;
+          $("detail-chips").innerHTML = '<span class="chip">Export view</span>';
+          $("detail-body").innerHTML = renderExportEdition(response) + '<div class="' + (state.detailPreviewError ? 'error' : 'loading') + '">' + escapeHTML(state.detailPreviewError || "Selecting export metadata…") + '</div>';
+          bindExportEdition(); return;
+        }
+        response = exportResponse(response);
+      }
       const game = response.game;
       const profile = response.profile || {};
       $("detail-title").textContent = profile.title || game.title || game.folder;
       $("detail-chips").innerHTML = [
-        response.has_metadata ? '<span class="chip good">source metadata matched</span>' : '<span class="chip bad">no source metadata found</span>',
+        state.exportMode ? '<span class="chip">' + escapeHTML(state.exportSettings.target === "launchbox" ? "LaunchBox" : "ES-DE") + ' · catalog preview</span>' : response.has_metadata ? '<span class="chip good">source metadata matched</span>' : '<span class="chip bad">no source metadata found</span>',
         profile.release_date ? '<span class="chip">' + escapeHTML(yearOf(profile.release_date)) + '</span>' : '',
         chips((profile.genres || []).slice(0, 3), ''),
         '<span class="chip">' + escapeHTML(profile.platform || game.platform) + '</span>',
         '<span class="chip">' + formatNumber((game.releases || []).length) + ' releases</span>',
         '<span class="chip">' + formatNumber((response.local_media || []).length) + ' local media</span>'
       ].flat().filter(Boolean).join("");
-      $("detail-body").innerHTML = renderProfile(response) + renderSourceSection(response) + renderMediaSection(response);
+      const provenance = response.export_preview ? '<details class="raw-details"><summary>Selected fields and provenance</summary><div class="fact-list">' + Object.entries(response.export_preview.fields || {}).map(([key,value]) => fact(key, value.value + ' · ' + value.source + (value.language ? ' / ' + value.language : '') + (value.from_variant ? ' / variant: ' + value.from_variant : value.from_release ? ' / release: ' + value.from_release : ''))).join("") + '</div></details>' : '';
+      const original = !state.exportMode ? '<details class="raw-details"><summary>Stored catalog YAML · fields, releases and variants</summary><pre>' + escapeHTML(response.catalog_yaml || "") + '</pre></details>' : '';
+      $("detail-body").innerHTML = (state.exportMode ? renderExportEdition(state.game) : '') + renderProfile(response) + provenance + original + renderMediaSection(response) + renderSourceSection(response);
+      bindExportEdition();
       document.querySelectorAll("[data-source-index]").forEach((button) => {
         button.addEventListener("click", () => {
           state.sourceIndex = Number(button.dataset.sourceIndex);
@@ -1299,16 +1516,22 @@
       });
     }
 
+    function bindExportEdition() {
+      if (!state.exportMode) return;
+      $("export-edition").value = state.edition;
+      $("export-edition").addEventListener("change", () => { state.edition = $("export-edition").value; loadDetailPreview(); });
+    }
+
     function renderProfile(response) {
       const game = response.game;
       const profile = response.profile || {};
-      const cover = bestCover(response.local_media || []);
+      const cover = state.exportMode ? (response.local_media || []).find((file) => file.kind === "cover") : bestCover(response.local_media || []);
       const coverHTML = cover
         ? '<button class="media-open" type="button" aria-label="Open media preview" data-lightbox-type="image" data-lightbox-src="' + escapeAttr(cover.url) + '" data-lightbox-title="' + escapeAttr(cover.name) + '"><img class="cover-image" src="' + escapeAttr(cover.url) + '" alt="' + escapeAttr(cover.name) + '" loading="lazy"></button>'
         : '<div class="cover-placeholder">No local cover</div>';
-      const description = profile.description
+      const description = !state.exportMode && (profile.descriptions || []).length ? renderDescriptions(profile.descriptions, profile.description, profile.description_language, profile.source) : profile.description
         ? '<div class="description">' + paragraphs(profile.description) + '</div>'
-        : '<div class="empty">No description available from fetched sources.</div>';
+        : '<div class="empty">No description available.</div>';
       const factRows = [
         fact("Release date", profile.release_date),
         fact("Developer", profile.developer),
@@ -1320,16 +1543,17 @@
         fact("Collections", listText(profile.collections)),
         fact("Franchises", listText(profile.franchises)),
         fact("Platform", profile.platform || game.platform),
-        fact("Default release", game.default_release),
-        fact("Source", profile.source)
+        fact(state.exportMode ? "Metadata release" : "Default release", state.exportMode ? response.export_preview?.release : game.default_release),
+        fact("Description source", profile.source)
       ].filter(Boolean).join("");
       const aliases = renderTitleVariants(profile.alternate_titles || [], game.aliases || []);
-      const releases = renderReleases(game.releases || []);
-      const lists = [aliases, releases].filter(Boolean).join("");
+      const releases = state.exportMode ? "" : renderReleases(game.releases || []);
+      const variants = state.exportMode || !(game.variants || []).length ? "" : '<div class="section"><h3>Variants</h3>' + game.variants.map((variant) => '<div class="release-item"><span class="primary">' + escapeHTML(variant.name) + '</span><span class="secondary">' + escapeHTML([variant.kind,variant.based_on,...(variant.languages || [])].filter(Boolean).join(" / ")) + '</span></div>').join("") + '</div>';
+      const lists = [aliases, releases, variants].filter(Boolean).join("");
       return '<div class="profile-layout">' +
         '<div class="cover-panel">' + coverHTML + '</div>' +
         '<div class="profile-content">' +
-          '<div class="section"><h3>Source overview</h3>' + description + '</div>' +
+          '<div class="section"><h3>' + (state.exportMode ? "Export metadata" : "Library metadata") + '</h3>' + description + '</div>' +
           (lists ? '<div class="profile-lists">' + lists + '</div>' : '') +
         '</div>' +
         '<aside class="side-panel"><div class="fact-list">' + (factRows || fact("Folder", game.folder)) + '</div></aside>' +
@@ -1353,7 +1577,7 @@
       const raw = block.raw || block.source + ":\n  status: " + (block.status || "unknown");
       const profile = block.profile || {};
       return '<div class="section">' +
-        '<h3>Sources</h3>' +
+        '<h3>' + (state.exportMode ? 'Stored source evidence' : 'Sources') + '</h3>' +
         '<div class="source-tabs">' + tabs + '</div>' +
         '<div class="source-readable">' +
           '<div class="source-top">' +

@@ -25,6 +25,7 @@ import (
 const maxPayload = 512 << 20
 
 type game struct {
+	context        context.Context
 	mediaStyles    map[string]mediaStyle
 	path, name     string
 	root           *yaml.Node

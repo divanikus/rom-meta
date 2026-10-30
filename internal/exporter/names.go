@@ -207,14 +207,20 @@ func attachRecord(root string, g *game, release string, record *Record, profile 
 	if err := loadGameDocument(root, g); err != nil {
 		return err
 	}
-	record.GameTitle = g.name
-	record.Game, _ = filepath.Rel(root, g.path)
-	record.Game = filepath.ToSlash(record.Game)
-	record.Release = release
 	basis := release
 	if basis == "" {
 		basis = catalogyaml.DefaultRelease(g.root)
 	}
+	return attachMetadataRecord(root, g, release, basis, record, profile, system)
+}
+
+// An explicit metadata basis lets catalog browsing retain an unselected edition.
+// Export callers keep their established default-release behavior above.
+func attachMetadataRecord(root string, g *game, release, basis string, record *Record, profile Profile, system string) error {
+	record.GameTitle = g.name
+	record.Game, _ = filepath.Rel(root, g.path)
+	record.Game = filepath.ToSlash(record.Game)
+	record.Release = release
 	record.MetadataRelease = basis
 	record.Fields = resolveFields(g, basis, profile)
 	if release != "" {

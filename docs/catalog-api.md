@@ -20,11 +20,56 @@ Catalog mode needs no ROM mount, token, profile or `--all`. Default address:
 The browser (`/`), API index (`/api`) and documentation (`/docs`, `/openapi.json`)
 share this process.
 
-The browser and `/api/game` show a source overview and provider-match coverage,
-not the resolved fields of an export. They currently do not apply explicit local
-metadata overrides or export selection profiles. Source coverage therefore does
-not measure all available catalog metadata. Use `export` preview (and an optional
-package preview) to review frontend output; `/v1/export` applies the export policy.
+The ordinary browser and `GET /api/game` show explicit saved game fields over a
+source overview, all saved descriptions, releases, variants and local media.
+Provider observations stay separately inspectable; collapsed catalog YAML also
+retains unknown owner fields and release-specific overrides. The source-match
+badges/filter still describe provider coverage, not all available metadata.
+
+### Browse with an export profile
+
+Enable **Export view** in the same browser. Choose ES-DE or LaunchBox, description
+language (with English fallback), and images/video, images, cover only or no media.
+The same draft settings affect the visible game list and opened cards across
+platforms. Returning to ordinary browsing restores stored values without losing
+the draft. Settings last for this page session; reload starts a new draft.
+
+**Advanced** contains title mode, description/media scope and optional
+comma-separated source orders. Empty source controls use catalog priorities.
+Choose a release or variant on an opened card to inspect its selection; this does
+not create a per-card policy. A declared default or sole release is selected
+initially. Multiple releases without an explicit default remain game-scoped until
+an edition is chosen. Selected fields expose source/language/donor provenance;
+missing local media remain visible. IBM PC/ScummVM retain their export exclusions.
+
+**Save profile** downloads a new neutral version-1 YAML profile. The usage dialog
+shows a CLI preview command with placeholder paths; review that preview and add
+`--apply` separately. Frontend, catalog/API origin, ROM roots and destination stay
+command inputs. Existing-profile import, web editing and direct web application
+are not included.
+
+This is a catalog metadata/media projection using the actual Go export selectors.
+It does not verify ROM identity, input-specific title disambiguation, existing
+native metadata/merges, emulator readiness or final packages. CLI export with the
+actual ROMs/destination remains the exact preview/apply workflow. Frontend choice
+sets CLI usage; the displayed selection policy is shared between both adapters.
+
+The browser computes only the displayed list page and opened card. Requests are
+cancellable; mode/profile changes do not trigger a whole-catalog media scan. Return
+to a platform, re-enter Export view or reload to refresh external catalog changes.
+No acquisition database is opened, media payloads are not read during selection,
+and video opens only on explicit play.
+
+`POST /api/export-preview` is a read-only computation (64 KiB maximum JSON body).
+It accepts `platform`, up to 32 explicit `games` objects (`folder`, optional
+`release` or `variant`) and `settings`. Required settings are `language` and
+`media` (`all`, `images`, `cover`, `none`); `target` defaults to ES-DE. Optional
+`title_mode`, `description_scope`, `media_scope`, `metadata_sources`,
+`artwork_sources` and `video_sources` match the compact controls. The response
+contains `target`, `profile_yaml` and per-card `preview` or `error`. Omitting games
+returns only the profile. Invalid requests/policy return 400; malformed/missing
+cards are isolated. No server paths, output jobs or filesystem writes are accepted.
+The endpoint and its wire schemas are also documented at `/docs`.
 
 `GET /v1/platforms` returns actual catalog folders, `schema_version: 1`,
 `mode: catalog`, `system`, `supported`, `aliases` and optional `reason`/

@@ -188,6 +188,9 @@ type mediaCandidate struct {
 
 func resolveMedia(root string, g *game, release, rom string, profile Profile, releaseSpecific bool, system string, regionHints ...[]string) (map[string]Media, []string, error) {
 	result := map[string]Media{}
+	if len(profile.Selection.Media) == 0 {
+		return result, nil, nil
+	}
 	var warnings []string
 	mediaRoot := filepath.Join(g.path, "media")
 	activeGamelistMedia, err := catalogyaml.GamelistMediaReferences(g.root)
@@ -196,6 +199,11 @@ func resolveMedia(root string, g *game, release, rom string, profile Profile, re
 	}
 	var paths []string
 	err = catalogfs.WalkDir(mediaRoot, func(path string, entry fs.DirEntry, walkErr error) error {
+		if g.context != nil {
+			if err := g.context.Err(); err != nil {
+				return err
+			}
+		}
 		if walkErr != nil {
 			if os.IsNotExist(walkErr) {
 				return nil

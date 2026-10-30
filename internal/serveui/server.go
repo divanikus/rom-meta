@@ -51,6 +51,7 @@ func Handler(dataRoot string) (http.Handler, error) {
 	mux.HandleFunc("/api/platforms", server.platforms)
 	mux.HandleFunc("/api/games", server.games)
 	mux.HandleFunc("/api/game", server.game)
+	mux.HandleFunc("/api/export-preview", server.exportPreview)
 	mux.HandleFunc("/media", server.media)
 	server.handler = mux
 	return server, nil
@@ -194,7 +195,8 @@ func (s *server) game(w http.ResponseWriter, r *http.Request) {
 		Game:            found,
 		HasMetadata:     gameHasMetadata(found),
 		MissingMetadata: !gameHasMetadata(found),
-		Profile:         buildGameProfile(firstNonEmpty(found.Title, found.Folder), found.Platform, blocks),
+		Profile:         libraryProfile(document.Root(), firstNonEmpty(found.Title, found.Folder), found.Platform, blocks),
+		CatalogYAML:     renderCatalog(document.Root()),
 		SourceBlocks:    blocks,
 		LocalMedia:      media,
 	})
@@ -312,6 +314,7 @@ type gameListItem struct {
 }
 
 type gameResponse struct {
+	CatalogYAML     string            `json:"catalog_yaml"`
 	Game            catalogcache.Game `json:"game"`
 	HasMetadata     bool              `json:"has_metadata"`
 	MissingMetadata bool              `json:"missing_metadata"`
