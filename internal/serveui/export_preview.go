@@ -80,7 +80,7 @@ func (s *server) exportProfile(settings exportSettings) (exporter.Profile, strin
 		}
 		p.Titles.Mode = settings.TitleMode
 	}
-	if len(settings.MetadataSources) > 0 {
+	if settings.MetadataSources != nil {
 		p.Selection.Description.Sources = settings.MetadataSources
 		for key, rule := range p.Selection.Fields {
 			rule.Sources = settings.MetadataSources
@@ -110,7 +110,7 @@ func (s *server) exportProfile(settings exportSettings) (exporter.Profile, strin
 		if role == "video" {
 			sources = settings.VideoSources
 		}
-		if len(sources) > 0 {
+		if sources != nil {
 			rule.Sources = sources
 		}
 		p.Selection.Media[role] = rule
@@ -209,4 +209,25 @@ func (s *server) exportPreview(w http.ResponseWriter, r *http.Request) {
 	if r.Context().Err() == nil {
 		writeJSON(w, response)
 	}
+}
+
+// exportOptions returns actual catalog defaults without enumerating games/media.
+// The UI adds sources observed on the opened card to these selectable choices.
+func (s *server) exportOptions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	p, err := exporter.ExportProfile(s.root, "schema_version: 1\n")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, exportSourceOptions{Metadata: p.Selection.Description.Sources, Artwork: p.Selection.Media["cover"].Sources, Video: p.Selection.Media["video"].Sources})
+}
+
+type exportSourceOptions struct {
+	Metadata []string `json:"metadata_sources"`
+	Artwork  []string `json:"artwork_sources"`
+	Video    []string `json:"video_sources"`
 }

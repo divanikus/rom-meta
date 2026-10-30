@@ -35,6 +35,7 @@ func browserOpenAPI() any {
 		preview := op("Preview catalog export selection", "Read-only computation for at most 32 explicitly named games. Returns a neutral profile YAML and selected fields/media descriptors. With no games, returns only the profile. Does not match ROMs, open media payloads, save files or apply native export.", nil, s.Ref(exportPreviewResponse{}))
 		preview["requestBody"] = httpdocs.Schema{"required": true, "content": httpdocs.Schema{"application/json": httpdocs.Schema{"schema": s.Ref(exportPreviewRequest{})}}}
 		paths["/api/export-preview"] = httpdocs.Schema{"post": preview}
+		paths["/api/export-options"] = httpdocs.Schema{"get": op("Read export source defaults", "Catalog-configured metadata/artwork/video source order for the visual chooser. No game/media scan. Omitted settings use defaults; explicit empty arrays disable automatic providers while saved catalog overrides still apply.", nil, s.Ref(exportSourceOptions{}))}
 		for path, item := range paths {
 			method := "get"
 			if path == "/api/export-preview" {

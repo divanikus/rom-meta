@@ -179,3 +179,34 @@ func TestBrowserDoesNotPresentImplicitReleaseAsStoredDefault(t *testing.T) {
 		t.Fatal(response)
 	}
 }
+
+func TestExportSourceOptionsAndExplicitEmptySources(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "config", "sources.yaml"), "priority:\n  metadata: [screenscraper, launchbox]\n  artwork: [launchbox]\n  video: [emumovies]\n")
+	h, err := Handler(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var options exportSourceOptions
+	requestJSON(t, h, "/api/export-options", &options)
+	if len(options.Metadata) != 2 || options.Metadata[0] != "screenscraper" || len(options.Artwork) != 1 || options.Video[0] != "emumovies" {
+		t.Fatal(options)
+	}
+	body := `{"settings":{"language":"en","media":"all","metadata_sources":[],"artwork_sources":[],"video_sources":[]}}`
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("POST", "/api/export-preview", strings.NewReader(body)))
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	var response exportPreviewResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	p, err := exporter.ExportProfile(root, response.ProfileYAML)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Selection.Description.Sources == nil || len(p.Selection.Description.Sources) != 0 || len(p.Selection.Fields["developer"].Sources) != 0 || len(p.Selection.Media["cover"].Sources) != 0 || len(p.Selection.Media["video"].Sources) != 0 {
+		t.Fatal("empty source lists reverted to defaults", p)
+	}
+}

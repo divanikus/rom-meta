@@ -117,7 +117,7 @@ Open http://127.0.0.1:8787 for the read-only browser. Local browsing requires no
 token or profile. Stats starts with one platform; full-catalog scans are explicit,
 show progress and support cancellation. HDD/network scans can take minutes.
 Video loads on playback. The ordinary view includes saved game fields and source
-evidence. Enable **Export view** to adjust one shared frontend/language/media
+evidence. Choose **Export preview** to adjust one shared frontend/language/media
 profile while browsing, then **Save profile** to download YAML for CLI export.
 Advanced preferences stay collapsed; no catalog/frontend writes occur in the web
 UI. See [the browser guide](docs/catalog-api.md#browse-with-an-export-profile).

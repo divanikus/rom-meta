@@ -28,17 +28,27 @@ badges/filter still describe provider coverage, not all available metadata.
 
 ### Browse with an export profile
 
-Enable **Export view** in the same browser. Choose ES-DE or LaunchBox, description
-language (with English fallback), and images/video, images, cover only or no media.
+Choose **Export preview** beside **Library** in the same browser. Choose ES-DE or
+LaunchBox, description language (with English fallback), and images/video, images, cover only or no media.
 The same draft settings affect the visible game list and opened cards across
 platforms. Returning to ordinary browsing restores stored values without losing
 the draft. Settings last for this page session; reload starts a new draft.
 
-**Advanced** contains title mode, description/media scope and optional
-comma-separated source orders. Empty source controls use catalog priorities.
-Choose a release or variant on an opened card to inspect its selection; this does
-not create a per-card policy. A declared default or sole release is selected
-initially. Multiple releases without an explicit default remain game-scoped until
+Export preview shows one selected description with its source/language and only
+selected media. Original provider descriptions and evidence are shown in Library
+mode, outside the export result.
+
+**Advanced** contains title mode, description/media scope and visual source lists.
+Checkboxes enable sources; up/down buttons set priority. Defaults come from the
+catalog, with relevant sources observed on the opened card also offered. Reset
+restores catalog order. Disabling every source deliberately disables automatic
+provider selection; explicit saved catalog overrides still take priority.
+
+**Release for this preview** selects a release or variant for the opened card;
+this does not create a per-card policy. The result says which fields/media changed,
+or explicitly reports equal selected output. Whole-game descriptions, shared
+artwork and saved overrides can legitimately stay the same between releases.
+A declared default or sole release is selected initially. Multiple releases without an explicit default remain game-scoped until
 an edition is chosen. Selected fields expose source/language/donor provenance;
 missing local media remain visible. IBM PC/ScummVM retain their export exclusions.
 
@@ -56,7 +66,7 @@ sets CLI usage; the displayed selection policy is shared between both adapters.
 
 The browser computes only the displayed list page and opened card. Requests are
 cancellable; mode/profile changes do not trigger a whole-catalog media scan. Return
-to a platform, re-enter Export view or reload to refresh external catalog changes.
+to a platform, re-enter Export preview or reload to refresh external catalog changes.
 No acquisition database is opened, media payloads are not read during selection,
 and video opens only on explicit play.
 
@@ -69,7 +79,10 @@ It accepts `platform`, up to 32 explicit `games` objects (`folder`, optional
 contains `target`, `profile_yaml` and per-card `preview` or `error`. Omitting games
 returns only the profile. Invalid requests/policy return 400; malformed/missing
 cards are isolated. No server paths, output jobs or filesystem writes are accepted.
-The endpoint and its wire schemas are also documented at `/docs`.
+Omitted source lists use catalog defaults; explicit empty source lists disable
+automatic providers for that category. `GET /api/export-options` returns actual
+catalog defaults for the visual source chooser without scanning games or media.
+The endpoints and wire schemas are also documented at `/docs`.
 
 `GET /v1/platforms` returns actual catalog folders, `schema_version: 1`,
 `mode: catalog`, `system`, `supported`, `aliases` and optional `reason`/

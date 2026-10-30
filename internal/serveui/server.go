@@ -52,6 +52,7 @@ func Handler(dataRoot string) (http.Handler, error) {
 	mux.HandleFunc("/api/games", server.games)
 	mux.HandleFunc("/api/game", server.game)
 	mux.HandleFunc("/api/export-preview", server.exportPreview)
+	mux.HandleFunc("/api/export-options", server.exportOptions)
 	mux.HandleFunc("/media", server.media)
 	server.handler = mux
 	return server, nil

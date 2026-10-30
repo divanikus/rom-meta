@@ -12,7 +12,8 @@ function browser(fetch) {
   const element = (id) => {
     if (!elements.has(id)) elements.set(id, {
       value: '', checked: false, textContent: '', innerHTML: '', scrollTop: 0,
-      addEventListener() {}, querySelectorAll() { return []; },
+      listeners: {}, addEventListener(name, handler) { this.listeners[name] = handler; }, querySelectorAll() { return []; },
+      attributes: {}, setAttribute(name, value) { this.attributes[name] = value; },
       focus() {}, click() { this.clicked = true; },
       classList: {toggle() {}, add() {}, remove() {}}
     });
@@ -195,7 +196,7 @@ test('export mode projects only visible cards in bounded batches and keeps one p
   for(let i=0;i<10;i++) await tick();
   assert.ok(previewCalls.filter(input=>input.platform==='New').every(input=>input.settings.language==='ru'));
   assert.equal(b.run('state.exportSettings.language'),'ru');
-  assert.match(b.element('detail-body').innerHTML,/Export metadata/);
+  assert.match(b.element('detail-body').innerHTML,/Selected export description/);
   b.run('state.exportMode=false; resetPreviews(); renderDetails()');
   assert.equal(b.element('detail-title').textContent,'Stored title');
   assert.match(b.element('detail-body').innerHTML,/Library metadata/);
@@ -239,4 +240,48 @@ test('game-level export rows never display an implicit default edition', () => {
   b.run('state.exportMode=true; state.games=[{folder:"Card",default_release:"Implicit USA",previewRevision:0,preview:{fields:{title:{value:"Card"}},media:{}}}]; renderGames()');
   assert.match(b.element('game-list').innerHTML,/Game-level selection/);
   assert.doesNotMatch(b.element('game-list').innerHTML,/Implicit USA/);
+});
+
+
+test('explicit modes keep provider descriptions outside export preview', () => {
+  const b=browser(async()=>json({}));
+  b.run(`state.game={game:{folder:"Card"},profile:{description:"Stored prose"},source_blocks:[{source:"launchbox",match_count:1,profile:{descriptions:[{language:"en",text:"Unselected provider prose"}]}}],local_media:[]}; state.detailPreview={fields:{title:{value:"Card",source:"catalog"},description:{value:"Chosen prose",source:"screenscraper",language:"ru"}},media:{}}; state.exportMode=true; renderDetails()`);
+  assert.match(b.element('detail-body').innerHTML,/Chosen prose/);
+  assert.match(b.element('detail-body').innerHTML,/ScreenScraper/);
+  assert.doesNotMatch(b.element('detail-body').innerHTML,/Unselected provider prose|Stored source evidence|data-source-index/);
+  b.run('setExportMode(false)');
+  assert.match(b.element('detail-body').innerHTML,/Unselected provider prose/);
+  assert.equal(b.element('library-mode').attributes['aria-pressed'],'true');
+  assert.equal(b.element('export-mode').attributes['aria-pressed'],'false');
+});
+
+test('visual source chooser loads catalog defaults, reorders, disables all and resets without text input', async () => {
+  const b=browser(async(path)=>{ assert.equal(path,'/api/export-options');return json({metadata_sources:['launchbox','screenscraper'],artwork_sources:['emumovies','launchbox'],video_sources:['emumovies']}); });
+  await b.run('loadExportSources()');
+  assert.match(b.element('export-source-controls').innerHTML,/ScreenScraper/);
+  assert.doesNotMatch(html,/comma-separated override|id="export-metadata-sources"/);
+  b.element('export-source-controls').listeners.click({target:{closest:()=>({dataset:{sourceCategory:'metadata_sources',sourceId:'screenscraper',sourceAction:'up'}})}});
+  assert.equal(b.run('state.exportSettings.metadata_sources.join(",")'),'screenscraper,launchbox');
+  b.run('changeSourcePreference("metadata_sources","screenscraper","disable"); changeSourcePreference("metadata_sources","launchbox","disable")');
+  assert.equal(b.run('JSON.stringify(state.exportSettings.metadata_sources)'),'[]');
+  assert.match(b.element('export-source-controls').innerHTML,/Automatic sources are off/);
+  b.run('changeSourcePreference("metadata_sources",null,"reset")');
+  assert.equal(b.run('Object.hasOwn(state.exportSettings,"metadata_sources")'),false);
+  assert.equal(b.run('sourcePreference("metadata_sources").join(",")'),'launchbox,screenscraper');
+});
+
+test('release inspection says what changed and explains equal shared output', async () => {
+  let name='Europe';
+  const b=browser(async(path,options)=>{
+    const input=JSON.parse(options.body).games[0];assert.equal(input.release,name);
+    return json({games:[{preview:{release:name,fields:{title:{value:'European title',source:'release'},description:{value:'Shared prose',source:'launchbox'}},media:{cover:{source_path:'cover.png'}}}}]});
+  });
+  b.run(`state.exportMode=true; state.selectedFolder="Card"; state.game={game:{folder:"Card",releases:[{name:"USA"},{name:"Europe"}]}}; state.detailPreview={release:"USA",fields:{title:{value:"American title",source:"release"},description:{value:"Shared prose",source:"launchbox"}},media:{cover:{source_path:"cover.png"}}}`);
+  await b.run('inspectEdition("release:Europe")');
+  assert.match(b.element('detail-body').innerHTML,/Updated for this release: title/);
+  name='USA'; // Different edition, identical selected output.
+  await b.run('inspectEdition("release:USA")');
+  assert.match(b.element('detail-body').innerHTML,/unchanged under this profile/);
+  assert.equal(b.element('export-edition').value,'release:USA');
+  assert.match(b.element('detail-body').innerHTML,/Shared game data can be reused/);
 });

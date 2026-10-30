@@ -22,7 +22,7 @@ func TestBrowserOpenAPIRoutesAndWireSchemas(t *testing.T) {
 		t.Fatal(err)
 	}
 	paths := doc["paths"].(map[string]any)
-	for _, path := range []string{"/api", "/api/platforms", "/api/games", "/api/game", "/api/export-preview", "/api/stats", "/media"} {
+	for _, path := range []string{"/api", "/api/platforms", "/api/games", "/api/game", "/api/export-preview", "/api/export-options", "/api/stats", "/media"} {
 		if paths[path] == nil {
 			t.Fatal("undocumented route", path)
 		}
