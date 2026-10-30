@@ -890,13 +890,15 @@
     .overview-description .description { max-width:90ch; }
     .card-tabs { display:flex; flex-wrap:wrap; gap:6px; position:sticky; top:-16px; z-index:4; padding:10px 0; background:#0f1419; }
     .card-section { min-width:0; }
+    .card-section > .section,.game-overview { grid-template-columns:minmax(0,1fr); }
+    .fact-value { min-width:0; overflow-wrap:anywhere; }
     .export-context { padding:12px; border:1px solid var(--line); border-radius:6px; }
     .export-edition { display:grid; grid-template-columns:70px minmax(0,1fr); margin-bottom:6px; }
     .export-edition select { width:100%; min-width:0; }
     .export-warning { font-size:12px; }
-    .fingerprint-filter { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0; }
-    .fingerprint-filter input { flex:1; min-width:160px; }
-    .fingerprint-filter select { max-width:100%; }
+    .fingerprint-filter { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0; min-width:0; }
+    .fingerprint-filter input { flex:1 1 160px; min-width:0; max-width:100%; }
+    .fingerprint-filter select { flex-basis:100%; width:100%; max-width:100%; min-width:0; }
     .fingerprint-list { display:grid; gap:8px; margin:14px 0; }
     .fingerprint-item { border:1px solid var(--line); border-radius:6px; padding:12px; min-width:0; }
     .fingerprint-item summary { cursor:pointer; display:grid; gap:5px; }
@@ -905,7 +907,8 @@
     .fingerprint-hashes dt { color:var(--muted); }
     .fingerprint-hashes dd { margin:0; min-width:0; }
     .fingerprint-hashes code { white-space:normal; overflow-wrap:anywhere; user-select:text; }
-    .edition-register { display:grid; gap:10px; }
+    .edition-register { display:grid; gap:10px; min-width:0; }
+    .edition-register .primary,.edition-register .secondary { white-space:normal; overflow-wrap:anywhere; }
     .edition-register .release-item { grid-template-columns:minmax(0,1fr); gap:4px; }
     @container card (max-width:560px) {
       .profile-layout { grid-template-columns:1fr; grid-template-areas:"cover" "facts"; }
