@@ -141,7 +141,8 @@ frontend before applying; replaced files are backed up automatically. ROMs and
 the catalog remain unchanged. Preview does not copy or download media.
 
 Use `--api "http://catalog-host:8787"` instead of `--data-root` for a remote catalog,
-`--platforms`/`--all` for several systems, and an optional `--profile` for language,
+`--platforms`/`--all` for several systems (short or long folder names; see
+[platform codes and discovery](docs/platform-selection.md)), and an optional `--profile` for language,
 source and media priorities. To create a portable package, use `--out <new-directory>`
 instead of `--destination`. Install a prepared package through the same command
 with `--package <directory> --destination <frontend-directory>`.

@@ -345,3 +345,19 @@ func TestDSiWareNormalizedDatasetMappings(t *testing.T) {
 		}
 	}
 }
+
+func TestCandidatesExposeAmbiguityAndRetainPrecedence(t *testing.T) {
+	r := DefaultRegistry()
+	r.AddAliases("Nintendo - Game Boy", "Shared")
+	r.AddAliases("Nintendo - Game Boy Advance", "shared")
+	if got := r.Candidates("SHARED"); len(got) != 2 {
+		t.Fatalf("ambiguous aliases: %+v", got)
+	}
+	if _, ok := r.Entry("shared"); ok {
+		t.Fatal("ambiguous alias picked first")
+	}
+	r.AddAliases("Nintendo - Game Boy Advance", "Nintendo - Game Boy")
+	if got := r.Candidates("nintendo_game-boy"); len(got) != 1 || got[0].Name != "Nintendo - Game Boy" {
+		t.Fatalf("canonical precedence: %+v", got)
+	}
+}

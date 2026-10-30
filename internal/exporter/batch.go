@@ -67,64 +67,24 @@ func BuildBatch(options BatchOptions) (*BatchPlan, error) {
 	if _, err := loadProfile(root, options.ProfilePath); err != nil {
 		return nil, err
 	}
-	requested := append([]string(nil), options.Systems...)
-	if options.All {
-		entries, err := catalogfs.ReadDir(romRoot)
-		if err != nil {
-			return nil, err
-		}
-		for _, entry := range entries {
-			if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") && !strings.HasPrefix(entry.Name(), "_") {
-				requested = append(requested, entry.Name())
-			}
-		}
-	}
-	platforms, err := storedPlatforms(root)
+	selector, err := LoadPlatformSelector(root)
 	if err != nil {
 		return nil, err
 	}
-	batch := &BatchPlan{SchemaVersion: 1, Target: target, DataRoot: root, ROMRoot: romRoot, Out: out, Plans: []*Plan{}, Skipped: []SkippedSystem{}}
-	seen := map[string]bool{}
-	for _, requestedSystem := range requested {
-		system := strings.ToLower(strings.TrimSpace(requestedSystem))
-		spec, supported := systems[system]
-		if seen[system] {
-			return nil, fmt.Errorf("duplicate selected system: %s", system)
-		}
-		seen[system] = true
+	selected, skipped, err := selector.Folders(romRoot, options.Systems, options.All)
+	if err != nil {
+		return nil, err
+	}
+	batch := &BatchPlan{SchemaVersion: 1, Target: target, DataRoot: root, ROMRoot: romRoot, Out: out, Plans: []*Plan{}, Skipped: skipped}
+	for _, selected := range selected {
+		selection := selected.Selection
+		system := selection.System
 		skip := func(reason string) {
-			batch.Skipped = append(batch.Skipped, SkippedSystem{System: requestedSystem, Reason: reason})
-		}
-		if !supported {
-			if !options.All {
-				return nil, fmt.Errorf("unsupported system %q; use --list-systems", requestedSystem)
-			}
-			skip("no launch reader for this ES-DE system")
-			continue
-		}
-		folder, err := realPath(filepath.Join(romRoot, requestedSystem))
-		if os.IsNotExist(err) {
-			skip("ROM system directory is missing")
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
-		if !within(romRoot, folder) {
-			skip("ROM system directory link escapes selected root")
-			continue
-		}
-		stored := platforms[spec.Platform]
-		if len(stored) == 0 {
-			skip("catalog platform is missing: " + spec.Platform)
-			continue
-		}
-		if len(stored) > 1 {
-			skip("multiple catalog folders claim platform " + spec.Platform)
-			continue
+			batch.Skipped = append(batch.Skipped, SkippedSystem{System: filepath.Base(selection.Folder), Reason: reason})
 		}
 		child := options.Options
-		child.DataRoot, child.ROMRoot, child.Out, child.Platform, child.System = root, folder, out, stored[0], system
+		child.DataRoot, child.ROMRoot, child.Out, child.Platform, child.System = root, selection.Folder, out, selected.Catalog, system
+		child.selector, child.selection, child.selectedCatalog = selector, selection, selected.Catalog
 		if options.Progress != nil {
 			child.Progress = func(stage, name string, current, total int) {
 				options.Progress(system+" / "+stage, name, current, total)

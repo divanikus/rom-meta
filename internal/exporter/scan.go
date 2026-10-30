@@ -19,7 +19,6 @@ import (
 	"rommeta/internal/catalogfs"
 	"rommeta/internal/catalogrules"
 	"rommeta/internal/catalogyaml"
-	"rommeta/internal/platformnames"
 	"rommeta/internal/zipnames"
 )
 
@@ -73,39 +72,36 @@ func Build(options Options) (*Plan, error) {
 	if within(root, out) || within(out, root) || within(romRoot, out) || within(out, romRoot) {
 		return nil, fmt.Errorf("output must be separate from the catalog and ROM trees")
 	}
-	platform := options.Platform
-	if strings.ContainsAny(platform, `/\`) || platform == "." || platform == ".." {
-		return nil, fmt.Errorf("invalid platform name")
-	}
-	platformPath := filepath.Join(root, "platforms", platform)
-	if _, err := catalogfs.Stat(platformPath); os.IsNotExist(err) {
-		registry, _, err := platformnames.LoadRegistry(root)
+	selector := options.selector
+	if selector == nil {
+		selector, err = LoadPlatformSelector(root)
 		if err != nil {
 			return nil, err
 		}
-		platform = registry.ResolveCLI(platform)
-		platformPath = filepath.Join(root, "platforms", platform)
 	}
-	platformReal, err := realPath(platformPath)
+	selection, platform := options.selection, options.selectedCatalog
+	if selection == nil {
+		selection, platform, err = selector.Single(options.Platform, romRoot)
+		if err != nil {
+			return nil, err
+		}
+	}
+	system := selection.System
+	if options.System != "" {
+		system, err = systemFor(selection.Name, options.System)
+		if err != nil {
+			return nil, err
+		}
+		copySelection := *selection
+		copySelection.System = system
+		selection = &copySelection
+	}
+	platformReal, err := realPath(filepath.Join(root, "platforms", platform))
 	if err != nil {
 		return nil, err
 	}
 	if !within(root, platformReal) {
 		return nil, fmt.Errorf("catalog platform escapes data root")
-	}
-	platformDoc, err := readDocument(filepath.Join(platformReal, "_platform.yaml"))
-	if err != nil {
-		return nil, err
-	}
-	requested := options.System
-	if requested == "" {
-		if _, ok := systems[options.Platform]; ok {
-			requested = options.Platform
-		}
-	}
-	system, err := systemFor(field(platformDoc, "name"), requested)
-	if err != nil {
-		return nil, err
 	}
 	options.System = system
 	profile, err := loadProfile(root, options.ProfilePath)
@@ -117,12 +113,8 @@ func Build(options Options) (*Plan, error) {
 	if systems[system].Arcade {
 		arcade, err = loadArcadeIndex(root, options.ArcadeSnapshot)
 	} else {
-		catalog, e := NewLookupCatalog(root, options.ProfilePath)
-		if e != nil {
-			return nil, e
-		}
 		index = newCatalogIndex()
-		for _, folder := range catalog.scope(platform) {
+		for _, folder := range selector.Scope(platform) {
 			part, e := buildIndex(root, filepath.Join(root, "platforms", folder), options.Progress)
 			if e != nil {
 				return nil, e
@@ -143,6 +135,7 @@ func Build(options Options) (*Plan, error) {
 		return nil, err
 	}
 	plan.ROMRoot, plan.Out, plan.Context = romRoot, out, options.Context
+	plan.PlatformSelection = selection
 	if err := ProjectTarget(plan, target); err != nil {
 		return nil, err
 	}

@@ -16,6 +16,9 @@ import (
 )
 
 type Options struct {
+	selector                                             *PlatformSelector
+	selection                                            *PlatformSelection
+	selectedCatalog                                      string
 	Context                                              context.Context
 	DataRoot, ROMRoot, Platform, Out, ProfilePath, Match string
 	Target, System, ArcadeSnapshot                       string
@@ -138,29 +141,30 @@ type Record struct {
 }
 
 type Plan struct {
-	LaunchBox     *LaunchBoxProjection `json:"launchbox,omitempty"`
-	HashMatches   int                  `json:"hash_matches"`
-	NameMatches   int                  `json:"name_matches"`
-	GameOnly      int                  `json:"game_only"`
-	SchemaVersion int                  `json:"schema_version"`
-	Target        string               `json:"target"`
-	Platform      string               `json:"platform"`
-	System        string               `json:"system"`
-	DataRoot      string               `json:"data_root"`
-	ROMRoot       string               `json:"rom_root"`
-	Out           string               `json:"-"`
-	SourceAPI     string               `json:"source_api,omitempty"`
-	MediaRoot     string               `json:"-"`
-	MediaPaths    map[string]string    `json:"-"`
-	Context       context.Context      `json:"-"`
-	Profile       Profile              `json:"profile"`
-	Records       []Record             `json:"records"`
-	Matched       int                  `json:"matched"`
-	Ambiguous     int                  `json:"ambiguous"`
-	Unmatched     int                  `json:"unmatched"`
-	Unsupported   int                  `json:"unsupported"`
-	MediaFiles    int                  `json:"media_files"`
-	MediaBytes    int64                `json:"media_bytes"`
+	PlatformSelection *PlatformSelection   `json:"platform_selection,omitempty"`
+	LaunchBox         *LaunchBoxProjection `json:"launchbox,omitempty"`
+	HashMatches       int                  `json:"hash_matches"`
+	NameMatches       int                  `json:"name_matches"`
+	GameOnly          int                  `json:"game_only"`
+	SchemaVersion     int                  `json:"schema_version"`
+	Target            string               `json:"target"`
+	Platform          string               `json:"platform"`
+	System            string               `json:"system"`
+	DataRoot          string               `json:"data_root"`
+	ROMRoot           string               `json:"rom_root"`
+	Out               string               `json:"-"`
+	SourceAPI         string               `json:"source_api,omitempty"`
+	MediaRoot         string               `json:"-"`
+	MediaPaths        map[string]string    `json:"-"`
+	Context           context.Context      `json:"-"`
+	Profile           Profile              `json:"profile"`
+	Records           []Record             `json:"records"`
+	Matched           int                  `json:"matched"`
+	Ambiguous         int                  `json:"ambiguous"`
+	Unmatched         int                  `json:"unmatched"`
+	Unsupported       int                  `json:"unsupported"`
+	MediaFiles        int                  `json:"media_files"`
+	MediaBytes        int64                `json:"media_bytes"`
 }
 
 var roles = map[string]struct{ Kind, Dir string }{

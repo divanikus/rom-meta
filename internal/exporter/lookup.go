@@ -28,17 +28,19 @@ type ObservedInput struct {
 	Catalog *CatalogObservation `json:"catalog,omitempty"`
 }
 type LookupPlatform struct {
-	Catalogs       []string `json:"catalogs,omitempty"`
-	header, family string
-	VariantBinding bool     `json:"variant_binding,omitempty"`
-	ExportSystems  []string `json:"export_systems,omitempty"`
-	Platform       string   `json:"platform"`
-	System         string   `json:"system,omitempty"`
-	Supported      bool     `json:"supported"`
-	Reason         string   `json:"reason,omitempty"`
-	GameBinding    bool     `json:"game_binding,omitempty"`
-	NameBinding    bool     `json:"name_binding,omitempty"`
-	Aliases        []string `json:"aliases,omitempty"`
+	Name            string   `json:"name,omitempty"`
+	SelectorAliases []string `json:"selector_aliases,omitempty"`
+	Catalogs        []string `json:"catalogs,omitempty"`
+	header, family  string
+	VariantBinding  bool     `json:"variant_binding,omitempty"`
+	ExportSystems   []string `json:"export_systems,omitempty"`
+	Platform        string   `json:"platform"`
+	System          string   `json:"system,omitempty"`
+	Supported       bool     `json:"supported"`
+	Reason          string   `json:"reason,omitempty"`
+	GameBinding     bool     `json:"game_binding,omitempty"`
+	NameBinding     bool     `json:"name_binding,omitempty"`
+	Aliases         []string `json:"aliases,omitempty"`
 }
 type LookupCatalog struct {
 	Root      string
@@ -132,9 +134,20 @@ func NewLookupCatalog(dataRoot, profilePath string) (*LookupCatalog, error) {
 		return nil, err
 	}
 	catalog := &LookupCatalog{Root: root, Profile: profile, Platforms: []LookupPlatform{}}
+	if err := catalog.discoverPlatforms(); err != nil {
+		return nil, err
+	}
+	return catalog, nil
+}
+func (catalog *LookupCatalog) discoverPlatforms() error {
+	root := catalog.Root
+	registry, err := LoadSelectorNames(root)
+	if err != nil {
+		return err
+	}
 	entries, err := catalogfs.ReadDir(filepath.Join(root, "platforms"))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for _, entry := range entries {
 		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") || strings.HasPrefix(entry.Name(), "_") {
@@ -142,14 +155,14 @@ func NewLookupCatalog(dataRoot, profilePath string) (*LookupCatalog, error) {
 		}
 		path, err := realPath(filepath.Join(root, "platforms", entry.Name()))
 		if err != nil || !within(root, path) {
-			return nil, fmt.Errorf("catalog platform escapes root")
+			return fmt.Errorf("catalog platform escapes root")
 		}
 		platform := LookupPlatform{Platform: entry.Name()}
 		doc, err := readDocument(filepath.Join(path, "_platform.yaml"))
 		if os.IsNotExist(err) {
 			platform.Reason = "catalog has no platform header"
 		} else if err != nil {
-			return nil, err
+			return err
 		} else {
 			for _, system := range SupportedSystems() {
 				if systems[system].Platform == catalogFamily(field(doc, "name")) {
@@ -179,6 +192,15 @@ func NewLookupCatalog(dataRoot, profilePath string) (*LookupCatalog, error) {
 		}
 		if doc != nil && field(doc, "name") != "" {
 			platform.header = field(doc, "name")
+			platform.Name = registry.ResolveCLI(platform.header)
+			if entry, ok := registry.Entry(platform.Name); ok {
+				for _, alias := range selectorNames(entry) {
+					matches := registry.Candidates(alias)
+					if len(matches) == 1 && matches[0].Name == entry.Name {
+						platform.SelectorAliases = append(platform.SelectorAliases, alias)
+					}
+				}
+			}
 			platform.family = catalogFamily(platform.header)
 			platform.NameBinding = true
 			platform.Aliases = []string{field(doc, "name"), field(doc, "display_name")}
@@ -199,7 +221,7 @@ func NewLookupCatalog(dataRoot, profilePath string) (*LookupCatalog, error) {
 		catalog.Platforms = append(catalog.Platforms, platform)
 	}
 	catalog.groupDatasets()
-	return catalog, nil
+	return nil
 }
 func (catalog *LookupCatalog) Open(platform string) (*LookupResolver, error) {
 	var selected *LookupPlatform

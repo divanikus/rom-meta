@@ -89,8 +89,9 @@ rom-meta export --api "http://192.168.1.10:8787" --all --rom-root "/games/roms" 
 rom-meta export --api "http://192.168.1.10:8787" --all --rom-root "/games/roms" --profile "/path/to/profile.yaml" --destination "/home/player/ES-DE" --apply
 ```
 
-`--platforms nes,gba,psx,mame` selects immediate folders. `--api` excludes
-`--data-root`. `--list-systems` lists client readers; server catalog contents
+`--platforms nes,gba,psx,mame` selects immediate folders by code, full name or alias.
+`--api` excludes `--data-root`. `--list-platforms --api <origin>` lists client reader
+support and server catalog availability; server catalog contents
 determine availability. Custom roots still need separate `--platform` exports.
 
 The client hashes ROMs locally and sends batches of 100 observations, never ROM
@@ -127,7 +128,9 @@ rom-meta export --target es-de --data-root <catalog-root> --rom-root <ES-DE-ROM-
 
 Use one [shared profile](../examples/export-es-de-library.yaml) for all systems.
 Choose exactly one of `--all`, `--platforms n64,snes,psx,arcade` or single-system
-`--platform n64` with its actual system directory. `--list-systems` lists readers.
+`--platform n64` with its actual system directory. `--list-platforms` shows codes,
+full names, accepted aliases, export support and catalog availability. Both selection
+flags accept the same values; see [folder recognition](platform-selection.md).
 `--limit` applies **per system**; `--match` filters relative filenames. No 1G1R or
 automatic region/revision filtering occurs.
 
@@ -135,7 +138,8 @@ Preview writes nothing. Apply stages every selected system before publishing one
 package; later failure leaves no partial final output. Output must be new and
 outside both input trees.
 
-Discovery uses immediate non-hidden directories and `_platform.yaml` identity.
+Discovery matches immediate visible ROM directory names against the shared registry,
+including long canonical names. Catalog `_platform.yaml` headers locate metadata.
 Unknown/missing/duplicate platforms, absent folders, empty selections and unresolved
 MAME snapshots are reported as skips. Malformed selected data/profile or I/O errors
 stop the batch. Skips generate no files; an all-skipped batch creates no package.

@@ -26,8 +26,8 @@ Windows for both targets and on Linux for ES-DE.
 | `--target es-de` or `--target launchbox` | Select the native adapter |
 | `--data-root <catalog>` or `--api <origin>` | Select metadata/media source |
 | `--rom-root <directory>` | Existing launchable ROM inputs |
-| `--platform <system>` | One system directory |
-| `--platforms nes,snes,psx` or `--all` | Selected/all supported immediate system folders |
+| `--platform <code/name/alias>` | One platform ROM directory |
+| `--platforms nes,snes,psx` or `--all` | Same selectors across short or long platform folder names |
 | `--destination <directory>` | Add games and enrich the installed frontend |
 | `--profile <yaml>` | Shared selection priorities; adapter-specific preferences remain optional |
 | `--match <text>`, `--limit <count>` | Bound the observed input selection; avoid partial disc sets |
@@ -56,6 +56,9 @@ Replaced files are backed up under `<destination>/Backups/RomMeta/<run>/`.
 Assets are prepared before XML publication. This is not a multi-file transaction;
 a partial I/O failure may require reviewed manual recovery. No automatic restore
 overwrites later edits. Do not interrupt an active frontend save.
+
+See [platform selection](platform-selection.md) for the unified code/name/alias list,
+folder discovery and the distinction between name recognition and ROM evidence.
 
 ## Local, API and batch sources
 

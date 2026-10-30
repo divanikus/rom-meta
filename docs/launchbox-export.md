@@ -61,8 +61,10 @@ catalog title; older responses fall back to the primary regional display title.
 rom-meta export --target launchbox --api "http://catalog-host:8787" --platforms nes,snes,psx --rom-root "D:\Games" --profile "D:\Profiles\launchbox.yaml" --destination "D:\LaunchBox" --apply
 ```
 
-`--platforms` and `--all` use the shared system-directory IDs. `--list-systems`
-lists readers. Profiles keep their shared `target: es-de` header; the command's
+`--platform` and `--platforms` accept the same codes, full names and aliases;
+`--all` recognizes short or long registered folder names. `--list-platforms` lists
+codes, aliases, export support and catalog availability; see
+[platform selection](platform-selection.md). Profiles keep their shared `target: es-de` header; the command's
 `--target launchbox` selects the native layout. ES-DE retains its existing layout.
 
 ## Cartridges and multiple discs

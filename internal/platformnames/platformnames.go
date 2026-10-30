@@ -593,59 +593,89 @@ func (r *Registry) setPlatform(platform Platform) {
 	r.platforms[key(platform.Name)] = clonePlatform(platform)
 }
 
-func (r Registry) lookup(name string) (Platform, bool) {
+// Candidates returns exact normalized matches, preserving the registry's
+// canonical-name, explicit-alias, then provider-name precedence.
+func (r Registry) Candidates(name string) []Platform {
 	lookupKey := key(name)
 	if lookupKey == "" {
-		return Platform{}, false
+		return nil
 	}
 	if platform, ok := r.platforms[lookupKey]; ok {
-		return clonePlatform(platform), true
+		return []Platform{clonePlatform(platform)}
 	}
-	// Explicit catalog aliases outrank provider names shared by several datasets.
 	for _, sourceNames := range []bool{false, true} {
-		var matched Platform
-		found := false
+		var matches []Platform
 		for _, platform := range r.platforms {
-			matches := false
+			found := false
 			if !sourceNames {
 				for _, alias := range platform.Aliases {
 					if key(alias) == lookupKey {
-						matches = true
+						found = true
 						break
 					}
 				}
 			} else {
 				for _, ref := range platform.Sources {
 					if key(ref.Name) == lookupKey {
-						matches = true
-						break
+						found = true
 					}
 					for _, name := range ref.Names {
 						if key(name) == lookupKey {
-							matches = true
-							break
+							found = true
 						}
-					}
-					if matches {
-						break
 					}
 				}
 			}
-			if !matches {
-				continue
+			if found {
+				matches = append(matches, clonePlatform(platform))
 			}
-			if found && key(matched.Name) != key(platform.Name) {
-				return Platform{}, false
-			}
-			matched = platform
-			found = true
 		}
-		if found {
-			return clonePlatform(matched), true
+		if len(matches) > 0 {
+			sort.Slice(matches, func(i, j int) bool { return matches[i].Name < matches[j].Name })
+			return matches
 		}
 	}
-	return Platform{}, false
+	return nil
 }
+func (r Registry) lookup(name string) (Platform, bool) {
+	matches := r.Candidates(name)
+	if len(matches) != 1 {
+		return Platform{}, false
+	}
+	return matches[0], true
+}
+
+// AddAliases registers names without choosing between conflicting aliases.
+func (r *Registry) AddAliases(platform string, names ...string) { r.addAliases(platform, names) }
+
+// Code prefers a short unambiguous alias; its canonical-name fallback also
+// resolves through the same normalization, rather than inventing an unknown ID.
+func (r Registry) Code(name string) string {
+	entry, ok := r.Entry(name)
+	if !ok {
+		return ""
+	}
+	for _, alias := range entry.Aliases {
+		code := strings.ToLower(strings.TrimSpace(alias))
+		simple := code != ""
+		for _, c := range code {
+			if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
+				simple = false
+				break
+			}
+		}
+		if simple {
+			matches := r.Candidates(code)
+			if len(matches) == 1 && matches[0].Name == entry.Name {
+				return code
+			}
+		}
+	}
+	return strings.ReplaceAll(key(entry.Name), " ", "-")
+}
+
+// Normalize exposes the exact name comparison used by selectors and folders.
+func Normalize(name string) string { return key(name) }
 
 func (r *Registry) addAliases(platform string, aliases []string) {
 	entry := r.ensurePlatform(platform)

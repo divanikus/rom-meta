@@ -25,7 +25,11 @@ share this process.
 `game_binding`/`name_binding`. `name_binding` advertises metadata lookup by a
 complete release name for files/folders, independently of ES-DE launch readers.
 `game_binding: true` in a request explicitly permits unverified metadata.
-`export_schema_version: 1` and `export_systems` separately advertise ES-DE readers,
+Optional `name` and `selector_aliases` supply canonical names and accepted selector
+spellings for [shared platform selection](platform-selection.md); metadata `aliases`
+and lookup support retain their existing meaning. Clients fall back to embedded
+names for older servers.
+`export_schema_version: 1` and `export_systems` separately advertise frontend readers,
 including modern systems and MAME. `/v1/health` returns the last published view
 without waiting for active work; it does not establish freshness or completion.
 

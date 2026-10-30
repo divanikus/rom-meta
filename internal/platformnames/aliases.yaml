@@ -1,4 +1,6 @@
 aliases:
+  - match: "IBM - PC and Compatibles"
+    keys: [ibmpc]
   - match: "ScummVM"
     keys: [scummvm, scumm-vm]
     display: "ScummVM"

@@ -20,6 +20,7 @@ import (
 
 	"rommeta/internal/catalogapi"
 	"rommeta/internal/exporter"
+	"rommeta/internal/platformnames"
 )
 
 type Options struct {
@@ -164,6 +165,31 @@ func outputPath(path string) (string, error) {
 	return parent, nil
 }
 
+func (c *client) platforms(ctx context.Context) (*exporter.PlatformSelector, error) {
+	var capabilities struct {
+		SchemaVersion int                       `json:"schema_version"`
+		ExportVersion int                       `json:"export_schema_version"`
+		Mode          string                    `json:"mode"`
+		Platforms     []exporter.LookupPlatform `json:"platforms"`
+	}
+	if err := c.json(ctx, "GET", "/v1/platforms", nil, &capabilities); err != nil {
+		return nil, err
+	}
+	if capabilities.SchemaVersion != 1 || capabilities.ExportVersion != 1 || capabilities.Mode != "catalog" || capabilities.Platforms == nil {
+		return nil, fmt.Errorf("API must serve catalog mode with network export capabilities")
+	}
+	return exporter.NewPlatformSelector(platformnames.DefaultRegistry(), capabilities.Platforms), nil
+}
+
+// ListPlatforms reads capabilities only; it never observes ROMs or fetches assets.
+func ListPlatforms(ctx context.Context, options Options) (*exporter.PlatformSelector, error) {
+	c, err := newClient(options.API, options.Token, options.HTTP)
+	if err != nil {
+		return nil, err
+	}
+	return c.platforms(ctx)
+}
+
 func Build(ctx context.Context, options Options) (*Job, error) {
 	target, err := exporter.NormalizeTarget(options.Target)
 	if err != nil {
@@ -201,17 +227,9 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 	if within(root, out) || within(out, root) {
 		return nil, fmt.Errorf("output must be outside ROM trees")
 	}
-	var capabilities struct {
-		SchemaVersion int                       `json:"schema_version"`
-		ExportVersion int                       `json:"export_schema_version"`
-		Mode          string                    `json:"mode"`
-		Platforms     []exporter.LookupPlatform `json:"platforms"`
-	}
-	if err = c.json(ctx, "GET", "/v1/platforms", nil, &capabilities); err != nil {
+	selector, err := c.platforms(ctx)
+	if err != nil {
 		return nil, err
-	}
-	if capabilities.SchemaVersion != 1 || capabilities.ExportVersion != 1 || capabilities.Mode != "catalog" || capabilities.Platforms == nil {
-		return nil, fmt.Errorf("API must serve catalog mode with network export capabilities")
 	}
 	profile := ""
 	if options.ProfilePath != "" {
@@ -233,96 +251,28 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 	}
 	batch := &exporter.BatchPlan{SchemaVersion: 1, Target: target, ROMRoot: root, Out: out, Plans: []*exporter.Plan{}, Skipped: []exporter.SkippedSystem{}}
 	job := &Job{Batch: batch, Single: options.Platform != "", client: c, assets: map[string]catalogapi.ExportAsset{}, stamps: map[string]os.FileInfo{}, progress: options.Progress}
-	requested := append([]string(nil), options.Systems...)
+	var selectedFolders []exporter.FolderSelection
 	if job.Single {
-		requested = []string{options.Platform}
-	}
-	if options.All {
-		entries, err := os.ReadDir(root)
+		selection, catalog, err := selector.Single(options.Platform, root)
 		if err != nil {
 			return nil, err
 		}
-		for _, entry := range entries {
-			if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") && !strings.HasPrefix(entry.Name(), "_") {
-				requested = append(requested, entry.Name())
-			}
+		selectedFolders = []exporter.FolderSelection{{Selection: selection, Catalog: catalog}}
+	} else {
+		selectedFolders, batch.Skipped, err = selector.Folders(root, options.Systems, options.All)
+		if err != nil {
+			return nil, err
 		}
 	}
-	seen := map[string]bool{}
-	for _, requestedSystem := range requested {
+	for _, chosen := range selectedFolders {
 		if err = ctx.Err(); err != nil {
 			return nil, err
 		}
-		system := strings.ToLower(strings.TrimSpace(requestedSystem))
-		if seen[system] {
-			return nil, fmt.Errorf("duplicate selected system: %s", system)
-		}
-		seen[system] = true
-		canonical, known := exporter.SystemPlatform(system)
-		if !known && !job.Single {
-			if !options.All {
-				return nil, fmt.Errorf("unsupported system %q", requestedSystem)
-			}
-			batch.Skipped = append(batch.Skipped, exporter.SkippedSystem{System: requestedSystem, Reason: "no client launch reader"})
-			continue
-		}
-		var candidates []struct{ platform, system string }
-		for _, platform := range capabilities.Platforms {
-			covered := false
-			ids := platform.ExportSystems
-			for _, group := range capabilities.Platforms {
-				if group.Platform == platform.Platform {
-					continue
-				}
-				for _, member := range group.Catalogs {
-					if member == platform.Platform {
-						covered = true
-						if job.Single && !known && strings.EqualFold(requestedSystem, platform.Platform) {
-							ids = group.ExportSystems
-						}
-					}
-				}
-			}
-			if covered && !(job.Single && !known && strings.EqualFold(requestedSystem, platform.Platform)) {
-				continue
-			}
-			for _, id := range ids {
-				label, _ := exporter.SystemPlatform(id)
-				if known && id == system || job.Single && !known && (strings.EqualFold(requestedSystem, platform.Platform) || strings.EqualFold(requestedSystem, label)) && (id == platform.System || len(ids) == 1) {
-					candidates = append(candidates, struct{ platform, system string }{platform.Platform, id})
-				}
-			}
-		}
+		selection := chosen.Selection
+		system, folder := selection.System, selection.Folder
+		selected := struct{ platform, system string }{chosen.Catalog, system}
 		skip := func(reason string) {
-			batch.Skipped = append(batch.Skipped, exporter.SkippedSystem{System: requestedSystem, Reason: reason})
-		}
-		if len(candidates) != 1 {
-			reason := "server has no export catalog for " + canonical
-			if len(candidates) > 1 {
-				reason = "multiple server catalog folders claim this system"
-			}
-			if job.Single {
-				return nil, fmt.Errorf("%s", reason)
-			}
-			skip(reason)
-			continue
-		}
-		selected := candidates[0]
-		system = selected.system
-		folder := root
-		if !job.Single {
-			folder, err = real(filepath.Join(root, requestedSystem))
-			if os.IsNotExist(err) {
-				skip("ROM system directory is missing")
-				continue
-			}
-			if err != nil {
-				return nil, err
-			}
-			if !within(root, folder) {
-				skip("ROM directory link escapes selected root")
-				continue
-			}
+			batch.Skipped = append(batch.Skipped, exporter.SkippedSystem{System: filepath.Base(folder), Reason: reason})
 		}
 		child := options.Options
 		child.Context = ctx
@@ -345,7 +295,7 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 				return nil, err
 			}
 		}
-		plan := &exporter.Plan{SchemaVersion: 1, Target: "es-de", Platform: selected.platform, System: system, ROMRoot: folder, Out: out, SourceAPI: c.origin, Records: []exporter.Record{}}
+		plan := &exporter.Plan{PlatformSelection: selection, SchemaVersion: 1, Target: "es-de", Platform: selected.platform, System: system, ROMRoot: folder, Out: out, SourceAPI: c.origin, Records: []exporter.Record{}}
 		for offset := 0; offset < len(observations); offset += 100 {
 			end := offset + 100
 			if end > len(observations) {

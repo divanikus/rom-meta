@@ -79,7 +79,7 @@ func systemFor(platform, requested string) (string, error) {
 			return name, nil
 		}
 	}
-	return "", fmt.Errorf("no ES-DE launch reader for catalog platform %q", platform)
+	return "", fmt.Errorf("no export launch reader for catalog platform %q", platform)
 }
 
 func payloadExtension(system, ext string) bool {
@@ -110,34 +110,4 @@ func nameExtension(ext string) bool {
 		}
 	}
 	return false
-}
-
-// Find actual stored folders by their platform header, rather than assuming an
-// alias, display name or representation suffix is the physical catalog path.
-func storedPlatforms(root string) (map[string][]string, error) {
-	result := map[string][]string{}
-	catalog, err := NewLookupCatalog(root, "")
-	if err != nil {
-		return nil, err
-	}
-	covered := map[string]bool{}
-	for _, p := range catalog.Platforms {
-		for _, member := range p.Catalogs {
-			if member != p.Platform {
-				covered[member] = true
-			}
-		}
-	}
-	for _, p := range catalog.Platforms {
-		if covered[p.Platform] {
-			continue
-		}
-		for _, id := range p.ExportSystems {
-			canonical := systems[id].Platform
-			if position(result[canonical], p.Platform) < 0 {
-				result[canonical] = append(result[canonical], p.Platform)
-			}
-		}
-	}
-	return result, nil
 }

@@ -23,12 +23,13 @@ func runExport(args []string) error {
 	flags.StringVar(&api, "api", "", "Catalog HTTP(S) origin; reads local ROMs without a local catalog")
 	flags.StringVar(&target, "target", "es-de", "Output target (es-de or launchbox)")
 	flags.StringVar(&options.DataRoot, "data-root", ".", "Local catalog root")
-	flags.StringVar(&options.Platform, "platform", "", "One catalog platform or supported ES-DE system")
-	flags.StringVar(&selected, "platforms", "", "Comma-separated ES-DE system directories under --rom-root")
-	flags.BoolVar(&all, "all", false, "Discover supported system directories under the ES-DE ROM root")
-	flags.BoolVar(&list, "list-systems", false, "List supported ES-DE launch readers")
+	flags.StringVar(&options.Platform, "platform", "", "One platform code, full name or registered alias")
+	flags.StringVar(&selected, "platforms", "", "Comma-separated platform codes, full names or registered aliases")
+	flags.BoolVar(&all, "all", false, "Discover platform folders by registered names under --rom-root")
+	flags.BoolVar(&list, "list-platforms", false, "List platform codes, names, aliases and export support")
+	flags.BoolVar(&list, "list-systems", false, "Compatibility alias for --list-platforms")
 	flags.StringVar(&options.ArcadeSnapshot, "arcade-snapshot", "", "Saved MAME catalog snapshot (auto-select only when exactly one exists)")
-	flags.StringVar(&options.ROMRoot, "rom-root", "", "ROM system directory, or ES-DE root with --all/--platforms")
+	flags.StringVar(&options.ROMRoot, "rom-root", "", "One platform ROM directory, or collection root with --all/--platforms")
 	flags.StringVar(&options.Out, "out", "", "Optional new portable package directory instead of direct installation")
 	flags.StringVar(&destination, "destination", "", "Frontend application-data directory to create/enrich entries in place")
 	flags.StringVar(&packageRoot, "package", "", "Optional existing export package instead of catalog/ROM inputs")
@@ -55,11 +56,6 @@ func runExport(args []string) error {
 		return err
 	}
 	options.Target = target
-	if list {
-		fmt.Println("Supported ES-DE systems:", strings.Join(exporter.SupportedSystems(), ", "))
-		fmt.Println("Cartridges: raw/single-payload ZIP. Discs: standalone CHD/ISO. Arcade/MAME: saved set-name bindings for ZIP/7z; no payload/dependency validation.")
-		return nil
-	}
 	if api != "" {
 		var explicit bool
 		flags.Visit(func(f *flag.Flag) {
@@ -70,6 +66,18 @@ func runExport(args []string) error {
 		if explicit {
 			return fmt.Errorf("choose --api or --data-root, not both")
 		}
+	}
+	if list {
+		args := []string{}
+		if api != "" {
+			args = append(args, "--api", api)
+		} else {
+			args = append(args, "--data-root", options.DataRoot)
+		}
+		if options.ROMRoot != "" {
+			args = append(args, "--rom-root", options.ROMRoot)
+		}
+		return runPlatformsList(args)
 	}
 	if destination != "" && options.Out != "" {
 		return fmt.Errorf("choose --destination for direct export or --out for a package")
@@ -186,6 +194,9 @@ func runExport(args []string) error {
 	return nil
 }
 func printExportSummary(plan *exporter.Plan) {
+	if selection := plan.PlatformSelection; selection != nil {
+		fmt.Printf("Platform %q => %s (%s); reader %s\nROM folder: %s; %s\n", selection.Requested, selection.Code, selection.Name, selection.System, selection.Folder, selection.MatchedBy)
+	}
 	if plan.LaunchBox != nil {
 		fmt.Printf("%s: %d LaunchBox game cards | %d playable versions\n", plan.System, len(plan.LaunchBox.Groups), plan.LaunchBox.VersionCount)
 	}

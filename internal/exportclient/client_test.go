@@ -598,3 +598,82 @@ func TestLaunchBoxLocalNetworkParity(t *testing.T) {
 		})
 	}
 }
+
+func TestUnifiedPlatformSelectionLocalAPIParity(t *testing.T) {
+	root, roms := t.TempDir(), t.TempDir()
+	payload := []byte("synthetic Game Boy")
+	card(t, root, "gb", "Pocket", "Pocket", "Pocket (USA)", "Pocket.gb", payload)
+	// Selection parity does not materialize media (local hashes are pinned on apply).
+	if err := os.Remove(filepath.Join(root, "platforms", "gb", "Pocket", "media", "Pocket (USA)", "box-front.usa.launchbox.png")); err != nil {
+		t.Fatal(err)
+	}
+	put(t, filepath.Join(root, "config", "platforms.yaml"), []byte("Nintendo - Game Boy:\n  aliases: [Pocket Console]\n"))
+	long := "Nintendo - Game Boy"
+	folder := filepath.Join(roms, long)
+	put(t, filepath.Join(folder, "retail", "Pocket.gb"), payload)
+	api := server(t, root, nil)
+	for _, target := range []string{"es-de", "launchbox"} {
+		for _, selector := range []string{"gb", long, "Pocket Console"} {
+			options := exporter.Options{DataRoot: root, ROMRoot: folder, Platform: selector, Target: target, Out: filepath.Join(t.TempDir(), "export")}
+			local, err := exporter.Build(options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			network, err := Build(context.Background(), Options{API: api.URL, BatchOptions: exporter.BatchOptions{Options: options}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(network.Batch.Plans) != 1 || !recordsJSONEqual(local.Records, network.Batch.Plans[0].Records) || !reflect.DeepEqual(local.PlatformSelection, network.Batch.Plans[0].PlatformSelection) {
+				left, _ := json.Marshal(local.Records)
+				right, _ := json.Marshal(network.Batch.Plans[0].Records)
+				t.Fatalf("single selection differs %s: %s / %s", selector, left, right)
+			}
+			options.Platform = ""
+			options.ROMRoot = roms
+			batch := exporter.BatchOptions{Options: options, Systems: []string{selector}}
+			localBatch, err := exporter.BuildBatch(batch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			network, err = Build(context.Background(), Options{API: api.URL, BatchOptions: batch})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(network.Batch.Plans) != 1 || !recordsJSONEqual(localBatch.Plans[0].Records, network.Batch.Plans[0].Records) {
+				t.Fatal("batch selection differs", selector)
+			}
+		}
+	}
+	options := Options{API: api.URL, BatchOptions: exporter.BatchOptions{All: true, Options: exporter.Options{ROMRoot: roms, Out: filepath.Join(t.TempDir(), "all")}}}
+	job, err := Build(context.Background(), options)
+	if err != nil || len(job.Batch.Plans) != 1 {
+		t.Fatalf("long-name all: %+v %v", job, err)
+	}
+}
+
+func TestPlatformListOldAPIWithoutSelectorFields(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/v1/platforms" {
+			t.Error("listing observed ROMs or assets", r.URL.Path)
+		}
+		fmt.Fprint(w, `{"schema_version":1,"export_schema_version":1,"mode":"catalog","platforms":[{"platform":"gb","export_systems":["gb"]}]}`)
+	}))
+	defer api.Close()
+	selector, err := ListPlatforms(context.Background(), Options{API: api.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	choice, err := selector.Resolve("Nintendo - Game Boy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if physical, err := selector.CatalogFor(choice, choice.Name, "gb"); err != nil || physical != "gb" {
+		t.Fatal("old server incompatible", physical, err)
+	}
+}
+
+func recordsJSONEqual(a, b []exporter.Record) bool {
+	left, _ := json.Marshal(a)
+	right, _ := json.Marshal(b)
+	return string(left) == string(right)
+}
