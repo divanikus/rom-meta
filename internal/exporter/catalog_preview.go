@@ -13,12 +13,13 @@ import (
 // CatalogPreview is a metadata projection, never a ROM match or native merge plan.
 // Media descriptors are selected without opening their payloads.
 type CatalogPreview struct {
-	Release  string           `json:"release,omitempty"`
-	Variant  string           `json:"variant,omitempty"`
-	Fields   map[string]Value `json:"fields"`
-	Media    map[string]Media `json:"media"`
-	Warnings []string         `json:"warnings,omitempty"`
-	record   Record
+	Release      string                 `json:"release,omitempty"`
+	Variant      string                 `json:"variant,omitempty"`
+	Fields       map[string]Value       `json:"fields"`
+	Media        map[string]Media       `json:"media"`
+	Warnings     []string               `json:"warnings,omitempty"`
+	MediaReasons map[string]MediaReason `json:"media_reasons,omitempty"`
+	record       Record
 }
 
 // PreviewCatalog reuses export selection for one already-read catalog document.
@@ -56,7 +57,7 @@ func PreviewCatalog(ctx context.Context, root, gamePath string, node *yaml.Node,
 	if variant != "" && catalogyaml.Value(catalogyaml.Value(node, "variants"), variant) == nil {
 		return CatalogPreview{}, fmt.Errorf("unknown variant: %s", variant)
 	}
-	g := &game{path: gamePath, name: field(node, "title"), root: node, context: ctx}
+	g := &game{path: gamePath, name: field(node, "title"), root: node, context: ctx, mediaReasons: map[string]MediaReason{}}
 	if g.name == "" {
 		g.name = filepath.Base(gamePath)
 	}
@@ -75,7 +76,11 @@ func PreviewCatalog(ctx context.Context, root, gamePath string, node *yaml.Node,
 		record.Status = "matched"
 		record.Fields["title"] = renderExportTitle(record, profile.Titles, profile.Titles.Mode, nil, false)
 	}
+	reasons := map[string]MediaReason{}
 	for role, asset := range record.Media {
+		if reason, ok := g.mediaReasons[mediaReasonKey(role, asset.SourcePath)]; ok {
+			reasons[role] = reason
+		}
 		asset.OutputPath = ""
 		record.Media[role] = asset
 	}
@@ -92,5 +97,5 @@ func PreviewCatalog(ctx context.Context, root, gamePath string, node *yaml.Node,
 	if err := ctx.Err(); err != nil {
 		return CatalogPreview{}, err
 	}
-	return CatalogPreview{Release: record.MetadataRelease, Variant: record.Variant, Fields: record.Fields, Media: record.Media, Warnings: record.Warnings, record: record}, nil
+	return CatalogPreview{Release: record.MetadataRelease, Variant: record.Variant, Fields: record.Fields, Media: record.Media, Warnings: record.Warnings, MediaReasons: reasons, record: record}, nil
 }

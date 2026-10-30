@@ -21,16 +21,17 @@ import (
 )
 
 type exportSettings struct {
-	Target           string   `json:"target,omitempty"`
-	Language         string   `json:"language"`
-	Media            string   `json:"media"`
-	MediaRoles       []string `json:"media_roles,omitempty"`
-	MetadataSources  []string `json:"metadata_sources,omitempty"`
-	ArtworkSources   []string `json:"artwork_sources,omitempty"`
-	VideoSources     []string `json:"video_sources,omitempty"`
-	DescriptionScope string   `json:"description_scope,omitempty"`
-	MediaScope       string   `json:"media_scope,omitempty"`
-	TitleMode        string   `json:"title_mode,omitempty"`
+	Target            string   `json:"target,omitempty"`
+	Language          string   `json:"language"`
+	Media             string   `json:"media"`
+	MediaRoles        []string `json:"media_roles,omitempty"`
+	ArtworkPreference string   `json:"artwork_preference,omitempty"`
+	MetadataSources   []string `json:"metadata_sources,omitempty"`
+	ArtworkSources    []string `json:"artwork_sources,omitempty"`
+	VideoSources      []string `json:"video_sources,omitempty"`
+	DescriptionScope  string   `json:"description_scope,omitempty"`
+	MediaScope        string   `json:"media_scope,omitempty"`
+	TitleMode         string   `json:"title_mode,omitempty"`
 }
 
 type previewGameRequest struct {
@@ -142,7 +143,21 @@ func (s *server) exportProfile(settings exportSettings) (exporter.Profile, strin
 	if err := exporter.ValidateTargetMedia(p, target); err != nil {
 		return p, "", "", err
 	}
+	var variants []string
+	switch settings.ArtworkPreference {
+	case "", "auto":
+	case "original":
+		variants = []string{"original", "unknown", "reconstructed", "fanart"}
+	case "reconstructed":
+		variants = []string{"reconstructed", "original", "unknown", "fanart"}
+	default:
+		return p, "", "", fmt.Errorf("artwork preference must be auto, original or reconstructed")
+	}
 	for role, rule := range p.Selection.Media {
+		if variants != nil && role != "video" && role != "manual" {
+			rule.Variants = variants
+			rule.Order = []string{"region", "variant", "source", "format"}
+		}
 		if settings.MediaScope != "" {
 			rule.Scope = settings.MediaScope
 		}

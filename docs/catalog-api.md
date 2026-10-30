@@ -43,6 +43,19 @@ and visual source lists. Media types reflect the chosen frontend; LaunchBox also
 offers cartridges, discs, box spines, banners and icons. A checked role needs an
 eligible local asset; it does not download missing artwork. Switching to ES-DE
 removes LaunchBox-only roles from a custom draft. Default presets are unchanged.
+
+**Artwork** offers Auto, Originals first and Reconstructions first. Auto retains
+existing priorities. The other choices rank explicit filename artwork labels
+inside regional priority, before source and format, and fall back when that kind
+is unavailable. Video/manual rules are unaffected. Save profile writes ordinary
+`selection.media` rules with `variant` order/`variants` lists, so CLI/API export
+uses the same policy. This does not assess image quality or remove a case/spine.
+
+Each selected media tile shows its labelled artwork type and the decisive reason.
+**Why this file?** shows release/scope context, priority order and the nearest usable
+alternative. The Go selector produces this explanation from the same ranked
+candidates; the browser does not rank artwork. File numbers break ties only after
+the configured criteria. Reviewed exact-file overrides retain precedence.
 Checkboxes enable sources; up/down buttons set priority. Defaults come from the
 catalog. Names registered in root `source-policies.yaml`, discovered in already-read
 platform summaries or observed on the opened card are also offered, including
@@ -93,12 +106,16 @@ It accepts `platform`, up to 32 explicit `games` objects (`folder`, optional
 `release` or `variant`) and `settings`. Required settings are `language` and
 `media` (`all`, `images`, `cover`, `none`, `expanded`, `custom`); `target` defaults to ES-DE. Optional
 `title_mode`, `description_scope`, `media_scope`, `metadata_sources`,
-`artwork_sources`, `video_sources` and `media_roles` match the compact controls.
+`artwork_sources`, `video_sources`, `media_roles` and `artwork_preference` match the compact controls.
+`artwork_preference` accepts `auto` (default), `original` or `reconstructed`.
 `media_roles` replaces the preset roles when supplied; `[]` excludes all media.
 `custom` requires this array. Unknown/duplicate/frontend-incompatible roles fail
 validation. Top-level `include_raw: true` adds per-card `raw.xml` and
 `raw.media_paths`; list requests omit it. The response
-contains `target`, `profile_yaml` and per-card `preview` or `error`. Omitting games
+contains `target`, `profile_yaml` and per-card `preview` or `error`.
+`preview.media_reasons` maps selected roles to labelled kind, summary, context,
+priority order and an optional compared filename. These presentation fields are
+not added to native export/consumer identity or media proofs. Omitting games
 returns only the profile. Invalid requests/policy return 400; malformed/missing
 cards are isolated. No server paths, output jobs or filesystem writes are accepted.
 Omitted source lists use catalog defaults; explicit empty source lists disable

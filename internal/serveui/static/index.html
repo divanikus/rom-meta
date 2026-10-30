@@ -879,6 +879,10 @@
     #export-media-roles .secondary { grid-column:1 / -1; white-space:normal; }
     .section > p.secondary { white-space:normal; overflow:visible; text-overflow:clip; line-height:1.5; }
     .export-edition > .secondary { white-space:normal; overflow-wrap:anywhere; }
+    .media-choice { margin-top:10px; padding-top:8px; border-top:1px solid var(--line); color:var(--text); white-space:normal; font-size:12px; line-height:1.5; }
+    .media-choice p { margin:6px 0; white-space:normal; }
+    .media-reason summary { cursor:pointer; color:var(--accent); }
+    .media-reason-details { overflow-wrap:anywhere; }
     .export-xml { white-space:pre; overflow:auto; max-height:65vh; font-size:12px; }
   </style>
 </head>
@@ -905,6 +909,8 @@
             <label>Titles <select id="export-title-mode"><option value="regional">Regional title</option><option value="release">Full release name</option></select></label>
             <label>Description scope <select id="export-description-scope"><option value="game">Whole game</option><option value="release">Selected release</option></select></label>
             <label>Media scope <select id="export-media-scope"><option value="release">Selected release</option><option value="game">Whole game</option></select></label>
+            <label>Artwork <select id="export-artwork-preference"><option value="auto">Auto (current priorities)</option><option value="original">Originals first</option><option value="reconstructed">Reconstructions first</option></select></label>
+            <div class="secondary source-help">Within the selected region, prefer this artwork type before source and format. Unavailable types fall back automatically.</div>
             <fieldset id="export-media-roles"><legend>Media types</legend></fieldset>
             <div class="secondary source-help">Choose sources with checkboxes. Move a source up to prefer it. Saved catalog overrides take priority.</div>
             <div id="export-source-controls">Loading source choices…</div>
@@ -994,7 +1000,7 @@
       statsProgress: "",
       view: "browse",
       exportMode: false,
-      exportSettings: {target:"es-de", language:"en", media:"all", title_mode:"regional", description_scope:"game", media_scope:"release"},
+      exportSettings: {target:"es-de", language:"en", media:"all", title_mode:"regional", description_scope:"game", media_scope:"release", artwork_preference:"auto"},
       previewRevision: 0,
       previewController: null,
       previewLoading: false,
@@ -1028,7 +1034,7 @@
       if (enabled) loadExportSources();
       resetPreviews(); renderGames(); renderDetails(); loadDetailPreview();
     }
-    for (const id of ["target","language","media","title-mode","description-scope","media-scope"]) {
+    for (const id of ["target","language","media","title-mode","description-scope","media-scope","artwork-preference"]) {
       $("export-" + id).addEventListener("change", updateExportSettings);
     }
     $("export-advanced").addEventListener("toggle", () => { if ($("export-advanced").open) loadExportSources(); });
@@ -1065,7 +1071,7 @@
 
     function updateExportSettings(event) {
       const settings = state.exportSettings;
-      for (const key of ["target","language","media","title_mode","description_scope","media_scope"]) settings[key] = $("export-" + key.replaceAll("_","-")).value || settings[key];
+      for (const key of ["target","language","media","title_mode","description_scope","media_scope","artwork_preference"]) settings[key] = $("export-" + key.replaceAll("_","-")).value || settings[key];
       if (event?.target?.id === "export-media") delete settings.media_roles;
       if (settings.media_roles && state.sourceDefaults) {
         const allowed = new Set(mediaRoleChoices().map((role) => role.id));
@@ -1208,7 +1214,7 @@
     }
 
     function selectedMedia(preview) {
-      return Object.entries(preview.media || {}).map(([role, media]) => ({...media, kind:role, name:media.source_path.split("/").pop(), path:media.source_path, url:"/media?path=" + encodeURIComponent(media.source_path), type:role === "video" ? "video" : "image"}));
+      return Object.entries(preview.media || {}).map(([role, media]) => ({...media, kind:role, name:media.source_path.split("/").pop(), choice:preview.media_reasons?.[role], path:media.source_path, url:"/media?path=" + encodeURIComponent(media.source_path), type:role === "video" ? "video" : "image"}));
     }
 
     function exportResponse(response) {
@@ -1789,9 +1795,16 @@
           '<strong>' + escapeHTML(file.kind) + '</strong><br>' +
           '<span class="secondary">' + escapeHTML(mediaSourceLabel(mediaSourceKey(file))) + '</span><br>' +
           escapeHTML(file.name) +
+          (state.exportMode ? renderMediaReason(file.choice) : "") +
           '</div></div>';
       }).join("");
       return '<div class="section"><div class="media-head"><h3>' + (state.exportMode ? 'Selected media' : 'Media') + '</h3><div class="source-tabs">' + (state.exportMode ? '' : tabs) + '</div></div><div class="media-grid">' + items + '</div></div>';
+    }
+
+    function renderMediaReason(reason) {
+      if (!reason) return "";
+      const kind = ({original:"Original artwork", reconstructed:"Reconstructed artwork", unknown:"Unclassified artwork", fanart:"Fan art"})[reason.variant];
+      return '<div class="media-choice">' + (kind ? '<span class="chip">' + escapeHTML(kind) + '</span>' : "") + '<p>' + escapeHTML(reason.summary) + '</p><details class="media-reason"><summary>Why this file?</summary><div class="media-reason-details">' + (reason.details || []).map((text) => '<p>' + escapeHTML(text) + '</p>').join("") + (reason.compared_with ? '<p><strong>Compared with:</strong><br>' + escapeHTML(reason.compared_with) + '</p>' : "") + (reason.order?.length ? '<p><strong>Priority order:</strong><br>' + reason.order.map(escapeHTML).join(" → ") + '</p>' : "") + '</div></details></div>';
     }
 
     function openLightbox(src, type, title) {

@@ -340,3 +340,29 @@ test('Raw uses server XML, escapes markup and follows edition changes without st
  assert.doesNotMatch(b.element('detail-body').innerHTML,/Old XML/);
  b.run('state.detailTab="preview";renderDetails()');assert.match(b.element('detail-body').innerHTML,/Selected export description/);
 });
+
+
+test('artwork preference is global, refreshed and included in saved profile requests', async () => {
+ const requests=[];
+ const b=browser(async(path,options)=>{requests.push(JSON.parse(options.body));return json({profile_yaml:'selection: {}',games:[]});});
+ b.element('export-artwork-preference').value='original';
+ b.run('updateExportSettings({target:{id:"export-artwork-preference"}})');
+ assert.equal(b.run('state.exportSettings.artwork_preference'),'original');
+ await b.run('requestPreview([{folder:"Card"}],undefined)');
+ await b.run('saveProfile()');
+ assert.ok(requests.every(input=>input.settings.artwork_preference==='original'));
+ b.run('state.platform="Another platform"');
+ assert.equal(b.run('state.exportSettings.artwork_preference'),'original');
+ b.element('export-artwork-preference').value='auto'; b.run('updateExportSettings({target:{id:"export-artwork-preference"}})');
+ assert.equal(b.run('state.exportSettings.artwork_preference'),'auto');
+});
+
+test('selected media explains actual server choice, escapes details and keeps reasons out of Library', () => {
+ const b=browser(async()=>json({}));
+ b.run(`state.exportMode=true;state.detailPreview={media:{cover:{source_path:'media/box-front-01.jpg',source:'launchbox'}},media_reasons:{cover:{variant:'original',summary:'Original artwork is preferred to reconstructed artwork.',details:['Region matches the selected release: USA.','<unsafe>'],compared_with:'box-front-04.png',order:['Release region','Artwork type','Source','Format','File number']}}}`);
+ const files=b.run('selectedMedia(state.detailPreview)');assert.equal(files[0].choice.variant,'original');
+ const html=b.run('renderMediaSection({local_media:selectedMedia(state.detailPreview)})');
+ assert.match(html,/Why this file/);assert.match(html,/Original artwork/);assert.match(html,/box-front-04.png/);assert.match(html,/&lt;unsafe&gt;/);assert.doesNotMatch(html,/<unsafe>/);
+ b.run('state.exportMode=false');assert.doesNotMatch(b.run('renderMediaSection({local_media:selectedMedia(state.detailPreview)})'),/Why this file/);
+ assert.equal(b.run('renderMediaReason(null)'),'');
+});

@@ -304,6 +304,13 @@ as is [flat-front style](cover-refresh.md).
 Optional `variants: [original, unknown, reconstructed, fanart]` plus a `variant`
 order criterion ranks explicit filename labels before format, e.g.
 `box-front-01.usa.variant-original.launchbox.jpg`. Unqualified files are unknown.
+The browser's Artwork preference writes these ordinary rules. Originals first
+uses `order: [region, variant, source, format]` and
+`variants: [original, unknown, reconstructed, fanart]`; Reconstructions first uses
+`[reconstructed, original, unknown, fanart]`. Region remains the first criterion.
+Auto leaves the existing policy unchanged. Numeric filename suffixes break ties
+after the configured criteria, then the filename breaks remaining ties.
+
 No checksum-to-provider or pixel inference occurs; categories do not guarantee
 flat/case-free artwork.
 

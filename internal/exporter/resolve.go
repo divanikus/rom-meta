@@ -264,6 +264,9 @@ func resolveMedia(root string, g *game, release, rom string, profile Profile, re
 				override.Style, override.StyleEvidence, override.SourceType = style.style, style.evidence, style.sourceType
 			}
 			result[role] = *override
+			if g.mediaReasons != nil {
+				g.mediaReasons[mediaReasonKey(role, override.SourcePath)] = MediaReason{Summary: "Explicit file choice from the profile.", Details: []string{"This reviewed override takes priority over automatic artwork selection."}}
+			}
 			warnings = append(warnings, "explicit reviewed "+role+" override: "+override.SourcePath)
 			continue
 		}
@@ -392,7 +395,7 @@ func resolveMedia(root string, g *game, release, rom string, profile Profile, re
 			}
 			return candidates[i].path < candidates[j].path
 		})
-		for _, candidate := range candidates {
+		for candidateIndex, candidate := range candidates {
 			real, err := realPath(candidate.path)
 			if err != nil {
 				if os.IsNotExist(err) {
@@ -427,6 +430,9 @@ func resolveMedia(root string, g *game, release, rom string, profile Profile, re
 				selected.Selection, selected.FromRelease = "game", candidate.fromRelease
 			}
 			result[role] = selected
+			if g.mediaReasons != nil {
+				g.mediaReasons[mediaReasonKey(role, selected.SourcePath)] = explainMediaChoice(g.context, root, role, rule, regions, release, candidates, candidateIndex)
+			}
 			break
 		}
 		if _, ok := result[role]; !ok {
