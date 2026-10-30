@@ -1442,7 +1442,7 @@
         const status = game.previewRevision !== state.previewRevision ? "Loading preview…" : game.previewError ? game.previewError : !preview?.fields?.description ? "No description" : "";
         return '<button class="game-item' + active + '" type="button" data-game="' + escapeAttr(game.folder) + '">' +
           (cover ? '<img class="list-cover" src="/media?path=' + encodeURIComponent(cover.source_path) + '" alt="" loading="lazy">' : '') +
-          '<span class="primary">' + escapeHTML(title) + '</span><span class="secondary">' + escapeHTML(preview?.release || game.default_release || game.folder) + '</span>' +
+          '<span class="primary">' + escapeHTML(title) + '</span><span class="secondary">' + escapeHTML(preview ? (preview.release || 'Game-level selection') : (game.default_release || game.folder)) + '</span>' +
           '<span class="chips">' + (status ? '<span class="chip warn">' + escapeHTML(status) + '</span>' : '') + (preview && !cover && state.exportSettings.media !== "none" ? '<span class="chip warn">No cover</span>' : '') + '</span></button>';
       }
       const status = metadataStatusChip(game);

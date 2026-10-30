@@ -185,6 +185,9 @@ func (s *server) game(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	// Browser state reports the stored default, not the cache reader's implicit
+	// first-release fallback used by older consumers.
+	found.DefaultRelease = strings.TrimSpace(catalogyaml.Scalar(catalogyaml.Value(document.Root(), "default_release")))
 	media, err := localMediaFiles(s.root, found.Path, document)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -411,7 +414,7 @@ func isCatalogGameEntry(entry os.DirEntry) bool {
 }
 
 func readGameListItem(root, platform, folder string) (gameListItem, error) {
-	game, _, err := catalogcache.ReadGameDocument(root, platform, folder)
+	game, document, err := catalogcache.ReadGameDocument(root, platform, folder)
 	if err != nil {
 		return gameListItem{}, err
 	}
@@ -419,7 +422,7 @@ func readGameListItem(root, platform, folder string) (gameListItem, error) {
 		SummaryLoaded:       true,
 		Folder:              folder,
 		Title:               game.Title,
-		DefaultRelease:      game.DefaultRelease,
+		DefaultRelease:      strings.TrimSpace(catalogyaml.Scalar(catalogyaml.Value(document.Root(), "default_release"))),
 		ReleaseCount:        len(game.Releases),
 		VariantCount:        len(game.Variants),
 		SourceStats:         game.SourceStats,

@@ -232,3 +232,11 @@ test('saved profile downloads server-validated YAML and keeps paths out of the m
   assert.match(b.element('profile-command').textContent,/--target launchbox/);
   assert.doesNotMatch(b.element('detail-body').innerHTML,/--rom-root/);
 });
+
+
+test('game-level export rows never display an implicit default edition', () => {
+  const b=browser(async()=>json({}));
+  b.run('state.exportMode=true; state.games=[{folder:"Card",default_release:"Implicit USA",previewRevision:0,preview:{fields:{title:{value:"Card"}},media:{}}}]; renderGames()');
+  assert.match(b.element('game-list').innerHTML,/Game-level selection/);
+  assert.doesNotMatch(b.element('game-list').innerHTML,/Implicit USA/);
+});

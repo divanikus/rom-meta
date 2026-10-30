@@ -159,3 +159,23 @@ func TestCompactProfileControlsRoundTripCatalogDefaults(t *testing.T) {
 		t.Fatal(loaded, err)
 	}
 }
+
+func TestBrowserDoesNotPresentImplicitReleaseAsStoredDefault(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "platforms", "Test", "Card", "game.yaml"), "title: Card\nreleases:\n  USA:\n  Europe:\n")
+	h, err := Handler(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var detail gameResponse
+	requestJSON(t, h, "/api/game?platform=Test&game=Card", &detail)
+	var list gamesResponse
+	requestJSON(t, h, "/api/games?platform=Test&game=Card", &list)
+	if detail.Game.DefaultRelease != "" || list.Games[0].DefaultRelease != "" {
+		t.Fatal("invented stored default", detail.Game, list)
+	}
+	response := postPreview(t, h, exportPreviewRequest{Platform: "Test", Settings: exportSettings{Language: "en", Media: "none"}, Games: []previewGameRequest{{Folder: "Card"}}})
+	if response.Games[0].Preview.Release != "" {
+		t.Fatal(response)
+	}
+}

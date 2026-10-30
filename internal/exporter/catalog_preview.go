@@ -82,7 +82,11 @@ func PreviewCatalog(ctx context.Context, root, gamePath string, node *yaml.Node,
 		record.Warnings = append(record.Warnings, "This platform is excluded from frontend export; metadata inspection remains available.")
 	}
 	if release == "" && variant == "" {
-		record.Warnings = append(record.Warnings, "No default release: choose an edition to inspect release-specific selection.")
+		if releases == nil || len(releases.Content) == 0 {
+			record.Warnings = append(record.Warnings, "No releases registered: showing game-level selection.")
+		} else {
+			record.Warnings = append(record.Warnings, "No default release: choose an edition to inspect release-specific selection.")
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return CatalogPreview{}, err
