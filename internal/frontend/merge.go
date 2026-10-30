@@ -386,7 +386,7 @@ func buildLaunchBox(p *Plan) error {
 				} else if err = p.playlist(v.fields["ApplicationPath"]); err != nil {
 					return err
 				}
-				if found && guidPattern.MatchString(fields["Emulator"]) && id(fields["Emulator"]) != zeroGUID {
+				if found && v.fields["UseEmulator"] != "false" && guidPattern.MatchString(fields["Emulator"]) && id(fields["Emulator"]) != zeroGUID {
 					patch["EmulatorId"] = fields["Emulator"]
 					patch["UseEmulator"] = "true"
 				}

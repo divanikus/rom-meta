@@ -30,12 +30,13 @@ type Options struct {
 }
 
 type Job struct {
-	Batch    *exporter.BatchPlan
-	Single   bool
-	client   *client
-	assets   map[string]catalogapi.ExportAsset
-	stamps   map[string]os.FileInfo
-	progress func(string, string, int, int)
+	catalogInputs map[string]catalogStamp
+	Batch         *exporter.BatchPlan
+	Single        bool
+	client        *client
+	assets        map[string]catalogapi.ExportAsset
+	stamps        map[string]os.FileInfo
+	progress      func(string, string, int, int)
 }
 
 type client struct {
@@ -250,7 +251,7 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 		return nil, err
 	}
 	batch := &exporter.BatchPlan{SchemaVersion: 1, Target: target, ROMRoot: root, Out: out, Plans: []*exporter.Plan{}, Skipped: []exporter.SkippedSystem{}}
-	job := &Job{Batch: batch, Single: options.Platform != "", client: c, assets: map[string]catalogapi.ExportAsset{}, stamps: map[string]os.FileInfo{}, progress: options.Progress}
+	job := &Job{catalogInputs: map[string]catalogStamp{}, Batch: batch, Single: options.Platform != "", client: c, assets: map[string]catalogapi.ExportAsset{}, stamps: map[string]os.FileInfo{}, progress: options.Progress}
 	var selectedFolders []exporter.FolderSelection
 	if job.Single {
 		selection, catalog, err := selector.Single(options.Platform, root)
@@ -277,6 +278,7 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 		child := options.Options
 		child.Context = ctx
 		child.ROMRoot, child.System = folder, system
+		child.LegacyOnly = !selector.GenericExportAvailable(chosen.Catalog)
 		if options.Progress != nil {
 			child.Progress = func(stage, name string, current, total int) {
 				options.Progress(system+" / "+stage, name, current, total)
@@ -295,7 +297,7 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 				return nil, err
 			}
 		}
-		plan := &exporter.Plan{PlatformSelection: selection, SchemaVersion: 1, Target: "es-de", Platform: selected.platform, System: system, ROMRoot: folder, Out: out, SourceAPI: c.origin, Records: []exporter.Record{}}
+		plan := &exporter.Plan{PlatformName: selection.Name, PlatformSelection: selection, SchemaVersion: 1, Target: "es-de", Platform: selected.platform, System: system, ROMRoot: folder, Out: out, SourceAPI: c.origin, Records: []exporter.Record{}}
 		for offset := 0; offset < len(observations); offset += 100 {
 			end := offset + 100
 			if end > len(observations) {
@@ -368,6 +370,10 @@ func validateRecord(input exporter.ExportInput, record *exporter.Record, system 
 		if record.Status != "unsupported" || record.SHA1 != "" || len(record.Playlist) > 0 || len(record.Media) > 0 {
 			return fmt.Errorf("API changed unsupported input")
 		}
+	} else if input.Kind == "catalog" {
+		if record.Representation != "catalog-name-stat" || record.SourceOnly != exporter.ROMSetSourceOnly(input) || !reflect.DeepEqual(input.Catalog, record.Catalog) || record.Size != catalogInputSize(input) || record.Payload != nil || record.Disc != nil || record.SHA1 != "" || record.Member != "" || record.Status == "matched" && record.MatchedBy != "catalog-name" && record.MatchedBy != "game-name" {
+			return fmt.Errorf("API changed ROM-set name/stat evidence")
+		}
 	} else {
 		if record.Size != input.Proof.Size || record.SHA1 != input.Proof.SHA1 || record.Member != input.Proof.Member {
 			return fmt.Errorf("API changed local input proof")
@@ -427,6 +433,13 @@ func validateRecord(input exporter.ExportInput, record *exporter.Record, system 
 }
 
 func (j *Job) remember(root string, input exporter.ExportInput) error {
+	if input.Kind == "catalog" {
+		if err := exporter.CheckROMSetObservation(root, input.ROM, input.Catalog); err != nil {
+			return err
+		}
+		j.catalogInputs[filepath.Join(root, filepath.FromSlash(input.ROM))] = catalogStamp{Root: root, Input: input}
+		return nil
+	}
 	if input.Kind == "unsupported" {
 		return nil
 	}
@@ -451,6 +464,11 @@ func (j *Job) remember(root string, input exporter.ExportInput) error {
 	return nil
 }
 func (j *Job) fresh() error {
+	for _, input := range j.catalogInputs {
+		if err := exporter.CheckROMSetObservation(input.Root, input.Input.ROM, input.Input.Catalog); err != nil {
+			return err
+		}
+	}
 	for path, before := range j.stamps {
 		now, err := os.Lstat(path)
 		if err != nil {
@@ -541,4 +559,17 @@ func (j *Job) Apply(ctx context.Context) error {
 		return exporter.Apply(j.Batch.Plans[0], j.progress)
 	}
 	return exporter.ApplyBatch(j.Batch, j.progress)
+}
+
+func catalogInputSize(input exporter.ExportInput) int64 {
+	var size int64
+	for _, file := range input.Catalog.Files {
+		size += file.Size
+	}
+	return size
+}
+
+type catalogStamp struct {
+	Root  string
+	Input exporter.ExportInput
 }

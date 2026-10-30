@@ -40,6 +40,7 @@
     "docs/romm-import-guide.md",
     "docs/romm-server-importer.md",
     "docs/romm.md",
+    "docs/romset-export.md",
     "docs/scummvm.md",
     "docs/source-setup.md",
     "examples/export-es-de-library.yaml",

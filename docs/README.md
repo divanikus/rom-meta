@@ -12,6 +12,7 @@ Start with the [operator walkthrough](cli-workflow.md) and
 | Prepare translations/hacks | [Variants and inherited metadata](catalog-variants.md), [staging helper](prepare-variants.md) |
 | Understand catalog files | [Metadata model](portable-metadata.md), [storage](catalog-storage.md) |
 | Review game boundaries | [Identity rules](regional-content-identity.md), [fold plans](reviewed-fold-plans.md), [splits](reviewed-content-splits.md) |
+| Export ROM sets / new platforms | [Generic input handling and evidence](romset-export.md) |
 | Select platforms / identify folders | [Codes, aliases and export support](platform-selection.md) |
 | Export/enrich a frontend | [Shared ES-DE/LaunchBox workflow](frontend-export.md) |
 | Native adapter details | [LaunchBox versions/discs](launchbox-export.md), [ES-DE](offline-export.md), [input formats](export-scenarios.md#es-de-input-coverage) |

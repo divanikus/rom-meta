@@ -316,7 +316,7 @@ func TestIncompleteZIPAndUnknownFilesAreReported(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.Unsupported != 1 || plan.Unmatched != 1 || len(plan.Records) != 2 {
+	if plan.Unsupported != 0 || plan.Unmatched != 2 || len(plan.Records) != 2 {
 		t.Fatalf("counts: %+v", plan)
 	}
 	body, err := RenderGamelist(plan)
@@ -499,7 +499,7 @@ func TestGameGearSMSModePayloadUsesOnlyItsOwnExactCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.HashMatches != 2 || plan.Unsupported != 1 || plan.Unmatched != 1 || len(plan.Records) != 4 {
+	if plan.HashMatches != 2 || plan.Unsupported != 0 || plan.Unmatched != 2 || len(plan.Records) != 4 {
 		t.Fatalf("SMS-mode coverage: %+v", plan)
 	}
 	for _, record := range plan.Records {
@@ -509,8 +509,8 @@ func TestGameGearSMSModePayloadUsesOnlyItsOwnExactCatalog(t *testing.T) {
 		if record.ROM == "Wrapped.zip" && (record.Member != "unrelated-name.SMS" || record.Payload == nil || record.Payload.SHA1 == "") {
 			t.Fatal("ZIP payload proof absent", record)
 		}
-		if record.ROM == "Multiple.zip" && !strings.Contains(record.Reason, "multiple platform payloads") {
-			t.Fatal("mixed GG/SMS archive accepted", record)
+		if record.ROM == "Multiple.zip" && (record.Status != "unmatched" || record.Catalog == nil || record.Payload != nil) {
+			t.Fatal("mixed GG/SMS archive acquired false payload identity", record)
 		}
 	}
 }

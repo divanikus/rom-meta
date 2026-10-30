@@ -677,3 +677,85 @@ func recordsJSONEqual(a, b []exporter.Record) bool {
 	right, _ := json.Marshal(b)
 	return string(left) == string(right)
 }
+
+func TestGenericFuturePlatformLocalAPIAndMembershipParity(t *testing.T) {
+	root, roms := t.TempDir(), t.TempDir()
+	name := "Acme - Future Console"
+	data := []byte("synthetic future ROM")
+	put(t, filepath.Join(root, "platforms", "store", "_platform.yaml"), []byte("name: "+name+"\n"))
+	for _, title := range []string{"Raw", "Image", "Installed"} {
+		game := filepath.Join(root, "platforms", "store", title)
+		put(t, filepath.Join(game, "game.yaml"), []byte(fmt.Sprintf("title: %q\nreleases:\n  %q: {regions: [USA]}\n", title, title+" (USA)")))
+		fingerprintData := data
+		if title != "Raw" {
+			fingerprintData = []byte(title)
+		}
+		put(t, filepath.Join(game, "fingerprints.yaml"), []byte(fmt.Sprintf("items:\n - release: %q\n   file: {size: %d, sha1: '%x'}\n", title+" (USA)", len(fingerprintData), sha1.Sum(fingerprintData))))
+	}
+	put(t, filepath.Join(roms, "Raw (USA).newrom"), data)
+	put(t, filepath.Join(roms, "Image (USA).rvz"), data)
+	folder := filepath.Join(roms, "Installed (USA)")
+	put(t, filepath.Join(folder, "code", "main.rpx"), data)
+	api := server(t, root, nil)
+	for _, target := range []string{"es-de", "launchbox"} {
+		options := exporter.Options{DataRoot: root, ROMRoot: roms, Platform: name, Target: target, Out: filepath.Join(t.TempDir(), "local")}
+		local, err := exporter.Build(options)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if local.Matched != 3 || local.HashMatches != 1 {
+			t.Fatal("generic representations not distinct", local)
+		}
+		if err := exporter.Apply(local, nil); err != nil {
+			t.Fatal(err)
+		}
+		options.Out = filepath.Join(t.TempDir(), "network")
+		job, err := Build(context.Background(), Options{API: api.URL, BatchOptions: exporter.BatchOptions{Options: options}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(job.Batch.Plans) != 1 || !recordsJSONEqual(local.Records, job.Batch.Plans[0].Records) {
+			t.Fatal("generic API selection/proof differs")
+		}
+		if err := job.Apply(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		before, err := exporter.PreviewFiles([]*exporter.Plan{local}, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		after, err := exporter.PreviewFiles(job.Batch.Plans, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for path, file := range before {
+			if path != "manifest.json" && !reflect.DeepEqual(file, after[path]) {
+				t.Fatal("native rendering differs", path)
+			}
+		}
+	}
+	job, err := Build(context.Background(), Options{API: api.URL, BatchOptions: exporter.BatchOptions{Options: exporter.Options{ROMRoot: roms, Platform: name, Out: filepath.Join(t.TempDir(), "stale")}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	put(t, filepath.Join(folder, "code", "added.bin"), data)
+	if err := job.Apply(context.Background()); err == nil {
+		t.Fatal("changed remote folder membership accepted")
+	}
+}
+
+func TestGenericAPIRejectsStrengthenedOrChangedStatEvidence(t *testing.T) {
+	snapshot := &exporter.CatalogObservation{Kind: "name-stat-v1", Files: []exporter.CatalogFile{{Name: "Game (USA).rvz", Size: 5, MtimeNS: 1}}}
+	input := exporter.ExportInput{ROM: "Game (USA).rvz", Kind: "catalog", Catalog: snapshot}
+	record := exporter.Record{ROM: input.ROM, Size: 5, Status: "matched", MatchedBy: "catalog-name", Representation: "catalog-name-stat", Catalog: snapshot}
+	if err := validateRecord(input, &record, "gc", nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, mutate := range []func(*exporter.Record){func(r *exporter.Record) { r.MatchedBy = "hash" }, func(r *exporter.Record) { r.Representation = "raw-file" }, func(r *exporter.Record) { r.Size++ }, func(r *exporter.Record) { r.SourceOnly = true }, func(r *exporter.Record) { r.Payload = &exporter.PayloadProof{Size: 5} }} {
+		copy := record
+		mutate(&copy)
+		if err := validateRecord(input, &copy, "gc", nil); err == nil {
+			t.Fatal("untrusted API strengthened/replaced stat facts", copy)
+		}
+	}
+}

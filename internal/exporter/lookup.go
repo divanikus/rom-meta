@@ -30,6 +30,7 @@ type ObservedInput struct {
 type LookupPlatform struct {
 	Name            string   `json:"name,omitempty"`
 	SelectorAliases []string `json:"selector_aliases,omitempty"`
+	ExportMode      string   `json:"export_mode,omitempty"`
 	Catalogs        []string `json:"catalogs,omitempty"`
 	header, family  string
 	VariantBinding  bool     `json:"variant_binding,omitempty"`
@@ -63,7 +64,7 @@ func LookupSystem(system string) bool {
 	if _, ok := metadataCartridges[system]; ok {
 		return true
 	}
-	// Metadata-only CHD reader; no ES-DE launch support.
+	// Typed UMD metadata reader, separate from generic export observations.
 	if system == "psp" {
 		return true
 	}
@@ -164,10 +165,10 @@ func (catalog *LookupCatalog) discoverPlatforms() error {
 		} else if err != nil {
 			return err
 		} else {
-			for _, system := range SupportedSystems() {
-				if systems[system].Platform == catalogFamily(field(doc, "name")) {
-					platform.ExportSystems = append(platform.ExportSystems, system)
-				}
+			platform.Name = registry.ResolveCLI(field(doc, "name"))
+			platform.ExportSystems = exportSystemsFor(platform.Name, registry)
+			if len(platform.ExportSystems) > 0 {
+				platform.ExportMode = "romset-v1"
 			}
 			platform.System, err = systemFor(field(doc, "name"), "")
 			if err != nil {
@@ -219,6 +220,15 @@ func (catalog *LookupCatalog) discoverPlatforms() error {
 		}
 		platform.VariantBinding = platform.Supported && platform.Platform != "Arcade"
 		catalog.Platforms = append(catalog.Platforms, platform)
+	}
+	// First collect all physical/header aliases, then choose reader codes. A code
+	// can become unambiguous once actual datasets are known (notably MSX/MSX2).
+	selector := NewPlatformSelector(registry, catalog.Platforms)
+	for i := range catalog.Platforms {
+		platform := &catalog.Platforms[i]
+		if platform.ExportMode == "romset-v1" {
+			platform.ExportSystems = exportSystemsFor(platform.Name, selector.Names)
+		}
 	}
 	catalog.groupDatasets()
 	return nil

@@ -36,7 +36,7 @@ func TestVariantCombinedCHDExportAndLookup(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(result.Records) != 1 {
+			if len(result.Records) != 2 || result.Matched != 1 || result.Unmatched != 1 {
 				t.Fatalf("%+v", result.Records)
 			}
 			r := result.Records[0]

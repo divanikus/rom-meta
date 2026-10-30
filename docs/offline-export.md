@@ -147,6 +147,11 @@ Escaping system-directory links are skipped; individual ROM/media symlinks are n
 
 ## Supported launch readers
 
+Catalog platforms also use the [generic ROM-set observer](romset-export.md). The
+following table describes established specialized input profiles and is not an
+allowlist. IBM PC/ScummVM remain excluded from export.
+
+
 | ES-DE folders | Inputs |
 | --- | --- |
 | n64 | .z64, .v64, .n64 |

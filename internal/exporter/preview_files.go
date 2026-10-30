@@ -39,8 +39,14 @@ func PreviewFiles(plans []*Plan, single bool) (map[string]PreviewFile, error) {
 			return nil, err
 		}
 		name := outputXMLPath(plan)
-		if _, ok := files[name]; ok {
-			return nil, fmt.Errorf("duplicate target platform output: %s", name)
+		if previous, ok := files[name]; ok {
+			if plan.Target != "launchbox" {
+				return nil, fmt.Errorf("duplicate target platform output: %s", name)
+			}
+			body, err = mergeGeneratedLaunchBox(previous.Data, body)
+			if err != nil {
+				return nil, err
+			}
 		}
 		files[name] = PreviewFile{Data: body}
 		playlists, err := launchBoxPlaylistData(plan)

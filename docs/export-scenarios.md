@@ -18,6 +18,15 @@ from generating frontend output. This matrix describes supported inputs, generat
 The RomM server importer needs native runtime/DB handlers and Resources access.
 A website login or stock edit-API token alone does not configure this example.
 
+## Generic ROM-set coverage
+
+Both built-in targets default to [common ROM-set observation](romset-export.md)
+for catalog platforms, including new headers. IBM PC/ScummVM remain excluded.
+Raw/single-payload ZIP proofs, opaque container/set names and installed-directory
+stat snapshots keep distinct confidence. Native emulator setup remains separate.
+
+The table below describes established specialized readers, not a platform allowlist.
+
 ## ES-DE input coverage
 
 Run `rom-meta export --list-systems` for the compiled list; aliases are not extra
@@ -32,9 +41,9 @@ readers. Detailed rules and installation are in [offline export](offline-export.
 | xbox / xbox360 | ISO; Xbox also XISO | No decryption/conversion, firmware or emulator readiness check |
 | arcade / mame | ZIP or 7z short set names | Exact saved MAME snapshot binding; no component, parent/BIOS/sample/CHD completeness or input-version proof |
 
-Disc archives, CUE/GDI, loose M3U and component tracks are not general launch
-readers. Unmatched/ambiguous files stay in reports. ES-DE export does not copy or
-rename source ROMs, perform 1G1R filtering or write an installed frontend.
+Disc archives, CUE/GDI and other containers may be retained as generic catalog
+references; this does not validate dependencies or make source sets ready to launch. Unmatched/ambiguous files stay in reports. ES-DE export does not copy or
+rename source ROMs, perform 1G1R filtering or configure an emulator.
 
 ## RomM example coverage
 

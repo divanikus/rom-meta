@@ -48,7 +48,9 @@ See [source setup](docs/source-setup.md) for accounts/credentials and
 | LaunchBox | Built-in [export --target launchbox](docs/launchbox-export.md), local or over API | Direct creation/enrichment of cards, versions and media; optional portable package |
 | RomM | Separate [server importer example](examples/romm-importer/README.md) | Metadata and media for already-scanned games in the pinned RomM runtime |
 
-See [supported input formats and export scenarios](docs/export-scenarios.md).
+Catalog platforms use [generic ROM-set export](docs/romset-export.md), including
+new headers without code registration. IBM PC and ScummVM remain explicit export
+exclusions. See [input formats and scenarios](docs/export-scenarios.md).
 The [HTTP API](#http-api) also exposes catalog data and assets to other consumers.
 
 ## Install

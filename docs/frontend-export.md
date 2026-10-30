@@ -19,6 +19,10 @@ For ES-DE it is the application data/home directory containing `settings`,
 directory. Close the target frontend before applying. Process checks run on
 Windows for both targets and on Linux for ES-DE.
 
+Platforms use [generic ROM-set handling](romset-export.md); new catalog headers
+need no Go registration. IBM PC and ScummVM are currently excluded. Catalog
+coverage and native emulator readiness are reported separately.
+
 ## Common options and behavior
 
 | Option | Both targets |

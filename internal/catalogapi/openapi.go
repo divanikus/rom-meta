@@ -85,7 +85,7 @@ func OpenAPI(lookup, protected bool) any {
 			ep["profile"].(httpdocs.Schema)["description"] = "Optional YAML policy bytes parsed against catalog defaults; never a server filename"
 			ep["profile"].(httpdocs.Schema)["maxLength"] = 1 << 20
 			observed := schemas.Types["ExportInput"].(httpdocs.Schema)["properties"].(httpdocs.Schema)
-			observed["kind"] = httpdocs.Schema{"type": "string", "enum": []string{"payload", "arcade", "playlist", "serial", "unsupported"}}
+			observed["kind"] = httpdocs.Schema{"type": "string", "enum": []string{"payload", "arcade", "playlist", "serial", "catalog", "unsupported"}}
 			observed["rom"] = httpdocs.Schema{"type": "string", "minLength": 1, "maxLength": 8192, "description": "Safe relative client identity; never opened on the server"}
 			observed["parts"].(httpdocs.Schema)["maxItems"] = 32
 			observed["serial"].(httpdocs.Schema)["maxLength"] = 9

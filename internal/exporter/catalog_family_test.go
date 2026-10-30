@@ -131,8 +131,8 @@ func TestCatalogFamilyCapabilitiesAndDigitalOnly(t *testing.T) {
 					t.Fatalf("%+v %v", resolver, err)
 				}
 				if base == "Nintendo - Wii" || base == "Nintendo - Wii U" || base == "Nintendo - Nintendo DSi" {
-					if len(resolver.Platform.ExportSystems) != 0 {
-						t.Fatal("metadata routing advertised an absent launch reader")
+					if len(resolver.Platform.ExportSystems) == 0 || resolver.Platform.ExportMode != "romset-v1" {
+						t.Fatal("generic export unavailable for catalog family")
 					}
 				}
 			})

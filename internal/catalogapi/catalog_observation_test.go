@@ -15,7 +15,7 @@ import (
 func TestCatalogNamesAcrossRepresentationsRemainUnverified(t *testing.T) {
 	_, game, files := fixture(t)
 	root := filepath.Dir(filepath.Dir(filepath.Dir(game)))
-	// This platform intentionally has no ES-DE launch reader.
+	// This unknown platform uses the generic ROM-set exporter without registration.
 	header := filepath.Join(filepath.Dir(game), "_platform.yaml")
 	if err := os.WriteFile(header, []byte("name: Synthetic Catalog Platform\n"), 0600); err != nil {
 		t.Fatal(err)
@@ -26,7 +26,7 @@ func TestCatalogNamesAcrossRepresentationsRemainUnverified(t *testing.T) {
 		t.Fatal(err)
 	}
 	caps := s.catalog.Platforms
-	if len(caps) != 1 || !caps[0].Supported || !caps[0].NameBinding || len(caps[0].ExportSystems) != 0 {
+	if len(caps) != 1 || !caps[0].Supported || !caps[0].NameBinding || len(caps[0].ExportSystems) == 0 {
 		t.Fatal(caps)
 	}
 	for _, ext := range []string{".rvz", ".wux", ".xiso", ".zip"} {

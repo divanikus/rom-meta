@@ -67,6 +67,9 @@ codes, aliases, export support and catalog availability; see
 [platform selection](platform-selection.md). Profiles keep their shared `target: es-de` header; the command's
 `--target launchbox` selects the native layout. ES-DE retains its existing layout.
 
+See [generic ROM-set export](romset-export.md) for automatic platform coverage,
+opaque archives/modern formats, source-set versions and installed directories.
+
 ## Cartridges and multiple discs
 
 Cartridge readers accept supported raw files and single-payload ZIPs. Disc readers

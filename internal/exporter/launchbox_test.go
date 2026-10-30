@@ -112,7 +112,7 @@ func TestLaunchBoxDiscPlaylistAndUnsupported(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(plan.Records) != 3 || plan.Matched != 2 || plan.Unsupported != 1 {
+	if len(plan.Records) != 3 || plan.Matched != 2 || plan.Unsupported != 0 || plan.Unmatched != 1 {
 		t.Fatalf("%+v", plan)
 	}
 	if err := Apply(plan, nil); err != nil {
@@ -165,7 +165,7 @@ func TestLaunchBoxBatchAndDuplicatePlatform(t *testing.T) {
 	}
 	batch.Out = filepath.Join(filepath.Dir(batch.Out), "collision")
 	batch.Plans = append(batch.Plans, batch.Plans[0])
-	if err := ApplyBatch(batch, nil); err == nil || !strings.Contains(err.Error(), "duplicate target platform") {
+	if err := ApplyBatch(batch, nil); err == nil || !strings.Contains(err.Error(), "duplicate target") {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(batch.Out); !os.IsNotExist(err) {

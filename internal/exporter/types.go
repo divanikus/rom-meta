@@ -16,6 +16,7 @@ import (
 )
 
 type Options struct {
+	LegacyOnly                                           bool
 	selector                                             *PlatformSelector
 	selection                                            *PlatformSelection
 	selectedCatalog                                      string
@@ -111,6 +112,7 @@ type DiscVariant struct {
 }
 
 type Record struct {
+	SourceOnly      bool                `json:"source_only,omitempty"`
 	GameTitle       string              `json:"game_title,omitempty"`
 	DiscVariants    []DiscVariant       `json:"disc_variants,omitempty"`
 	Variant         string              `json:"variant,omitempty"`
@@ -141,6 +143,7 @@ type Record struct {
 }
 
 type Plan struct {
+	PlatformName      string               `json:"platform_name,omitempty"`
 	PlatformSelection *PlatformSelection   `json:"platform_selection,omitempty"`
 	LaunchBox         *LaunchBoxProjection `json:"launchbox,omitempty"`
 	HashMatches       int                  `json:"hash_matches"`

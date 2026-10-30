@@ -129,7 +129,7 @@ func Build(options Options) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
-	resolver := &ExportResolver{Root: root, Platform: platform, System: system, index: index, arcade: arcade}
+	resolver := &ExportResolver{Root: root, Platform: platform, PlatformName: selection.Name, System: system, index: index, arcade: arcade}
 	plan, err := resolver.Resolve(inputs, profile)
 	if err != nil {
 		return nil, err
@@ -255,7 +255,7 @@ func hashROMContext(ctx context.Context, path, system string) (hashes, string, e
 	}
 	defer input.Close()
 	limit := int64(maxPayload)
-	if systems[system].Disc || systems[system].Arcade {
+	if systems[system].Disc || systems[system].Arcade || genericSystem(system) && (strings.EqualFold(filepath.Ext(path), ".chd") || strings.EqualFold(filepath.Ext(path), ".iso")) {
 		limit = 0
 	}
 	h, err := hashStream(contextReader{ctx, input}, limit)
@@ -284,15 +284,19 @@ func countInputs(options Options, root string) (int, error) {
 		}
 		ext := strings.ToLower(filepath.Ext(entry.Name()))
 		playlistDir := entry.IsDir() && playlistSystem(options.System) && ext == ".m3u"
-		if entry.IsDir() && !playlistDir {
+		group, e := romsetEntry(root, path, entry, options.LegacyOnly)
+		if e != nil {
+			return e
+		}
+		if entry.IsDir() && !playlistDir && !group {
 			return nil
 		}
-		if !playlistDir && !inputExtension(options.System, ext) || catalogrules.IsBIOSName(entry.Name()) {
+		if !playlistDir && !group && !inputExtension(options.System, ext) || catalogrules.IsBIOSName(entry.Name()) {
 			return nil
 		}
 		rel, _ := filepath.Rel(root, path)
 		if options.Match != "" && !strings.Contains(strings.ToLower(rel), strings.ToLower(options.Match)) {
-			if playlistDir {
+			if playlistDir || group {
 				return fs.SkipDir
 			}
 			return nil
@@ -301,7 +305,7 @@ func countInputs(options Options, root string) (int, error) {
 		if options.Limit > 0 && count >= options.Limit {
 			return fs.SkipAll
 		}
-		if playlistDir {
+		if playlistDir || group {
 			return fs.SkipDir
 		}
 		return nil

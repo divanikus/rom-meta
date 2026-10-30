@@ -422,3 +422,24 @@ func TestSelfClosingUnrelatedNodeRemainsValid(t *testing.T) {
 		t.Fatal("self-closing sibling/root confused")
 	}
 }
+
+func TestSourceSetVersionDoesNotInheritParentEmulator(t *testing.T) {
+	original := game(a, "Owned", "ROMs/main.zip", "<Emulator>"+emulator+"</Emulator>")
+	incoming := game(c, "Catalog", "ROMs/main.zip", "") + strings.Replace(version(v1, c, "ROMs/source.zip", "<Installed>false</Installed>"), "<UseEmulator>true</UseEmulator>", "<UseEmulator>false</UseEmulator>", 1)
+	options := setup(t, original, incoming)
+	plan := mustBuild(t, options)
+	if len(plan.Conflicts) != 0 {
+		t.Fatal(plan.Conflicts)
+	}
+	if _, err := plan.Apply(); err != nil {
+		t.Fatal(err)
+	}
+	games, apps := nativeData(t, options.Destination)
+	if games[a].fields["Emulator"] != emulator || len(apps) != 1 || apps[0].fields["EmulatorId"] != zeroGUID || apps[0].fields["UseEmulator"] != "false" || apps[0].fields["Installed"] != "false" {
+		t.Fatal("source set inherited launch/install state", games, apps)
+	}
+	repeat := mustBuild(t, options)
+	if len(repeat.Files) != 0 {
+		t.Fatal("source set repeat changed native state")
+	}
+}

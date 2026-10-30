@@ -45,11 +45,11 @@ func TestMetadataCartridgeRawAndRenamedZIPMatchExactRelease(t *testing.T) {
 				t.Fatal(err)
 			}
 			cap := catalog.Platforms[0]
-			if !cap.Supported || cap.System != system || len(cap.ExportSystems) != 0 || !cap.NameBinding || !LookupSystem(system) {
+			if !cap.Supported || cap.System != system || len(cap.ExportSystems) == 0 || !cap.NameBinding || !LookupSystem(system) {
 				t.Fatalf("incorrect metadata capability: %#v", cap)
 			}
-			if _, err := systemFor(spec.Platform, system); err == nil {
-				t.Fatal("metadata reader was advertised as launch/export support")
+			if _, err := systemFor(spec.Platform, system); err != nil {
+				t.Fatal("generic export did not cover existing cartridge metadata reader", err)
 			}
 			resolver, err := catalog.Open(spec.Platform)
 			if err != nil {

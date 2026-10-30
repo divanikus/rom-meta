@@ -122,7 +122,7 @@ func TestDiscGameBindingOptInAndCatalogMissingDisc(t *testing.T) {
 	}
 }
 
-func TestPSPMetadataUsesDeclaredUMDHeaderWithoutLaunchReader(t *testing.T) {
+func TestPSPMetadataUsesDeclaredUMDHeaderWithGenericExport(t *testing.T) {
 	options, _, _ := fixture(t)
 	platform := filepath.Join(options.DataRoot, "platforms", "Sony - PlayStation Portable")
 	put(t, filepath.Join(platform, "_platform.yaml"), []byte("name: Sony - PlayStation Portable\n"))
@@ -144,7 +144,7 @@ func TestPSPMetadataUsesDeclaredUMDHeaderWithoutLaunchReader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resolver.Platform.System != "psp" || len(resolver.Platform.ExportSystems) != 0 || !resolver.Platform.GameBinding {
+	if resolver.Platform.System != "psp" || len(resolver.Platform.ExportSystems) == 0 || !resolver.Platform.GameBinding {
 		t.Fatal(resolver.Platform)
 	}
 	input, err := ObserveInput(options.ROMRoot, "psp", "Renamed.chd")

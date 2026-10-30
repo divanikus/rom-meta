@@ -10,23 +10,26 @@ import (
 
 	"rommeta/internal/catalogfs"
 	"rommeta/internal/catalogrules"
+	"rommeta/internal/platformnames"
 )
 
 // ExportInput contains only observations of caller-owned files. No caller path
 // is opened by the catalog server. Parts are bounded playlist members.
 type ExportInput struct {
-	Disc           *DiscObservation `json:"disc,omitempty"`
-	Representation string           `json:"representation,omitempty"`
-	ROM            string           `json:"rom"`
-	Kind           string           `json:"kind"`
-	Proof          PayloadProof     `json:"proof"`
-	Parts          []ExportInput    `json:"parts,omitempty"`
-	Serial         string           `json:"serial,omitempty"`
-	Reason         string           `json:"reason,omitempty"`
+	Catalog        *CatalogObservation `json:"catalog,omitempty"`
+	Disc           *DiscObservation    `json:"disc,omitempty"`
+	Representation string              `json:"representation,omitempty"`
+	ROM            string              `json:"rom"`
+	Kind           string              `json:"kind"`
+	Proof          PayloadProof        `json:"proof"`
+	Parts          []ExportInput       `json:"parts,omitempty"`
+	Serial         string              `json:"serial,omitempty"`
+	Reason         string              `json:"reason,omitempty"`
 }
 
 type ExportResolver struct {
 	Root, Platform, System string
+	PlatformName           string
 	DocumentDigests        map[string]string
 	index                  *catalogIndex
 	arcade                 *arcadeIndex
@@ -54,6 +57,12 @@ func (catalog *LookupCatalog) OpenExport(platform, system, snapshot string) (*Ex
 		return nil, fmt.Errorf("platform has no export reader for %q", system)
 	}
 	r := &ExportResolver{Root: catalog.Root, Platform: platform, System: system}
+	for _, p := range catalog.Platforms {
+		if p.Platform == platform {
+			r.PlatformName = p.Name
+			break
+		}
+	}
 	var err error
 	if systems[system].Arcade {
 		r.arcade, err = loadArcadeIndex(catalog.Root, snapshot)
@@ -78,6 +87,15 @@ func exportRecord(input ExportInput) Record {
 }
 
 func validExportInput(input ExportInput, system string, part bool) bool {
+	if !validSystemID(system) || !ValidInputPath(input.ROM) || len(input.ROM) > 8192 || len(input.Reason) > 4096 || len(input.Parts) > 32 {
+		return false
+	}
+	if input.Catalog != nil {
+		return !part && (input.Representation == "" || input.Representation == "romset-single-zip") && input.Kind == "catalog" && input.Disc == nil && input.Proof.Equal(PayloadProof{}) && len(input.Parts) == 0 && input.Serial == "" && ValidCatalogObservation(input.ROM, catalogSize(input.Catalog), input.Catalog)
+	}
+	if input.Kind == "catalog" {
+		return false
+	}
 	if input.Disc != nil && input.Kind != "payload" {
 		return false
 	}
@@ -107,13 +125,13 @@ func validExportInput(input ExportInput, system string, part bool) bool {
 		if part && ext != ".chd" && ext != ".iso" {
 			return false
 		}
-		if !systems[system].Disc && p.Size > maxPayload {
+		if !systems[system].Disc && !part && p.Size > maxPayload {
 			return false
 		}
 		if p.Member != "" {
-			return !part && !systems[system].Disc && ext == ".zip" && ValidInputPath(p.Member) && payloadExtension(system, strings.ToLower(filepath.Ext(p.Member)))
+			return !part && ext == ".zip" && ValidInputPath(p.Member) && (payloadExtension(system, strings.ToLower(filepath.Ext(p.Member))) || input.Representation == "romset-payload" && genericPayloadExtension(strings.ToLower(filepath.Ext(p.Member))))
 		}
-		return ext != ".zip" && !(system == "ps3" && ext == ".ps3") && payloadExtension(system, ext)
+		return ext != ".zip" && !(system == "ps3" && ext == ".ps3") && (payloadExtension(system, ext) || part && (ext == ".chd" || ext == ".iso") || input.Representation == "romset-payload" && genericPayloadExtension(ext))
 	case "arcade":
 		return !part && systems[system].Arcade && payloadExtension(system, ext) && p.Member == "" && len(input.Parts) == 0 && input.Serial == ""
 	case "serial":
@@ -136,7 +154,7 @@ func validExportInput(input ExportInput, system string, part bool) bool {
 
 // Resolve uses the same binding and output naming rules as local Build.
 func (r *ExportResolver) Resolve(inputs []ExportInput, profile Profile) (*Plan, error) {
-	plan := &Plan{SchemaVersion: 1, Target: "es-de", Platform: r.Platform, System: r.System, DataRoot: r.Root, Profile: profile, Records: []Record{}}
+	plan := &Plan{PlatformName: r.PlatformName, SchemaVersion: 1, Target: "es-de", Platform: r.Platform, System: r.System, DataRoot: r.Root, Profile: profile, Records: []Record{}}
 	seen := map[string]bool{}
 	for _, input := range inputs {
 		if !validExportInput(input, r.System, false) || seen[input.ROM] {
@@ -165,6 +183,8 @@ func (r *ExportResolver) resolve(input ExportInput, profile Profile) (Record, er
 	record.Size, record.SHA1, record.Member = p.Size, p.SHA1, p.Member
 	ext := strings.ToLower(filepath.Ext(input.ROM))
 	switch input.Kind {
+	case "catalog":
+		return r.resolveCatalogExport(input, profile)
 	case "playlist":
 		return r.resolvePlaylist(input, profile)
 	case "serial":
@@ -180,6 +200,9 @@ func (r *ExportResolver) resolve(input ExportInput, profile Profile) (Record, er
 	record.Representation = "raw-file"
 	if p.Member != "" {
 		record.Representation = "zip-payload"
+	}
+	if input.Representation == "romset-payload" {
+		record.Representation = input.Representation
 	}
 	if ext == ".chd" && input.Disc != nil {
 		record.Representation = "chd-container"
@@ -211,7 +234,7 @@ func finishExportPlan(plan *Plan) error {
 			switch record.MatchedBy {
 			case "hash", "playlist-hash":
 				plan.HashMatches++
-			case "name", "arcade-set-name", "playlist-name":
+			case "name", "catalog-name", "arcade-set-name", "playlist-name":
 				plan.NameMatches++
 			default:
 				plan.GameOnly++
@@ -238,7 +261,7 @@ func finishExportPlan(plan *Plan) error {
 
 // ObserveExport enumerates existing files without any catalog or frontend access.
 func ObserveExport(options Options) ([]ExportInput, error) {
-	if _, ok := systems[options.System]; !ok || options.Limit < 0 {
+	if !validSystemID(options.System) || options.Limit < 0 {
 		return nil, fmt.Errorf("invalid export reader or limit")
 	}
 	root, err := realPath(options.ROMRoot)
@@ -261,7 +284,12 @@ func ObserveExport(options Options) ([]ExportInput, error) {
 		}
 		ext := strings.ToLower(filepath.Ext(entry.Name()))
 		playlist := entry.IsDir() && playlistSystem(options.System) && ext == ".m3u"
-		if entry.IsDir() && !playlist || !playlist && !inputExtension(options.System, ext) || catalogrules.IsBIOSName(entry.Name()) {
+		group, err := romsetEntry(root, path, entry, options.LegacyOnly)
+		group = group && !playlist
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() && !playlist && !group || !entry.IsDir() && !inputExtension(options.System, ext) || catalogrules.IsBIOSName(entry.Name()) {
 			return nil
 		}
 		rel, e := filepath.Rel(root, path)
@@ -270,7 +298,7 @@ func ObserveExport(options Options) ([]ExportInput, error) {
 		}
 		rel = filepath.ToSlash(rel)
 		if options.Match != "" && !strings.Contains(strings.ToLower(rel), strings.ToLower(options.Match)) {
-			if playlist {
+			if playlist || group {
 				return fs.SkipDir
 			}
 			return nil
@@ -283,10 +311,12 @@ func ObserveExport(options Options) ([]ExportInput, error) {
 		}
 		input := ExportInput{ROM: rel, Kind: "unsupported"}
 		switch {
-		case !playlist && !entry.Type().IsRegular() && entry.Type()&os.ModeSymlink == 0:
+		case !playlist && !group && !entry.Type().IsRegular() && entry.Type()&os.ModeSymlink == 0:
 			input.Reason = "ROM input must be a regular file"
 		case entry.Type()&os.ModeSymlink != 0:
 			input.Reason = "ROM symlinks are not followed"
+		case group:
+			input, e = observeROMSet(options.Context, root, path, options.System)
 		case playlist:
 			input, e = observePlaylist(options.Context, root, path, options.System)
 		case options.System == "ps3" && ext == ".ps3":
@@ -298,6 +328,8 @@ func ObserveExport(options Options) ([]ExportInput, error) {
 				input.Kind = "arcade"
 				input.Proof, e = inspectROMContext(options.Context, path, options.System)
 			}
+		case !options.LegacyOnly && (genericSystem(options.System) || ext != ".zip" && !payloadExtension(options.System, ext)):
+			input, e = observeROMSet(options.Context, root, path, options.System)
 		case ext == ".7z" || ext == ".rar" || systems[options.System].Disc && !payloadExtension(options.System, ext):
 			input.Reason = "reader accepts raw cartridge files/single-payload ZIPs or standalone CHD/ISO discs"
 		default:
@@ -308,6 +340,9 @@ func ObserveExport(options Options) ([]ExportInput, error) {
 				input.Proof = PayloadProof{}
 				e = nil
 			}
+		}
+		if e == nil && input.Kind == "unsupported" && !options.LegacyOnly && entry.Type().IsRegular() && !systems[options.System].Arcade {
+			input, e = observeROMSet(options.Context, root, path, options.System)
 		}
 		if e == nil && input.Kind == "payload" && ext == ".chd" {
 			observed, observeErr := observeDisc(root, options.System, rel)
@@ -322,7 +357,7 @@ func ObserveExport(options Options) ([]ExportInput, error) {
 			input = ExportInput{ROM: rel, Kind: "unsupported", Reason: "invalid or unsafe launch observation"}
 		}
 		inputs = append(inputs, input)
-		if playlist {
+		if playlist || group {
 			return fs.SkipDir
 		}
 		return nil
@@ -338,7 +373,7 @@ func ObserveExport(options Options) ([]ExportInput, error) {
 
 // ExportOutputPath derives destinations locally rather than trusting API paths.
 func ExportOutputPath(system string, record Record, role, extension string) (string, error) {
-	_, ok := systems[system]
+	ok := validSystemID(system)
 	layout, known := roles[role]
 	if !ok || !known || !ValidInputPath(record.ROM) || len(extension) < 2 || extension[0] != '.' || strings.ContainsAny(extension[1:], "./\\:") {
 		return "", fmt.Errorf("invalid media destination")
@@ -386,8 +421,12 @@ func (r *ExportResolver) CheckDocuments(plan *Plan) error {
 }
 
 func SystemPlatform(system string) (string, bool) {
-	spec, ok := systems[system]
-	return spec.Platform, ok
+	if spec, ok := systems[system]; ok {
+		return spec.Platform, true
+	}
+	names := platformnames.DefaultRegistry()
+	entry, ok := names.Entry(system)
+	return entry.Name, ok && !exportExcluded(entry.Name)
 }
 
 // FinalizeExport recomputes public counts without trusting network aggregates.

@@ -62,12 +62,13 @@ type xmlGame struct {
 type xmlList struct {
 	XMLName xml.Name  `xml:"gameList"`
 	Games   []xmlGame `xml:"game"`
+	Folders []xmlGame `xml:"folder"`
 }
 
 func RenderGamelist(plan *Plan) ([]byte, error) {
 	list := xmlList{Games: []xmlGame{}}
 	for _, r := range plan.Records {
-		if !r.Hidden && (r.Status == "unsupported" || systems[plan.System].Arcade && r.Status != "matched") {
+		if !r.Hidden && (r.Status == "unsupported" || (systems[plan.System].Arcade || r.Catalog != nil || r.Representation == "romset-payload") && r.Status != "matched") {
 			continue
 		}
 		get := func(key string) string { return r.Fields[key].Value }
@@ -75,7 +76,12 @@ func RenderGamelist(plan *Plan) ([]byte, error) {
 		if parsed, err := time.Parse("2006-01-02", get("release_date")); err == nil {
 			date = parsed.Format("20060102T000000")
 		}
-		list.Games = append(list.Games, xmlGame{Hidden: r.Hidden, Path: "./" + r.ROM, Name: get("title"), Description: get("description"), Date: date, Developer: get("developer"), Publisher: get("publisher"), Genre: get("genres"), Players: get("players")})
+		entry := xmlGame{Hidden: r.Hidden, Path: "./" + r.ROM, Name: get("title"), Description: recordDescription(r), Date: date, Developer: get("developer"), Publisher: get("publisher"), Genre: get("genres"), Players: get("players")}
+		if r.Catalog != nil && r.Catalog.Directory {
+			list.Folders = append(list.Folders, entry)
+		} else {
+			list.Games = append(list.Games, entry)
+		}
 	}
 	body, err := xml.MarshalIndent(list, "", "  ")
 	if err != nil {
@@ -141,6 +147,11 @@ func writePlan(plan *Plan, staging, sidecarDir string, progress func(string, str
 		if progress != nil {
 			progress("write", record.ROM, i+1, len(plan.Records))
 		}
+		if record.Catalog != nil {
+			if err := CheckROMSetObservation(plan.ROMRoot, record.ROM, record.Catalog); err != nil {
+				return err
+			}
+		}
 		if record.SHA1 != "" {
 			inputName := record.ROM
 			if record.LaunchFile != "" {
@@ -154,7 +165,11 @@ func writePlan(plan *Plan, staging, sidecarDir string, progress func(string, str
 			if !within(plan.ROMRoot, real) {
 				return fmt.Errorf("ROM path escaped input root")
 			}
-			hashes, member, err := hashROMContext(plan.Context, real, plan.System)
+			reader := plan.System
+			if record.Representation == "romset-payload" {
+				reader = "romset"
+			}
+			hashes, member, err := hashROMContext(plan.Context, real, reader)
 			if err != nil {
 				return err
 			}
@@ -227,7 +242,16 @@ func writePlan(plan *Plan, staging, sidecarDir string, progress func(string, str
 		return err
 	}
 	xmlPath := filepath.Join(staging, filepath.FromSlash(outputXMLPath(plan)))
-	if err := writeOutput(xmlPath, xmlBytes); err != nil {
+	if previous, readErr := catalogfs.ReadFile(xmlPath); readErr == nil && plan.Target == "launchbox" {
+		// staging is owned by beginPackage; this cannot replace an installed library.
+		merged, err := mergeGeneratedLaunchBox(previous, xmlBytes)
+		if err != nil {
+			return err
+		}
+		if err := catalogfs.WriteFile(xmlPath, merged, 0o644); err != nil {
+			return err
+		}
+	} else if err := writeOutput(xmlPath, xmlBytes); err != nil {
 		return err
 	}
 	manifest, err := json.MarshalIndent(plan, "", "  ")

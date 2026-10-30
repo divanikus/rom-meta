@@ -33,6 +33,12 @@ names for older servers.
 including modern systems and MAME. `/v1/health` returns the last published view
 without waiting for active work; it does not establish freshness or completion.
 
+Optional `export_mode: romset-v1` enables [generic ROM-set export](romset-export.md)
+for catalog headers without platform registrations. The export endpoint accepts
+`kind: catalog` stat observations and preserves their weaker confidence. Older
+servers keep their existing advertised coverage. IBM PC/ScummVM remain excluded
+from this export path; metadata lookup stays available.
+
 Related disc/digital datasets advertise `catalogs` on the hardware entry.
 Lookup through that entry searches the listed datasets together; an explicit
 member folder keeps its own scope. Wii/Wii U, DSiWare, PS3 PSN and PSP Minis remain

@@ -86,7 +86,7 @@ func TestPlatformFolderDiscoveryRejectsGuessingAndCollisions(t *testing.T) {
 	put(t, filepath.Join(root, "Nintendo - Game Boy", "bad.zip"), []byte("never opened by discovery"))
 	put(t, filepath.Join(root, "Nintendo - Game Boy Advance", "bad.zip"), []byte("never opened by discovery"))
 	put(t, filepath.Join(root, "shared", "x.bin"), []byte("ambiguous alias"))
-	put(t, filepath.Join(root, "Atari - Atari 2600", "x.a26"), []byte("metadata only"))
+	put(t, filepath.Join(root, "IBM - PC and Compatibles", "x.a26"), []byte("metadata only"))
 	selected, skipped, err := p.Folders(root, nil, true)
 	if err != nil || len(selected) != 2 || len(skipped) != 3 {
 		t.Fatalf("discovery: %+v %+v %v", selected, skipped, err)

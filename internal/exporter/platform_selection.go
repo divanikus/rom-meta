@@ -88,7 +88,12 @@ func uniqueNames(values []string) []string {
 }
 func NewPlatformSelector(names platformnames.Registry, catalogs []LookupPlatform) *PlatformSelector {
 	p := &PlatformSelector{Names: names.Clone(), Catalogs: append([]LookupPlatform(nil), catalogs...), CatalogKnown: catalogs != nil}
-	for _, system := range SupportedSystems() {
+	var specialIDs []string
+	for id := range systems {
+		specialIDs = append(specialIDs, id)
+	}
+	sort.Strings(specialIDs)
+	for _, system := range specialIDs {
 		p.Names.AddAliases(systems[system].Platform, system)
 	}
 	for i := range p.Catalogs {
@@ -118,6 +123,13 @@ func NewPlatformSelector(names platformnames.Registry, catalogs []LookupPlatform
 			}
 		}
 		c.Name = name
+		if _, exists := p.Names.Entry(name); !exists {
+			code := strings.ReplaceAll(platformnames.Normalize(name), " ", "-")
+			if len(c.ExportSystems) > 0 {
+				code = c.ExportSystems[0]
+			}
+			p.Names.AddAliases(name, code)
+		}
 		aliases := append([]string{c.Platform}, c.SelectorAliases...)
 		// Preserve ambiguous provider spellings rather than promoting them to aliases.
 		for _, alias := range c.Aliases {
@@ -151,7 +163,7 @@ func (p *PlatformSelector) effectiveSystems(c LookupPlatform) []string {
 	}
 	var known []string
 	for _, id := range ids {
-		if _, ok := systems[id]; ok {
+		if validSystemID(id) {
 			known = append(known, id)
 		}
 	}
@@ -165,11 +177,7 @@ func (p *PlatformSelector) option(entry platformnames.Platform) PlatformOption {
 			row.Aliases = append(row.Aliases, alias)
 		}
 	}
-	for _, id := range SupportedSystems() {
-		if systems[id].Platform == catalogFamily(entry.Name) {
-			row.ExportSystems = append(row.ExportSystems, id)
-		}
-	}
+	row.ExportSystems = exportSystemsFor(entry.Name, p.Names)
 	for _, c := range p.Catalogs {
 		if catalogFamily(c.Name) == catalogFamily(entry.Name) {
 			row.Catalogs = append(row.Catalogs, c.Platform)
@@ -179,13 +187,21 @@ func (p *PlatformSelector) option(entry platformnames.Platform) PlatformOption {
 	row.ExportSystems = uniqueNames(row.ExportSystems)
 	sort.Strings(row.Catalogs)
 	for _, id := range row.ExportSystems {
-		row.Extensions = append(row.Extensions, systems[id].Extensions...)
+		if genericSystem(id) {
+			row.Extensions = append(row.Extensions, "*")
+		} else {
+			row.Extensions = append(row.Extensions, systems[id].Extensions...)
+		}
 	}
-	row.Extensions = uniqueNames(row.Extensions)
+	if position(row.Extensions, "*") >= 0 {
+		row.Extensions = []string{"*"}
+	} else {
+		row.Extensions = uniqueNames(row.Extensions)
+	}
 	if len(row.ExportSystems) > 0 {
 		row.ExportTargets = []string{"es-de", "launchbox"}
 	} else {
-		row.Reason = "export reader not implemented"
+		row.Reason = "excluded from ROM-set export (IBM PC / ScummVM)"
 	}
 	row.CatalogStatus = "not checked"
 	if p.CatalogKnown {
@@ -238,6 +254,9 @@ func (p *PlatformSelector) Resolve(value string) (PlatformChoice, error) {
 	system := ""
 	if spec, ok := systems[strings.ToLower(strings.TrimSpace(value))]; ok && spec.Platform == catalogFamily(row.Name) {
 		system = strings.ToLower(strings.TrimSpace(value))
+	}
+	if system == "" && strings.EqualFold(strings.TrimSpace(value), row.Code) {
+		system = row.Code
 	}
 	return PlatformChoice{row, system}, nil
 }
@@ -513,15 +532,24 @@ func (p *PlatformSelector) Folders(root string, requested []string, all bool) ([
 	// Never pick one of several folders that would overwrite the same native system.
 	counts := map[string]int{}
 	for _, s := range selected {
-		counts[systems[s.Selection.System].Platform]++
+		counts[catalogFamily(s.Selection.Name)]++
 	}
 	var safe []FolderSelection
 	for _, s := range selected {
-		if counts[systems[s.Selection.System].Platform] > 1 {
+		if counts[catalogFamily(s.Selection.Name)] > 1 {
 			skipped = append(skipped, SkippedSystem{System: filepath.Base(s.Selection.Folder), Reason: "multiple ROM folders map to the same export platform; select an exact root with --platform"})
 		} else {
 			safe = append(safe, s)
 		}
 	}
 	return safe, skipped, nil
+}
+
+func (p *PlatformSelector) GenericExportAvailable(platform string) bool {
+	for _, c := range p.Catalogs {
+		if c.Platform == platform {
+			return c.ExportMode == "romset-v1"
+		}
+	}
+	return false
 }

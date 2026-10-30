@@ -3,6 +3,10 @@ package exporter
 import (
 	"fmt"
 	"sort"
+	"strings"
+	"unicode"
+
+	"rommeta/internal/platformnames"
 )
 
 type systemSpec struct {
@@ -11,8 +15,9 @@ type systemSpec struct {
 	Disc, Arcade bool
 }
 
-// These are launch readers, not a promise of every emulator's format support.
-// ES-DE system IDs/extensions were checked against its Windows configuration.
+// Compatibility profiles preserve established system IDs and exact readers.
+// They do not restrict platform coverage: other catalog platforms and formats
+// use the generic ROM-set observer. Native emulator readiness remains separate.
 var systems = map[string]systemSpec{
 	"n64":          {"Nintendo - Nintendo 64", []string{".z64", ".v64", ".n64"}, false, false},
 	"nes":          {"Nintendo - Nintendo Entertainment System", []string{".nes", ".unf", ".unif"}, false, false},
@@ -38,8 +43,8 @@ var systems = map[string]systemSpec{
 	"mame":         {"Arcade", []string{".zip", ".7z"}, false, true},
 }
 
-// Metadata-only payload readers share the bounded raw/ZIP proof path without
-// advertising a new ES-DE launch/export system.
+// Typed metadata readers retain their format contracts independently of the
+// generic export observer. Export coverage is derived from catalog headers.
 var metadataCartridges = map[string]systemSpec{
 	"satellaview":     {"Nintendo - Satellaview", []string{".bs"}, false, false},
 	"atari2600":       {"Atari - Atari 2600", []string{".a26"}, false, false},
@@ -56,48 +61,111 @@ var metadataCartridges = map[string]systemSpec{
 	"sega32x":         {"Sega - 32X", []string{".32x", ".bin", ".md", ".gen"}, false, false},
 }
 
-func SupportedSystems() []string {
-	var names []string
-	for name := range systems {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
+// specialized systems retain their historical reader IDs; ordinary platforms
+// use the registry code and the common ROM-set observer, including local entries.
+func exportExcluded(name string) bool {
+	normalized := platformnames.Normalize(name)
+	return normalized == platformnames.Normalize("IBM - PC and Compatibles") || normalized == "ibmpc" || normalized == "scummvm" || normalized == "scumm vm"
 }
-
+func validSystemID(id string) bool {
+	if id == "" || exportExcluded(id) {
+		return false
+	}
+	for _, r := range id {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '-' && r != '_' {
+			return false
+		}
+	}
+	return true
+}
+func genericSystem(id string) bool { _, special := systems[id]; return !special && validSystemID(id) }
+func exportSystemsFor(name string, names platformnames.Registry) []string {
+	name = catalogFamily(names.ResolveCLI(name))
+	if exportExcluded(name) {
+		return nil
+	}
+	var ids []string
+	for id, spec := range systems {
+		if spec.Platform == name {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		code := names.Code(name)
+		if code == "" {
+			code = strings.ReplaceAll(platformnames.Normalize(name), " ", "-")
+		}
+		if validSystemID(code) {
+			ids = append(ids, code)
+		}
+	}
+	sort.Strings(ids)
+	return ids
+}
+func SupportedSystems() []string {
+	names := platformnames.DefaultRegistry()
+	var ids []string
+	for _, entry := range names.Platforms() {
+		ids = append(ids, exportSystemsFor(entry.Name, names)...)
+	}
+	return uniqueNames(ids)
+}
 func systemFor(platform, requested string) (string, error) {
-	platform = catalogFamily(platform)
+	names := platformnames.DefaultRegistry()
+	platform = catalogFamily(names.ResolveCLI(platform))
+	if exportExcluded(platform) {
+		return "", fmt.Errorf("platform %q is excluded from ROM-set export", platform)
+	}
 	if requested != "" {
-		spec, ok := systems[requested]
-		if !ok || spec.Platform != platform {
+		if spec, ok := systems[requested]; ok {
+			if spec.Platform == platform {
+				return requested, nil
+			}
 			return "", fmt.Errorf("system %q does not map to catalog platform %q", requested, platform)
 		}
-		return requested, nil
-	}
-	for _, name := range SupportedSystems() {
-		if systems[name].Platform == platform {
-			return name, nil
+		if entry, ok := names.Entry(requested); ok && catalogFamily(entry.Name) != platform {
+			return "", fmt.Errorf("system %q does not map to catalog platform %q", requested, platform)
 		}
+		if validSystemID(requested) {
+			return requested, nil
+		}
+		return "", fmt.Errorf("invalid export system %q", requested)
 	}
-	return "", fmt.Errorf("no export launch reader for catalog platform %q", platform)
+	ids := exportSystemsFor(platform, names)
+	if len(ids) > 0 {
+		return ids[0], nil
+	}
+	return "", fmt.Errorf("no export identity for %q", platform)
 }
-
 func payloadExtension(system, ext string) bool {
 	spec, ok := systems[system]
 	if !ok {
+		if metadata, exists := metadataCartridges[system]; exists {
+			return position(metadata.Extensions, ext) >= 0
+		}
+		if genericSystem(system) {
+			return genericPayloadExtension(ext)
+		}
 		spec = metadataCartridges[system]
 	}
 	return position(spec.Extensions, ext) >= 0
 }
 func inputExtension(system, ext string) bool {
+	if genericCandidateExtension(ext) {
+		return true
+	}
 	if payloadExtension(system, ext) || ext == ".zip" || ext == ".7z" || ext == ".rar" {
 		return true
 	}
 	return systems[system].Disc && position([]string{".cue", ".gdi", ".m3u", ".cso", ".pbp"}, ext) >= 0
 }
 func nameExtension(ext string) bool {
-	if position([]string{".zip", ".7z", ".chd", ".iso"}, ext) >= 0 {
-		return true
+	if genericCandidateExtension(ext) {
+		for _, r := range ext {
+			if r >= 'a' && r <= 'z' {
+				return true
+			}
+		}
 	}
 	for system := range metadataCartridges {
 		if payloadExtension(system, ext) {

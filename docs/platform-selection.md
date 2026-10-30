@@ -2,8 +2,9 @@
 
 ES-DE and LaunchBox use one selector for local and API export. A platform has a
 code, canonical name, accepted aliases, export targets/readers and separate
-catalog availability. Recognizing a platform does not promise an export reader,
-a populated catalog, matching ROMs or emulator compatibility.
+catalog availability. Catalog platforms use [generic ROM-set export](romset-export.md) by default, with
+explicit IBM PC/ScummVM exclusions. Recognition does not promise a populated
+catalog, matching ROMs or emulator compatibility.
 
 ```powershell
 rom-meta platforms list --data-root "D:\Catalog"
@@ -56,7 +57,7 @@ configuration must still agree with the actual folder paths. See the
    canonical names first, then explicit aliases, then provider names. Each tier
    requires one unique match. Case, punctuation and separators are normalized;
    letters and digits must match completely. There is no prefix or fuzzy match.
-2. Map the selected identity to a supported launch reader. An explicit reader ID
+2. Map the selected identity to the common ROM-set observer or a specialized reader. An explicit reader ID
    such as `genesis`, `megadrive`, `arcade` or `mame` keeps that native system choice.
    Otherwise a matching folder's reader ID or the platform default is used.
 3. Read catalog `_platform.yaml` headers to find the actual metadata dataset.
@@ -77,7 +78,7 @@ guess a directory's platform. Unknown or ambiguous folders in `--all` are report
 as skipped. Explicit unknown/ambiguous selectors and duplicate selections fail.
 If several ROM folders identify one platform, explicit batch selection fails;
 `--all` skips the conflicting folders. Use `--platform` with the exact ROM root.
-Missing catalogs/readers/ROM folders and empty selections are reported separately.
+Missing catalogs, explicit exclusions, ROM folders and empty selections are reported separately.
 No first-match choice or automatic merge combines unrelated ROM trees or DATs.
 
 Export previews print the chosen code/name, reader, actual ROM directory and

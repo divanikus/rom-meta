@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -24,13 +25,21 @@ func NormalizeTarget(target string) (string, error) {
 	return target, nil
 }
 
-func launchBoxPlatform(system string) string {
-	return platformnames.ForSource(systems[system].Platform, platformnames.SourceLaunchBox)
+func launchBoxPlatform(plan *Plan) string {
+	name := plan.PlatformName
+	if name == "" {
+		name = systems[plan.System].Platform
+	}
+	if name == "" {
+		name = platformnames.ResolveCLI(plan.System)
+	}
+	mapped := platformnames.ForSource(name, platformnames.SourceLaunchBox)
+	return strings.TrimSpace(strings.NewReplacer("/", " - ", "\\", " - ", ":", " - ", "*", "", "?", "", "\"", "", "<", "", ">", "", "|", " - ").Replace(mapped))
 }
 
 func outputXMLPath(plan *Plan) string {
 	if plan.Target == "launchbox" {
-		return filepath.ToSlash(filepath.Join("Data", "Platforms", launchBoxPlatform(plan.System)+".xml"))
+		return filepath.ToSlash(filepath.Join("Data", "Platforms", launchBoxPlatform(plan)+".xml"))
 	}
 	return filepath.ToSlash(filepath.Join("gamelists", plan.System, "gamelist.xml"))
 }
@@ -38,9 +47,9 @@ func outputXMLPath(plan *Plan) string {
 // launchBoxID is stable for a catalog card regardless of its primary version.
 func launchBoxID(plan *Plan, record Record) string {
 	if record.Status == "matched" && record.Game != "" {
-		return launchBoxUUID(launchBoxPlatform(plan.System) + "\ncard:" + record.Game)
+		return launchBoxUUID(launchBoxPlatform(plan) + "\ncard:" + record.Game)
 	}
-	return launchBoxUUID(launchBoxPlatform(plan.System) + "\ninput:" + launchBoxAbsolute(plan, record))
+	return launchBoxUUID(launchBoxPlatform(plan) + "\ninput:" + launchBoxAbsolute(plan, record))
 }
 
 func launchBoxUUID(identity string) string {
@@ -74,7 +83,7 @@ func ProjectTarget(plan *Plan, target string) error {
 	if err != nil {
 		return err
 	}
-	if _, ok := systems[plan.System]; !ok {
+	if !validSystemID(plan.System) {
 		return fmt.Errorf("unknown export system: %s", plan.System)
 	}
 	plan.Target = target
@@ -110,7 +119,7 @@ func ProjectTarget(plan *Plan, target string) error {
 		for i := range plan.Records {
 			record := &plan.Records[i]
 			for role, media := range record.Media {
-				platform := launchBoxPlatform(plan.System)
+				platform := launchBoxPlatform(plan)
 				ext := filepath.Ext(media.SourcePath)
 				path := filepath.Join("VersionMedia", platform, launchBoxVersionID(plan, *record), role+ext)
 				if id, ok := primary[i]; ok {
@@ -196,8 +205,8 @@ func RenderLaunchBox(plan *Plan) ([]byte, error) {
 			}
 			list.Versions = append(list.Versions, launchBoxApplication{
 				ID: version.ID, GameID: group.ID, Name: version.Name, Version: version.Name,
-				ApplicationPath: version.Path, Section: "Version", UseEmulator: true,
-				EmulatorID: "00000000-0000-0000-0000-000000000000", Installed: true,
+				ApplicationPath: version.Path, Section: "Version", UseEmulator: !r.SourceOnly,
+				EmulatorID: "00000000-0000-0000-0000-000000000000", Installed: !r.SourceOnly,
 				Priority: priority, Region: region, ReleaseDate: date, Developer: get("developer"), Publisher: get("publisher"),
 			})
 			if version.ID != group.Primary {
@@ -205,9 +214,9 @@ func RenderLaunchBox(plan *Plan) ([]byte, error) {
 			}
 			list.Games = append(list.Games, launchBoxGame{
 				ID: group.ID, Title: group.Title, ApplicationPath: version.Path,
-				Platform: launchBoxPlatform(plan.System),
-				Emulator: "00000000-0000-0000-0000-000000000000", Installed: true,
-				Notes: get("description"), ReleaseDate: date, Developer: get("developer"),
+				Platform: launchBoxPlatform(plan),
+				Emulator: "00000000-0000-0000-0000-000000000000", Installed: !r.SourceOnly,
+				Notes: recordDescription(r), ReleaseDate: date, Developer: get("developer"),
 				Publisher: get("publisher"), MaxPlayers: launchBoxPlayers(get("players")),
 				Genre: strings.ReplaceAll(get("genres"), " / ", "; "), Version: version.Name,
 				VideoPath: r.Media["video"].OutputPath, ManualPath: r.Media["manual"].OutputPath,
@@ -269,4 +278,39 @@ No provider fallback requests, emulator/BIOS install or ScummVM launches are add
 
 https://feedback.launchbox-app.com/en/help/articles/8972270-multi-disc-games-and-m3u-playlists
 `
+}
+
+// mergeGeneratedLaunchBox joins catalog datasets which share one native platform
+// label. It operates only on RomMeta-generated XML, never on owner library XML.
+func mergeGeneratedLaunchBox(first, second []byte) ([]byte, error) {
+	var left, right launchBoxList
+	if err := xml.Unmarshal(first, &left); err != nil {
+		return nil, err
+	}
+	if err := xml.Unmarshal(second, &right); err != nil {
+		return nil, err
+	}
+	left.Games = append(left.Games, right.Games...)
+	left.Versions = append(left.Versions, right.Versions...)
+	ids := map[string]bool{}
+	for _, game := range left.Games {
+		if ids[game.ID] {
+			return nil, fmt.Errorf("duplicate target game ID: %s", game.ID)
+		}
+		ids[game.ID] = true
+	}
+	versions := map[string]bool{}
+	for _, version := range left.Versions {
+		if versions[version.ID] || !ids[version.GameID] {
+			return nil, fmt.Errorf("duplicate target version or absent parent: %s", version.ID)
+		}
+		versions[version.ID] = true
+	}
+	sort.Slice(left.Games, func(i, j int) bool { return left.Games[i].ID < left.Games[j].ID })
+	sort.Slice(left.Versions, func(i, j int) bool { return left.Versions[i].ID < left.Versions[j].ID })
+	body, err := xml.MarshalIndent(left, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append([]byte(xml.Header), append(body, '\n')...), nil
 }

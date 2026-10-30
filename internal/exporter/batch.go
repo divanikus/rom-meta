@@ -107,13 +107,9 @@ func ApplyBatch(batch *BatchPlan, progress func(string, string, int, int)) error
 	if len(batch.Plans) == 0 {
 		return fmt.Errorf("no systems with selected inputs; no package created")
 	}
-	seen := map[string]bool{}
-	for _, plan := range batch.Plans {
-		path := strings.ToLower(outputXMLPath(plan))
-		if seen[path] {
-			return fmt.Errorf("duplicate target platform output: %s", path)
-		}
-		seen[path] = true
+	// Validate shared native outputs/IDs before preparing any package files.
+	if _, err := PreviewFiles(batch.Plans, false); err != nil {
+		return err
 	}
 	staging, err := beginPackage(batch.DataRoot, batch.ROMRoot, batch.Out)
 	if err != nil {

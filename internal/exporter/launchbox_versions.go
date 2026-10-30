@@ -116,10 +116,10 @@ func launchBoxAbsolute(plan *Plan, r Record) string {
 	return name
 }
 func launchBoxVersionID(plan *Plan, r Record) string {
-	return launchBoxUUID(launchBoxPlatform(plan.System) + "\nversion:" + launchBoxAbsolute(plan, r))
+	return launchBoxUUID(launchBoxPlatform(plan) + "\nversion:" + launchBoxAbsolute(plan, r))
 }
 func launchBoxPlayable(plan *Plan, r Record) bool {
-	return !r.Hidden && r.Status != "unsupported" && (!systems[plan.System].Arcade || r.Status == "matched")
+	return !r.Hidden && r.Status != "unsupported" && (!(systems[plan.System].Arcade || r.Catalog != nil || r.Representation == "romset-payload") || r.Status == "matched")
 }
 func launchBoxKind(r Record) string {
 	if r.VariantInfo != nil && r.VariantInfo.Kind != "" {
@@ -149,7 +149,11 @@ func versionRank(r Record, p LaunchBoxPolicy) []int {
 	if r.VariantInfo != nil && len(r.VariantInfo.Languages) > 0 {
 		languages = r.VariantInfo.Languages
 	}
-	return []int{preference([]string{launchBoxKind(r)}, p.Kinds), preference(regions, p.Regions), preference(languages, p.Languages)}
+	setup := 0
+	if r.SourceOnly {
+		setup = 1
+	}
+	return []int{setup, preference([]string{launchBoxKind(r)}, p.Kinds), preference(regions, p.Regions), preference(languages, p.Languages)}
 }
 func launchBoxVersionName(r Record) string {
 	if r.Variant != "" {
@@ -172,6 +176,9 @@ func launchBoxVersionName(r Record) string {
 		if len(r.Playlist) > 0 {
 			name += fmt.Sprintf(" [%d discs]", len(r.Playlist))
 		}
+		if r.SourceOnly {
+			name += " [source set]"
+		}
 		return name
 	}
 	name := r.Release
@@ -186,6 +193,9 @@ func launchBoxVersionName(r Record) string {
 	}
 	if name == "" {
 		name = r.ROM
+	}
+	if r.SourceOnly {
+		name += " [source set]"
 	}
 	return name
 }
@@ -271,7 +281,7 @@ func buildLaunchBoxProjection(plan *Plan) (*LaunchBoxProjection, error) {
 				})
 				complete := len(members) <= 32
 				var identity strings.Builder
-				identity.WriteString(launchBoxPlatform(plan.System) + "\ndiscset:" + key)
+				identity.WriteString(launchBoxPlatform(plan) + "\ndiscset:" + key)
 				for n, index := range members {
 					_, number, total := launchBoxDiscKey(plan.Records[index])
 					if number != n+1 || total > 0 && total != len(members) {
@@ -288,7 +298,7 @@ func buildLaunchBoxProjection(plan *Plan) (*LaunchBoxProjection, error) {
 					v.Records = members
 					v.Name = launchBoxDiscRE.ReplaceAllString(launchBoxVersionName(plan.Records[members[0]]), "")
 					v.Name = strings.TrimSpace(v.Name) + fmt.Sprintf(" [%d discs]", len(members))
-					v.Path = filepath.ToSlash(filepath.Join("Playlists", launchBoxPlatform(plan.System), v.ID+".m3u"))
+					v.Path = filepath.ToSlash(filepath.Join("Playlists", launchBoxPlatform(plan), v.ID+".m3u"))
 					v.GeneratedPlaylist = true
 					result.Warnings = append(result.Warnings, "Generated M3U for observed consecutive catalog discs: "+v.Name+"; full catalog/set completeness is not verified")
 				}

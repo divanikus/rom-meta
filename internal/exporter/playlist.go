@@ -189,5 +189,5 @@ func (r *ExportResolver) resolvePlaylist(input ExportInput, profile Profile) (Re
 }
 
 func playlistSystem(system string) bool {
-	return system == "psx" || system == "saturn" || system == "dreamcast"
+	return validSystemID(system) && !systems[system].Arcade
 }
