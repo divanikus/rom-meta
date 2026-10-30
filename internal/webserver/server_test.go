@@ -64,7 +64,7 @@ func TestOneServerNeedsNeitherProfileNorToken(t *testing.T) {
 		t.Fatal("token should be optional")
 	}
 	paths := doc["paths"].(map[string]any)
-	for _, path := range []string{"/api/game", "/api/stats", "/media", "/v1/lookup", "/v1/export", "/v1/assets/{id}"} {
+	for _, path := range []string{"/api/game", "/api/fingerprints", "/api/stats", "/media", "/v1/lookup", "/v1/export", "/v1/assets/{id}"} {
 		if paths[path] == nil {
 			t.Fatal("missing route", path)
 		}

@@ -26,6 +26,39 @@ Provider observations stay separately inspectable; collapsed catalog YAML also
 retains unknown owner fields and release-specific overrides. The source-match
 badges/filter still describe provider coverage, not all available metadata.
 
+### Card sections
+
+The card keeps a stable hierarchy in both Library and Export preview:
+
+- **Overview**: cover beside release date/developer/publisher/players, then a
+  full-width description. More game details holds aliases and secondary metadata.
+- **Media**: the gallery, source filters in Library, and selected-file explanations
+  in Export preview. Technical filenames/reasons stay with their media.
+- **Releases & fingerprints**: the edition register and recorded file names,
+  sizes, formats, payload kinds, CRC32, MD5, SHA-1 and SHA-256 when available.
+  Expand a file to see complete selectable hashes and derivative IDs. Filter by
+  exact release/variant or search filenames/hashes; Show more loads another page.
+- **Sources** (Library): original provider observations and alternate descriptions.
+- **Raw**: stored catalog YAML in Library; native XML template, media destinations
+  and selected-field provenance in Export preview.
+
+Overview stays free of galleries and raw evidence. Layout follows the actual card
+panel width, so facts do not get squeezed beneath a cover merely because the
+browser is wide. Edition selection/feedback remains in the opened export card;
+selection notes are collapsed. Fingerprints are catalog records, not a live ROM
+verification. They load only when requested, independently of export policy and
+without opening a writable catalog cache or media/ROM payloads. Malformed
+fingerprints do not block Overview. Per-card fingerprint results are cached for
+the page session; reselect/reload to refresh external edits.
+
+`GET /api/fingerprints?platform=<folder>&game=<folder>` returns `fingerprints`,
+`total` (filtered), `registered_total`, `offset` and `limit`. Default pages contain
+100 records; `limit` accepts 1..200 and `offset` is nonnegative. Optional `release`
+and `variant` are exclusive exact filters; `q` searches names/edition keys/hashes
+(up to 256 characters). Missing fingerprint documents produce an empty page.
+Invalid requests return 400, missing cards 404 and malformed documents 500.
+Only one named card is read; no whole-catalog scan or file verification occurs.
+
 ### Browse with an export profile
 
 Choose **Export preview** beside **Library** in the same browser. Choose ES-DE or
@@ -51,7 +84,7 @@ is unavailable. Video/manual rules are unaffected. Save profile writes ordinary
 `selection.media` rules with `variant` order/`variants` lists, so CLI/API export
 uses the same policy. This does not assess image quality or remove a case/spine.
 
-Each selected media tile shows its labelled artwork type and the decisive reason.
+Each selected tile in **Media** shows its labelled artwork type and the decisive reason.
 **Why this file?** shows release/scope context, priority order and the nearest usable
 alternative. The Go selector produces this explanation from the same ranked
 candidates; the browser does not rank artwork. File numbers break ties only after
@@ -64,7 +97,7 @@ automatically enable a source. Reload after a new import to refresh the registry
 restores catalog order. Disabling every source deliberately disables automatic
 provider selection; explicit saved catalog overrides still take priority.
 
-**Release for this preview** selects a release or variant for the opened card;
+**Edition** selects a release or variant for the opened card;
 this does not create a per-card policy. Variants show title, language, author and
 version; identical labels get a short ID suffix, while selection retains the full
 stable catalog key. The result says which fields/media changed,
@@ -74,7 +107,7 @@ A declared default or sole release is selected initially. Multiple releases with
 an edition is chosen. Selected fields expose source/language/donor provenance;
 missing local media remain visible. IBM PC/ScummVM retain their export exclusions.
 
-The card has **Preview** and **Raw** tabs. Raw renders a single-card XML template
+The card has an **Overview** and a separate **Raw** section. Raw renders a single-card XML template
 with the native ES-DE/LaunchBox renderer and the same selected metadata. `ROM_FILE`,
 `/ROM_ROOT` and `SYSTEM` stand in for unavailable launch inputs. Native IDs,
 paths, additional versions and merge results depend on actual ROMs/destination.

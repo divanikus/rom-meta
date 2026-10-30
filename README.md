@@ -120,7 +120,9 @@ Video loads on playback. The ordinary view includes saved game fields and source
 evidence. Choose **Export preview** to adjust one shared frontend/language/media
 profile while browsing, then **Save profile** to download YAML for CLI export.
 Advanced offers discovered sources and frontend-supported media types. Cards
-include a Raw XML template tab; variants use readable translation labels.
+use Overview, Media, Releases & fingerprints, Sources and Raw sections.
+Registered file names, sizes and hashes load on demand; export mode keeps its
+selected media and XML separate. Variants use readable translation labels.
 No catalog/frontend writes occur in the web UI. See [the browser guide](docs/catalog-api.md#browse-with-an-export-profile).
 
 ## HTTP API

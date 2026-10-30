@@ -167,7 +167,7 @@ test('browser labels source coverage separately from resolved export metadata', 
  const b=browser(async()=>json({}));
  b.run('state.game={game:{folder:"Example",releases:[]},profile:{},source_blocks:[],local_media:[],has_metadata:false}; renderDetails()');
  assert.match(b.element('detail-chips').innerHTML,/no source metadata found/);
- assert.match(b.element('detail-body').innerHTML,/Library metadata/);
+ assert.match(b.element('detail-body').innerHTML,/game-overview/);
  b.run('state.game.has_metadata=true; renderDetails()');
  assert.match(b.element('detail-chips').innerHTML,/source metadata matched/);
 });
@@ -196,10 +196,10 @@ test('export mode projects only visible cards in bounded batches and keeps one p
   for(let i=0;i<10;i++) await tick();
   assert.ok(previewCalls.filter(input=>input.platform==='New').every(input=>input.settings.language==='ru'));
   assert.equal(b.run('state.exportSettings.language'),'ru');
-  assert.match(b.element('detail-body').innerHTML,/Selected export description/);
+  assert.match(b.element('detail-body').innerHTML,/overview-description/);
   b.run('state.exportMode=false; resetPreviews(); renderDetails()');
   assert.equal(b.element('detail-title').textContent,'Stored title');
-  assert.match(b.element('detail-body').innerHTML,/Library metadata/);
+  assert.match(b.element('detail-body').innerHTML,/game-overview/);
 });
 
 test('stale policy and edition requests cannot overwrite current export view', async () => {
@@ -250,6 +250,9 @@ test('explicit modes keep provider descriptions outside export preview', () => {
   assert.match(b.element('detail-body').innerHTML,/ScreenScraper/);
   assert.doesNotMatch(b.element('detail-body').innerHTML,/Unselected provider prose|Stored source evidence|data-source-index/);
   b.run('setExportMode(false)');
+  assert.match(b.element('detail-body').innerHTML,/Stored prose/);
+  assert.doesNotMatch(b.element('detail-body').innerHTML,/Unselected provider prose/);
+  b.run('setDetailTab("sources")');
   assert.match(b.element('detail-body').innerHTML,/Unselected provider prose/);
   assert.equal(b.element('library-mode').attributes['aria-pressed'],'true');
   assert.equal(b.element('export-mode').attributes['aria-pressed'],'false');
@@ -338,7 +341,7 @@ test('Raw uses server XML, escapes markup and follows edition changes without st
  assert.match(b.element('detail-body').innerHTML,/ROM_FILE/); assert.match(b.element('detail-body').innerHTML,/Box - Front/);
  pending[0].resolve(json({games:[{preview:{fields:{title:{value:'Old'}},media:{}},raw:{xml:'Old XML'}}]}));await old;
  assert.doesNotMatch(b.element('detail-body').innerHTML,/Old XML/);
- b.run('state.detailTab="preview";renderDetails()');assert.match(b.element('detail-body').innerHTML,/Selected export description/);
+ b.run('state.detailTab="preview";renderDetails()');assert.match(b.element('detail-body').innerHTML,/overview-description/);
 });
 
 
@@ -365,4 +368,36 @@ test('selected media explains actual server choice, escapes details and keeps re
  assert.match(html,/Why this file/);assert.match(html,/Original artwork/);assert.match(html,/box-front-04.png/);assert.match(html,/&lt;unsafe&gt;/);assert.doesNotMatch(html,/<unsafe>/);
  b.run('state.exportMode=false');assert.doesNotMatch(b.run('renderMediaSection({local_media:selectedMedia(state.detailPreview)})'),/Why this file/);
  assert.equal(b.run('renderMediaReason(null)'),'');
+});
+
+
+test('card sections keep overview, media, sources and raw separate without loading fingerprints', () => {
+ const calls=[];const b=browser(async(path)=>{calls.push(path);return json({});});
+ b.run(`state.game={game:{folder:'Card',releases:[{name:'USA'}]},profile:{description:'Overview prose',developer:'Studio'},catalog_yaml:'private_catalog_field: sample',source_blocks:[{source:'launchbox',match_count:1,profile:{description:'Provider evidence'}}],local_media:[{type:'image',kind:'screenshot',name:'shot.png',url:'/media?path=shot.png'}]};renderDetails()`);
+ assert.match(b.element('detail-body').innerHTML,/Overview prose/);assert.match(b.element('detail-body').innerHTML,/Studio/);
+ assert.doesNotMatch(b.element('detail-body').innerHTML,/media-grid|Provider evidence|private_catalog_field/);
+ b.run('setDetailTab("media")');assert.match(b.element('detail-body').innerHTML,/media-grid/);assert.doesNotMatch(b.element('detail-body').innerHTML,/Overview prose|Provider evidence/);
+ b.run('setDetailTab("sources")');assert.match(b.element('detail-body').innerHTML,/Provider evidence/);assert.doesNotMatch(b.element('detail-body').innerHTML,/Overview prose/);
+ b.run('setDetailTab("raw")');assert.match(b.element('detail-body').innerHTML,/private_catalog_field/);
+ assert.equal(calls.length,0);
+});
+
+test('fingerprints load lazily, page in bounded requests and stay cached across modes', async () => {
+ const calls=[];const b=browser(async(path)=>{const q=new URLSearchParams(path.split('?')[1]);calls.push(q);const offset=Number(q.get('offset'));return json({total:101,registered_total:101,fingerprints:Array.from({length:offset?1:100},(_,i)=>({name:'file'+(offset+i)+'.zip',release:'USA',size:512,sha1:'0123456789abcdef'}))});});
+ b.run('state.platform="Test";state.selectedFolder="Card";state.game={game:{folder:"Card",releases:[{name:"USA"}]},profile:{}};renderDetails()');
+ assert.equal(calls.length,0);b.run('setDetailTab("files")');await tick();
+ assert.equal(calls.length,1);assert.equal(calls[0].get('limit'),'100');assert.match(b.element('detail-body').innerHTML,/file0.zip/);assert.match(b.element('detail-body').innerHTML,/Show more fingerprints/);
+ await b.run('loadFingerprints(true)');assert.equal(calls[1].get('offset'),'100');assert.equal(b.run('state.fingerprints.fingerprints.length'),101);
+ b.run('state.exportMode=true;renderDetails()');assert.match(b.element('detail-body').innerHTML,/file100.zip/);assert.equal(calls.length,2);
+});
+
+test('fingerprint filters cancel stale requests and escape registered file evidence', async () => {
+ const pending=[];const b=browser(async(path,options)=>new Promise(resolve=>pending.push({path,signal:options.signal,resolve})));
+ b.run(`state.platform='Test';state.selectedFolder='Card';state.detailTab='files';state.game={game:{folder:'Card',variants:[{name:'translation-key',kind:'translation',title:'<Translated>',languages:['en']}]},profile:{}}`);
+ const old=b.run('loadFingerprints()');b.run(`state.fingerprintEdition='variant:translation-key';state.fingerprintQuery='abc123'`);const current=b.run('loadFingerprints()');
+ assert.equal(pending[0].signal.aborted,true);assert.match(pending[1].path,/variant=translation-key/);assert.match(pending[1].path,/q=abc123/);
+ pending[1].resolve(json({total:1,registered_total:2,fingerprints:[{name:'<file>.zip',variant:'translation-key',size:1024,sha1:'<hash>',sha256:'abcd'}]}));await current;
+ const html=b.element('detail-body').innerHTML;assert.match(html,/&lt;file&gt;/);assert.match(html,/&lt;hash&gt;/);assert.match(html,/&lt;Translated&gt;/);assert.doesNotMatch(html,/<file>|<hash>|<Translated>/);
+ pending[0].resolve(json({total:1,fingerprints:[{name:'stale.zip'}]}));await old;assert.doesNotMatch(b.element('detail-body').innerHTML,/stale.zip/);
+ const abandoned=b.run('loadFingerprints()');b.run('resetFingerprints();state.gameRequestID++;state.selectedFolder="Other"');assert.equal(pending[2].signal.aborted,true);pending[2].resolve(json({total:1,fingerprints:[{name:'wrong-card.zip'}]}));await abandoned;assert.equal(b.run('state.fingerprints'),null);
 });

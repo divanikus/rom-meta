@@ -18,6 +18,7 @@ func (s *server) apiIndex(w http.ResponseWriter, r *http.Request) {
 			"platforms": "/api/platforms", "names": "/api/games?platform=<folder>&names=1",
 			"summaries":      "/api/games?platform=<folder>&game=<folder>",
 			"game":           "/api/game?platform=<folder>&game=<folder>",
+			"fingerprints":   "/api/fingerprints?platform=<folder>&game=<folder>",
 			"export_preview": "POST /api/export-preview",
 			"export_options": "/api/export-options",
 			"stats":          "/api/stats?platform=<folder>", "media": "/media?path=<relative-path>",

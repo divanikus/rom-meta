@@ -883,6 +883,36 @@
     .media-choice p { margin:6px 0; white-space:normal; }
     .media-reason summary { cursor:pointer; color:var(--accent); }
     .media-reason-details { overflow-wrap:anywhere; }
+    .details { container-type:inline-size; container-name:card; }
+    .profile-layout { grid-template-columns:minmax(130px,180px) minmax(0,1fr); grid-template-areas:"cover facts"; gap:20px; }
+    .game-overview { display:grid; gap:24px; }
+    .overview-description { display:grid; gap:12px; }
+    .overview-description .description { max-width:90ch; }
+    .card-tabs { display:flex; flex-wrap:wrap; gap:6px; position:sticky; top:-16px; z-index:4; padding:10px 0; background:#0f1419; }
+    .card-section { min-width:0; }
+    .export-context { padding:12px; border:1px solid var(--line); border-radius:6px; }
+    .export-edition { display:grid; grid-template-columns:70px minmax(0,1fr); margin-bottom:6px; }
+    .export-edition select { width:100%; min-width:0; }
+    .export-warning { font-size:12px; }
+    .fingerprint-filter { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0; }
+    .fingerprint-filter input { flex:1; min-width:160px; }
+    .fingerprint-filter select { max-width:100%; }
+    .fingerprint-list { display:grid; gap:8px; margin:14px 0; }
+    .fingerprint-item { border:1px solid var(--line); border-radius:6px; padding:12px; min-width:0; }
+    .fingerprint-item summary { cursor:pointer; display:grid; gap:5px; }
+    .fingerprint-item .primary,.fingerprint-item .secondary { white-space:normal; overflow-wrap:anywhere; }
+    .fingerprint-hashes { display:grid; grid-template-columns:80px minmax(0,1fr); gap:8px; margin:16px 0 0; }
+    .fingerprint-hashes dt { color:var(--muted); }
+    .fingerprint-hashes dd { margin:0; min-width:0; }
+    .fingerprint-hashes code { white-space:normal; overflow-wrap:anywhere; user-select:text; }
+    .edition-register { display:grid; gap:10px; }
+    .edition-register .release-item { grid-template-columns:minmax(0,1fr); gap:4px; }
+    @container card (max-width:560px) {
+      .profile-layout { grid-template-columns:1fr; grid-template-areas:"cover" "facts"; }
+      .profile-layout > .cover-panel { max-width:180px; }
+      .source-top { grid-template-columns:1fr; }
+      .fact-row { grid-template-columns:minmax(95px,.65fr) minmax(0,1fr); }
+    }
     .export-xml { white-space:pre; overflow:auto; max-height:65vh; font-size:12px; }
   </style>
 </head>
@@ -1016,7 +1046,8 @@
       editionFeedback: "",
       observedSources: [],
       detailRaw: null,
-      detailTab: "preview"
+      detailTab: "preview",
+      fingerprints: null, fingerprintLoading: false, fingerprintError: "", fingerprintController: null, fingerprintRequestID: 0, fingerprintEdition: "", fingerprintQuery: ""
     };
 
     const $ = (id) => document.getElementById(id);
@@ -1056,7 +1087,17 @@
     });
     $("detail-body").addEventListener("click", (event) => {
       const button = event.target.closest("[data-detail-tab]");
-      if (button) { state.detailTab = button.dataset.detailTab; renderDetails(); }
+      if (button) setDetailTab(button.dataset.detailTab);
+      if (event.target.closest("[data-fingerprint-more]")) loadFingerprints(true);
+      if (event.target.closest("[data-fingerprint-retry]")) loadFingerprints();
+    });
+    $("detail-body").addEventListener("submit", (event) => {
+      if (event.target.id !== "fingerprint-filter") return;
+      event.preventDefault(); state.fingerprintQuery = $("fingerprint-query").value.trim(); state.fingerprintEdition = $("fingerprint-edition").value; loadFingerprints();
+    });
+    $("detail-body").addEventListener("change", (event) => {
+      if (event.target.id !== "fingerprint-edition") return;
+      state.fingerprintEdition = event.target.value; state.fingerprintQuery = $("fingerprint-query").value.trim(); loadFingerprints();
     });
     $("save-profile").addEventListener("click", saveProfile);
     $("profile-close").addEventListener("click", () => { $("profile-dialog").classList.add("hidden"); $("app").inert = false; $("save-profile").focus(); });
@@ -1249,16 +1290,15 @@
     }
     function renderExportEdition(response) {
       const preview = state.detailPreview, releases = response.game.releases || [], variants = response.game.variants || [];
-      const initial = response.game.default_release ? "Catalog default" : releases.length === 1 ? "Only release" : "Choose a release";
+      const initial = response.game.default_release ? "Default · " + response.game.default_release : releases.length === 1 ? "Default · " + releases[0].name : "Game-level metadata";
       const options = ['<option value="">' + initial + '</option>'];
       for (const release of releases) options.push('<option value="release:' + escapeAttr(release.name) + '">' + escapeHTML(release.name) + '</option>');
       for (const variant of variants) options.push('<option value="variant:' + escapeAttr(variant.name) + '" title="' + escapeAttr(variant.name) + '">' + escapeHTML(variantLabel(variant, variants)) + '</option>');
       const canChoose = releases.length > 1 || variants.length > 0;
       const edition = (preview?.variant ? variantLabel(variants.find((item) => item.name === preview.variant) || {name:preview.variant}, variants) : "") || preview?.release || (preview ? "Game-level selection" : "Selecting data…");
-      return '<div class="export-context"><div class="export-edition"><label for="export-edition">Release for this preview</label>' + (canChoose ? '<select id="export-edition">' + options.join("") + '</select>' : '') + '<span class="secondary">' + escapeHTML(edition) + '</span></div>' +
-        '<div class="edition-note">This release is for the opened card. Profile settings apply across the library. Shared descriptions and media may stay the same.</div>' +
+      return '<div class="export-context"><div class="export-edition"><label for="export-edition">Edition</label>' + (canChoose ? '<select id="export-edition">' + options.join("") + '</select>' : '') + (canChoose ? "" : '<span class="secondary">' + escapeHTML(edition) + '</span>') + '</div>' +
         (state.editionFeedback ? '<div class="edition-feedback" role="status">' + escapeHTML(state.editionFeedback) + '</div>' : '') +
-        (preview?.warnings?.length ? '<div class="export-warning">' + preview.warnings.map(escapeHTML).join(' / ') + '</div>' : '') + '</div>';
+        (preview?.warnings?.length ? '<details class="export-warning"><summary>' + preview.warnings.length + ' selection notes</summary><ul>' + preview.warnings.map((note) => '<li>' + escapeHTML(note) + '</li>').join("") + '</ul></details>' : '') + '</div>';
     }
 
     $("browse-tab").addEventListener("click", () => setView("browse"));
@@ -1437,6 +1477,7 @@
     }
 
     async function selectGame(folder) {
+      resetFingerprints(); $("detail-body").scrollTop = 0;
       state.detailPreviewController?.abort(); state.detailPreview = null; state.detailPreviewError = ""; state.edition = ""; state.editionFeedback = "";
       state.gameController?.abort();
       const controller = new AbortController();
@@ -1460,6 +1501,7 @@
           return;
         }
         state.game = response;
+        if (state.detailTab === "files") loadFingerprints();
         renderSourceControls();
         renderDetails();
         loadDetailPreview();
@@ -1634,52 +1676,113 @@
       return '<span class="chip warn">not checked</span>';
     }
 
+    function resetFingerprints() {
+      state.fingerprintController?.abort(); state.fingerprintRequestID++;
+      state.fingerprints = null; state.fingerprintLoading = false; state.fingerprintError = "";
+      state.fingerprintEdition = ""; state.fingerprintQuery = "";
+    }
+
+    async function loadFingerprints(append = false) {
+      if (!state.game || state.view !== "browse" || append && state.fingerprintLoading) return;
+      state.fingerprintController?.abort();
+      const controller = new AbortController(); state.fingerprintController = controller;
+      const id = ++state.fingerprintRequestID, gameID = state.gameRequestID, platform = state.platform, folder = state.selectedFolder;
+      const offset = append ? state.fingerprints?.fingerprints?.length || 0 : 0;
+      const previous = append ? state.fingerprints?.fingerprints || [] : [];
+      if (!append) state.fingerprints = null;
+      state.fingerprintLoading = true; state.fingerprintError = ""; renderDetails();
+      const params = new URLSearchParams({platform,game:folder,offset:String(offset),limit:"100"});
+      if (state.fingerprintEdition.startsWith("release:")) params.set("release",state.fingerprintEdition.slice(8));
+      if (state.fingerprintEdition.startsWith("variant:")) params.set("variant",state.fingerprintEdition.slice(8));
+      if (state.fingerprintQuery) params.set("q",state.fingerprintQuery);
+      const current = () => id === state.fingerprintRequestID && gameID === state.gameRequestID && platform === state.platform && folder === state.selectedFolder;
+      try {
+        const response = await fetchJSON("/api/fingerprints?" + params,controller.signal);
+        if (!current() || controller.signal.aborted) return;
+        state.fingerprints = {...response,fingerprints:[...previous,...(response.fingerprints || [])]};
+      } catch (error) { if (error.name !== "AbortError" && current()) state.fingerprintError = error.message; }
+      finally { if (current()) { state.fingerprintLoading = false; if (state.view === "browse") renderDetails(); } }
+    }
+
+    function fingerprintSize(size) {
+      if (!(size > 0)) return "Size not recorded";
+      const units = ["B","KiB","MiB","GiB","TiB"];
+      const index = Math.min(units.length-1,Math.floor(Math.log(size)/Math.log(1024)));
+      return (size/1024**index).toLocaleString(undefined,{maximumFractionDigits:2}) + " " + units[index];
+    }
+
+    function renderFingerprintSection(game) {
+      const releases = game.releases || [], variants = game.variants || [];
+      const options = ['<option value="">All releases and variants</option>'];
+      for (const release of releases) options.push('<option value="release:' + escapeAttr(release.name) + '"' + (state.fingerprintEdition === 'release:' + release.name ? ' selected' : '') + '>' + escapeHTML(release.name) + '</option>');
+      for (const variant of variants) options.push('<option value="variant:' + escapeAttr(variant.name) + '"' + (state.fingerprintEdition === 'variant:' + variant.name ? ' selected' : '') + '>' + escapeHTML(variantLabel(variant,variants)) + '</option>');
+      const variantRows = variants.map((variant) => '<div class="release-item"><span class="primary">' + escapeHTML(variantLabel(variant,variants)) + '</span><span class="secondary">' + escapeHTML(variant.based_on ? 'Based on: ' + variant.based_on : 'Game-level variant') + '</span></div>').join("");
+      const register = '<details class="raw-details"><summary>' + releases.length + ' releases · ' + variants.length + ' variants</summary><div class="edition-register">' + renderReleases(releases) + (variantRows ? '<section class="section"><h3>Variants</h3>' + variantRows + '</section>' : '') + '</div></details>';
+      const filter = '<form class="fingerprint-filter" id="fingerprint-filter"><select id="fingerprint-edition" aria-label="Filter fingerprints by edition">' + options.join("") + '</select><input id="fingerprint-query" aria-label="Search registered filenames or hashes" placeholder="Filename or hash" maxlength="256" value="' + escapeAttr(state.fingerprintQuery) + '"><button class="tab-button" type="submit">Find</button></form>';
+      const data = state.fingerprints, records = data?.fingerprints || [];
+      const rows = records.map((record) => {
+        const variant = variants.find((item) => item.name === record.variant);
+        const edition = record.variant ? variantLabel(variant || {name:record.variant},variants) : record.release || "Game-level record";
+        const hashes = [["CRC32",record.crc32],["MD5",record.md5],["SHA-1",record.sha1],["SHA-256",record.sha256]].filter(([,value]) => value);
+        const fields = [...(record.size > 0 ? [["Bytes",String(record.size)]] : []),...(record.format ? [["Format",record.format]] : []),...(record.payload_kind ? [["Payload kind",record.payload_kind]] : []),...(record.variant ? [["Variant ID",record.variant]] : []),...hashes];
+        return '<details class="fingerprint-item"><summary><span class="primary">' + escapeHTML(record.name || "Unnamed file") + '</span><span class="secondary">' + escapeHTML(edition) + '</span><span class="secondary">' + escapeHTML(fingerprintSize(record.size)) + ' · ' + (hashes.length ? hashes.length + (hashes.length === 1 ? ' recorded hash' : ' recorded hashes') : 'No hashes recorded') + '</span></summary><dl class="fingerprint-hashes">' + fields.map(([key,value]) => '<dt>' + escapeHTML(key) + '</dt><dd><code>' + escapeHTML(value) + '</code></dd>').join("") + '</dl></details>';
+      }).join("");
+      const status = state.fingerprintError ? '<div class="error">' + escapeHTML(state.fingerprintError) + '</div><button class="tab-button" type="button" data-fingerprint-retry>Retry fingerprints</button>' : state.fingerprintLoading && !data ? '<div class="loading">Reading registered fingerprints…</div>' : !records.length ? '<div class="empty">' + (data?.registered_total ? 'No fingerprints match this filter.' : 'No fingerprints registered for this game.') + '</div>' : '';
+      return '<section class="section"><h3>Releases & fingerprints</h3><p class="secondary">Registered catalog files and hashes. No ROM scan is performed in this view.</p>' + register + filter + status + '<div class="fingerprint-list">' + rows + '</div>' + (data ? '<div class="secondary">Showing ' + records.length + ' of ' + data.total + ' matching records · ' + data.registered_total + ' registered</div>' : '') + (data && records.length < data.total ? '<button class="tab-button" type="button" data-fingerprint-more' + (state.fingerprintLoading ? ' disabled' : '') + '>' + (state.fingerprintLoading ? 'Loading…' : 'Show more fingerprints') + '</button>' : '') + '</section>';
+    }
+
+    function setDetailTab(tab) {
+      if (!["preview","media","files","sources","raw"].includes(tab)) return;
+      state.detailTab = tab;
+      $("detail-body").scrollTop = 0;
+      renderDetails();
+      if (tab === "files" && !state.fingerprints && !state.fingerprintLoading) loadFingerprints();
+    }
+
     function renderDetails() {
-      let response = state.game;
-      if (!response) {
+      const focusID = document.activeElement?.id, focusTab = document.activeElement?.dataset?.detailTab;
+      const stored = state.game;
+      if (!stored) {
         $("detail-title").textContent = "Select a game";
         $("detail-chips").innerHTML = "";
         $("detail-body").innerHTML = '<div class="empty">Choose a platform and game from the lists.</div>';
         return;
       }
-      if (state.exportMode) {
-        if (!state.detailPreview) {
-          $("detail-title").textContent = response.game.title || response.game.folder;
-          $("detail-chips").innerHTML = '<span class="chip">Export view</span>';
-          $("detail-body").innerHTML = renderExportEdition(response) + '<div class="' + (state.detailPreviewError ? 'error' : 'loading') + '">' + escapeHTML(state.detailPreviewError || "Selecting export metadata…") + '</div>';
-          bindExportEdition(); return;
-        }
-        response = exportResponse(response);
-      }
-      const game = response.game;
-      const profile = response.profile || {};
+      if (state.exportMode && state.detailTab === "sources") state.detailTab = "preview";
+      const ready = !state.exportMode || !!state.detailPreview;
+      const response = state.exportMode && ready ? exportResponse(stored) : stored;
+      const game = response.game, profile = response.profile || {};
       $("detail-title").textContent = profile.title || game.title || game.folder;
       $("detail-chips").innerHTML = [
         state.exportMode ? '<span class="chip">' + escapeHTML(state.exportSettings.target === "launchbox" ? "LaunchBox" : "ES-DE") + ' · catalog preview</span>' : response.has_metadata ? '<span class="chip good">source metadata matched</span>' : '<span class="chip bad">no source metadata found</span>',
         profile.release_date ? '<span class="chip">' + escapeHTML(yearOf(profile.release_date)) + '</span>' : '',
         chips((profile.genres || []).slice(0, 3), ''),
-        '<span class="chip">' + escapeHTML(profile.platform || game.platform) + '</span>',
-        '<span class="chip">' + formatNumber((game.releases || []).length) + ' releases</span>',
-        '<span class="chip">' + formatNumber((response.local_media || []).length) + ' local media</span>'
+        '<span class="chip">' + escapeHTML(profile.platform || game.platform) + '</span>'
       ].flat().filter(Boolean).join("");
-      const provenance = response.export_preview ? '<details class="raw-details"><summary>Selected fields and provenance</summary><div class="fact-list">' + Object.entries(response.export_preview.fields || {}).map(([key,value]) => fact(key, value.value + ' · ' + sourceLabel(value.source || 'catalog') + (value.language ? ' / ' + value.language : '') + (value.from_variant ? ' / variant: ' + value.from_variant : value.from_release ? ' / release: ' + value.from_release : ''))).join("") + '</div></details>' : '';
-      const original = !state.exportMode ? '<details class="raw-details"><summary>Stored catalog YAML · fields, releases and variants</summary><pre>' + escapeHTML(response.catalog_yaml || "") + '</pre></details>' : '';
-      const tabs = state.exportMode ? '<div class="source-tabs" role="group" aria-label="Export card view"><button type="button" class="tab-button' + (state.detailTab === "preview" ? " active" : "") + '" data-detail-tab="preview" aria-pressed="' + (state.detailTab === "preview") + '">Preview</button><button type="button" class="tab-button' + (state.detailTab === "raw" ? " active" : "") + '" data-detail-tab="raw" aria-pressed="' + (state.detailTab === "raw") + '">Raw</button></div>' : '';
-      const content = state.exportMode && state.detailTab === "raw" ? renderExportRaw() : renderProfile(response) + provenance + original + renderMediaSection(response) + (state.exportMode ? '' : renderSourceSection(response));
-      $("detail-body").innerHTML = (state.exportMode ? renderExportEdition(state.game) : '') + tabs + content;
+      const sections = [["preview","Overview"],["media","Media · " + (response.local_media || []).length],["files","Releases & fingerprints"],...(!state.exportMode ? [["sources","Sources"]] : []),["raw","Raw"]];
+      const tabs = '<nav class="card-tabs" aria-label="Card sections">' + sections.map(([id,label]) => '<button type="button" class="tab-button' + (state.detailTab === id ? ' active' : '') + '" data-detail-tab="' + id + '" aria-pressed="' + (state.detailTab === id) + '">' + escapeHTML(label) + '</button>').join("") + '</nav>';
+      let content;
+      if (state.detailTab === "files") content = renderFingerprintSection(stored.game);
+      else if (state.exportMode && !ready) content = '<div class="' + (state.detailPreviewError ? 'error' : 'loading') + '">' + escapeHTML(state.detailPreviewError || 'Selecting export metadata…') + '</div>';
+      else if (state.detailTab === "media") content = renderMediaSection(response);
+      else if (state.detailTab === "sources") content = renderSourceSection(stored);
+      else if (state.detailTab === "raw") {
+        content = state.exportMode ? renderExportRaw() + renderExportProvenance(response) : '<section class="section"><h3>Stored catalog YAML</h3><pre class="export-xml">' + escapeHTML(stored.catalog_yaml || '') + '</pre></section>';
+      } else content = renderProfile(response);
+      $("detail-body").innerHTML = tabs + (state.exportMode && state.detailTab !== "files" ? renderExportEdition(stored) : '') + '<div class="card-section">' + content + '</div>';
       bindExportEdition();
-      document.querySelectorAll("[data-source-index]").forEach((button) => {
-        button.addEventListener("click", () => {
-          state.sourceIndex = Number(button.dataset.sourceIndex);
-          renderDetails();
-        });
-      });
-      document.querySelectorAll("[data-media-source]").forEach((button) => {
-        button.addEventListener("click", () => {
-          state.mediaSource = button.dataset.mediaSource || "all";
-          renderDetails();
-        });
-      });
+      document.querySelectorAll("[data-source-index]").forEach((button) => button.addEventListener("click", () => { state.sourceIndex = Number(button.dataset.sourceIndex); renderDetails(); }));
+      document.querySelectorAll("[data-media-source]").forEach((button) => button.addEventListener("click", () => { state.mediaSource = button.dataset.mediaSource || "all"; renderDetails(); }));
+      if (focusTab) document.querySelectorAll("[data-detail-tab]").forEach((button) => { if (button.dataset.detailTab === focusTab) button.focus(); });
+      if (["fingerprint-query","fingerprint-edition","export-edition"].includes(focusID)) {
+        const field = $(focusID); field?.focus();
+        if (focusID === "fingerprint-query") field?.setSelectionRange?.(field.value.length,field.value.length);
+      }
+    }
+
+    function renderExportProvenance(response) {
+      if (!response.export_preview) return "";
+      return '<details class="raw-details"><summary>Selected fields and provenance</summary><div class="fact-list">' + Object.entries(response.export_preview.fields || {}).map(([key,value]) => fact(key, value.value + ' · ' + sourceLabel(value.source || 'catalog') + (value.language ? ' / ' + value.language : '') + (value.from_variant ? ' / variant: ' + value.from_variant : value.from_release ? ' / release: ' + value.from_release : ''))).join("") + '</div></details>';
     }
 
     function renderExportRaw() {
@@ -1703,37 +1806,16 @@
       const coverHTML = cover
         ? '<button class="media-open" type="button" aria-label="Open media preview" data-lightbox-type="image" data-lightbox-src="' + escapeAttr(cover.url) + '" data-lightbox-title="' + escapeAttr(cover.name) + '"><img class="cover-image" src="' + escapeAttr(cover.url) + '" alt="' + escapeAttr(cover.name) + '" loading="lazy"></button>'
         : '<div class="cover-placeholder">' + (state.exportMode && state.exportSettings.media === "none" ? "Media excluded by profile" : "No eligible cover") + '</div>';
-      const description = !state.exportMode && (profile.descriptions || []).length ? renderDescriptions(profile.descriptions, profile.description, profile.description_language, profile.source) : profile.description
-        ? '<div class="description">' + paragraphs(profile.description) + '</div>'
-        : '<div class="empty">No description available.</div>';
+      const description = profile.description ? '<div class="description">' + paragraphs(profile.description) + '</div>' : '<div class="empty">No description available.</div>';
       const chosen = response.export_preview?.fields?.description;
-      const descriptionMeta = chosen ? '<div class="description-choice chips">' + chips([sourceLabel(chosen.source || "catalog"), chosen.language?.toUpperCase(), chosen.from_variant ? "Variant: " + chosen.from_variant : chosen.from_release ? "Release: " + chosen.from_release : ""].filter(Boolean), '') + '</div>' : '';
-      const factRows = [
-        fact("Release date", profile.release_date),
-        fact("Developer", profile.developer),
-        fact("Publisher", profile.publisher),
-        fact("Genres", listText(profile.genres)),
-        fact("Themes", listText(profile.themes)),
-        fact("Players", profile.players),
-        fact("Rating", ratingText(profile)),
-        fact("Collections", listText(profile.collections)),
-        fact("Franchises", listText(profile.franchises)),
-        fact("Platform", profile.platform || game.platform),
-        fact(state.exportMode ? "Metadata release" : "Default release", state.exportMode ? response.export_preview?.release : game.default_release),
-        fact("Description source", profile.source ? sourceLabel(profile.source) : "")
-      ].filter(Boolean).join("");
+      const descriptionMeta = chosen ? '<div class="description-choice chips">' + chips([sourceLabel(chosen.source || "catalog"), chosen.language?.toUpperCase(), chosen.from_variant ? "Variant: " + variantLabel((game.variants || []).find((item) => item.name === chosen.from_variant) || {name:chosen.from_variant},game.variants || []) : chosen.from_release ? "Release: " + chosen.from_release : ""].filter(Boolean), '') + '</div>' : profile.source ? '<div class="description-choice chips">' + chips([sourceLabel(profile.source),profile.description_language?.toUpperCase()].filter(Boolean), '') + '</div>' : '';
+      const factRows = [fact("Release date",profile.release_date),fact("Developer",profile.developer),fact("Publisher",profile.publisher),fact("Players",profile.players)].filter(Boolean).join("");
+      const additional = [fact("Genres",listText(profile.genres)),fact("Themes",listText(profile.themes)),fact("Rating",ratingText(profile)),fact("Collections",listText(profile.collections)),fact("Franchises",listText(profile.franchises)),fact(state.exportMode ? "Metadata release" : "Default release",state.exportMode ? response.export_preview?.release : game.default_release)].filter(Boolean).join("");
       const aliases = state.exportMode ? "" : renderTitleVariants(profile.alternate_titles || [], game.aliases || []);
-      const releases = state.exportMode ? "" : renderReleases(game.releases || []);
-      const variants = state.exportMode || !(game.variants || []).length ? "" : '<div class="section"><h3>Variants</h3>' + game.variants.map((variant) => '<div class="release-item"><span class="primary">' + escapeHTML(variantLabel(variant, game.variants)) + '</span><span class="secondary">' + escapeHTML([variant.based_on].filter(Boolean).join(" / ")) + '</span></div>').join("") + '</div>';
-      const lists = [aliases, releases, variants].filter(Boolean).join("");
-      return '<div class="profile-layout">' +
+      return '<section class="game-overview"><div class="profile-layout">' +
         '<div class="cover-panel">' + coverHTML + '</div>' +
-        '<div class="profile-content">' +
-          '<div class="section"><h3>' + (state.exportMode ? "Selected export description" : "Library metadata") + '</h3>' + descriptionMeta + description + '</div>' +
-          (lists ? '<div class="profile-lists">' + lists + '</div>' : '') +
-        '</div>' +
         '<aside class="side-panel"><div class="fact-list">' + (factRows || fact("Folder", game.folder)) + '</div></aside>' +
-        '</div>';
+        '</div><section class="overview-description"><h3>Description</h3>' + descriptionMeta + description + '</section>' + (additional || aliases ? '<details class="raw-details"><summary>More game details</summary><div class="fact-list">' + additional + '</div>' + aliases + '</details>' : '') + '</section>';
     }
 
     function renderSourceSection(response) {
