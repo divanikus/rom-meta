@@ -888,6 +888,12 @@
     .game-overview { display:grid; gap:24px; }
     .overview-description { display:grid; gap:12px; }
     .overview-description .description { max-width:90ch; }
+    .overview-details { display:grid; gap:24px; min-width:0; }
+    .overview-details .fact-list,.overview-details .title-list { grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr)); gap:8px; }
+    .overview-details .fact-row { grid-template-columns:minmax(0,1fr); gap:6px; border:1px solid var(--line); border-radius:6px; background:var(--panel); }
+    .overview-details .title-item { grid-template-columns:minmax(0,1fr); gap:6px; }
+    .overview-details .title-item .primary,.overview-details .title-item .secondary { white-space:normal; overflow-wrap:anywhere; }
+    .overview-details .title-item .secondary { justify-self:start; }
     .card-tabs { display:flex; flex-wrap:wrap; gap:6px; position:sticky; top:-16px; z-index:4; padding:10px 0; background:#0f1419; }
     .card-section { min-width:0; }
     .card-section > .section,.game-overview { grid-template-columns:minmax(0,1fr); }
@@ -1818,7 +1824,7 @@
       return '<section class="game-overview"><div class="profile-layout">' +
         '<div class="cover-panel">' + coverHTML + '</div>' +
         '<aside class="side-panel"><div class="fact-list">' + (factRows || fact("Folder", game.folder)) + '</div></aside>' +
-        '</div><section class="overview-description"><h3>Description</h3>' + descriptionMeta + description + '</section>' + (additional || aliases ? '<details class="raw-details"><summary>More game details</summary><div class="fact-list">' + additional + '</div>' + aliases + '</details>' : '') + '</section>';
+        '</div><section class="overview-description"><h3>Description</h3>' + descriptionMeta + description + '</section>' + (additional || aliases ? '<div class="overview-details">' + (additional ? '<section class="section"><h3>Game details</h3><div class="fact-list">' + additional + '</div></section>' : '') + aliases + '</div>' : '') + '</section>';
     }
 
     function renderSourceSection(response) {
@@ -1930,7 +1936,7 @@
       if (items.length === 0) {
         return "";
       }
-      return '<div class="section"><h3>Alternate Names</h3><div class="title-list">' + items.slice(0, 18).join("") + '</div></div>';
+      return '<div class="section"><h3>Alternate Names</h3><div class="title-list">' + items.join("") + '</div></div>';
     }
 
     function renderReleases(releases) {
