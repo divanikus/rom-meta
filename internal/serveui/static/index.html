@@ -884,18 +884,17 @@
     .media-reason summary { cursor:pointer; color:var(--accent); }
     .media-reason-details { overflow-wrap:anywhere; }
     .details { container-type:inline-size; container-name:card; }
-    .profile-layout { grid-template-columns:minmax(130px,180px) minmax(0,1fr); grid-template-areas:"cover facts"; gap:20px; }
+    .profile-layout { grid-template-columns:minmax(180px,220px) minmax(0,1fr); grid-template-areas:"cover content" "facts content"; gap:20px; }
     .game-overview { display:grid; gap:24px; }
     .overview-description { display:grid; gap:12px; }
     .overview-description .description { max-width:90ch; }
     .overview-details { display:grid; gap:24px; min-width:0; }
     .profile-facts { min-width:0; }
-    .profile-facts .fact-list { grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr)); }
-    .profile-facts .fact-row { grid-template-columns:minmax(0,1fr); gap:6px; align-content:start; }
-    .overview-details .title-list { grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr)); gap:8px; }
-    .overview-details .title-item { grid-template-columns:minmax(0,1fr); gap:6px; }
+    .profile-facts .fact-list { grid-template-columns:minmax(0,1fr); }
+    .overview-details .title-list { grid-template-columns:minmax(0,1fr); gap:8px; }
+    .overview-details .title-item { grid-template-columns:minmax(0,1fr) auto; gap:12px; }
     .overview-details .title-item .primary,.overview-details .title-item .secondary { white-space:normal; overflow-wrap:anywhere; }
-    .overview-details .title-item .secondary { justify-self:start; }
+    .overview-details .title-item .secondary { justify-self:end; }
     .card-tabs { display:flex; flex-wrap:wrap; gap:6px; position:sticky; top:-16px; z-index:4; padding:10px 0; background:#0f1419; }
     .card-section { min-width:0; }
     .card-section > .section,.game-overview { grid-template-columns:minmax(0,1fr); }
@@ -919,7 +918,9 @@
     .edition-register .primary,.edition-register .secondary { white-space:normal; overflow-wrap:anywhere; }
     .edition-register .release-item { grid-template-columns:minmax(0,1fr); gap:4px; }
     @container card (max-width:560px) {
-      .profile-layout { grid-template-columns:1fr; grid-template-areas:"cover" "facts"; }
+      .profile-layout { grid-template-columns:1fr; grid-template-areas:"cover" "facts" "content"; }
+      .overview-details .title-item { grid-template-columns:minmax(0,1fr); }
+      .overview-details .title-item .secondary { justify-self:start; }
       .profile-layout > .cover-panel { max-width:180px; }
       .source-top { grid-template-columns:1fr; }
       .fact-row { grid-template-columns:minmax(95px,.65fr) minmax(0,1fr); }
@@ -1820,12 +1821,12 @@
       const description = profile.description ? '<div class="description">' + paragraphs(profile.description) + '</div>' : '<div class="empty">No description available.</div>';
       const chosen = response.export_preview?.fields?.description;
       const descriptionMeta = chosen ? '<div class="description-choice chips">' + chips([sourceLabel(chosen.source || "catalog"), chosen.language?.toUpperCase(), chosen.from_variant ? "Variant: " + variantLabel((game.variants || []).find((item) => item.name === chosen.from_variant) || {name:chosen.from_variant},game.variants || []) : chosen.from_release ? "Release: " + chosen.from_release : ""].filter(Boolean), '') + '</div>' : profile.source ? '<div class="description-choice chips">' + chips([sourceLabel(profile.source),profile.description_language?.toUpperCase()].filter(Boolean), '') + '</div>' : '';
-      const factRows = [fact("Release date",profile.release_date),fact("Developer",profile.developer),fact("Publisher",profile.publisher),fact("Players",profile.players),fact("Genres",listText(profile.genres)),fact("Themes",listText(profile.themes)),fact("Rating",ratingText(profile)),fact("Collections",listText(profile.collections)),fact("Franchises",listText(profile.franchises)),fact(state.exportMode ? "Metadata release" : "Default release",state.exportMode ? response.export_preview?.release : game.default_release)].filter(Boolean).join("");
+      const factRows = [fact("Release date",profile.release_date),fact("Developer",profile.developer),fact("Publisher",profile.publisher),fact("Genres",listText(profile.genres)),fact("Themes",listText(profile.themes)),fact("Players",profile.players),fact("Rating",ratingText(profile)),fact("Collections",listText(profile.collections)),fact("Franchises",listText(profile.franchises)),fact(state.exportMode ? "Metadata release" : "Default release",state.exportMode ? response.export_preview?.release : game.default_release)].filter(Boolean).join("");
       const aliases = state.exportMode ? "" : renderTitleVariants(profile.alternate_titles || [], game.aliases || []);
       return '<section class="game-overview"><div class="profile-layout">' +
         '<div class="cover-panel">' + coverHTML + '</div>' +
         '<aside class="side-panel profile-facts"><div class="fact-list">' + (factRows || fact("Folder", game.folder)) + '</div></aside>' +
-        '</div><section class="overview-description"><h3>Description</h3>' + descriptionMeta + description + '</section>' + (aliases ? '<div class="overview-details">' + aliases + '</div>' : '') + '</section>';
+        '<div class="profile-content"><section class="overview-description"><h3>Overview</h3>' + descriptionMeta + description + '</section>' + (aliases ? '<div class="overview-details">' + aliases + '</div>' : '') + '</div></div></section>';
     }
 
     function renderSourceSection(response) {

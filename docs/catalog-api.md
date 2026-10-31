@@ -30,9 +30,10 @@ badges/filter still describe provider coverage, not all available metadata.
 
 The card keeps a stable hierarchy in both Library and Export preview:
 
-- **Overview**: cover beside one responsive, multi-column block containing all
-  available game fields. The full-width description and, in Library, all alternate
-  names follow below. Long values and names wrap without truncation.
+- **Overview**: the cover and a vertical field list form the left column; the
+  description and, in Library, all alternate names form the right column. Field
+  labels sit left of their values. Long values and names wrap; narrow cards stack
+  the cover, fields and content.
 - **Media**: the gallery, source filters in Library, and selected-file explanations
   in Export preview. Technical filenames/reasons stay with their media.
 - **Releases & fingerprints**: the edition register and recorded file names,

@@ -378,7 +378,9 @@ test('card sections keep overview, media, sources and raw separate without loadi
  const overview=b.element('detail-body').innerHTML;
  const facts=overview.match(/<aside class="side-panel profile-facts">([\s\S]*?)<\/aside>/)[1];
  assert.match(facts,/Studio/);assert.match(facts,/Adventure/);assert.match(facts,/Fantasy/);
- assert.ok(overview.indexOf('overview-description')>overview.indexOf('</aside>'));
+ const content=overview.match(/<div class="profile-content">([\s\S]*)<\/div><\/div><\/section>/)[1];
+ assert.match(content,/Overview prose/);assert.match(content,/Alternate Names/);
+ assert.doesNotMatch(content,/class="fact-list"/);
  assert.ok(overview.indexOf('Alternate Names')>overview.indexOf('overview-description'));
  assert.doesNotMatch(overview,/<h3>Game details<\/h3>/);
  assert.match(overview,/&lt;Alternate name&gt;/);assert.match(overview,/Japan \/ ja/);assert.match(overview,/Alias 19/);
