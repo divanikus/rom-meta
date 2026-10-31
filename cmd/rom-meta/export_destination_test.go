@@ -261,11 +261,7 @@ func TestExportShowsProgressAfterROMObservation(t *testing.T) {
 				if code != 0 {
 					t.Fatalf("export failed: %s", output)
 				}
-				phase, observation := "metadata/media", "export ROMs"
-				if network {
-					phase, observation = "n64 / API", "export n64 / ROMs"
-				}
-				stages := []string{observation, "export " + phase + " 0/1", "export " + phase + " 1/1", "frontend projection", "render XML", "read destination", "plan library/media", "files to write"}
+				stages := []string{"export scan", "export plan 0/1", "export plan 1/1", "files to write"}
 				offset := 0
 				for _, stage := range stages {
 					at := strings.Index(output[offset:], stage)

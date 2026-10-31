@@ -59,12 +59,17 @@ func applyDestination(plan *frontend.Plan) error {
 	progress := newTerminalProgress(os.Stdout)
 	defer progress.Done()
 	plan.Progress = func(stage, name string, current, total int) {
-		progress.UpdateTask("export", stage, current, total, name)
+		if stage == "check files" {
+			return
+		}
+		progress.UpdateTask("export", "write", current, total, name)
 	}
+	progress.UpdateTask("export", "write", 0, len(plan.Files), "checking inputs and backups")
 	backup, err := plan.Apply()
 	if err != nil {
 		return err
 	}
+	progress.Done()
 	if backup == "" {
 		fmt.Println("Destination already up to date; no files or backups created.")
 	} else {
@@ -76,7 +81,7 @@ func runPackageDestination(target, pkg, destination, mediaRoot, report string, a
 	progress := newTerminalProgress(os.Stdout)
 	defer progress.Done()
 	notify := func(stage, name string, current, total int) {
-		progress.UpdateTask("export", stage, current, total, name)
+		updateExportProgress(progress, stage, name, current, total)
 	}
 	plan, err := frontend.Build(frontend.Options{Progress: notify, Target: target, PackageRoot: pkg, Destination: destination, MediaRoot: mediaRoot})
 	if err != nil {
@@ -98,7 +103,7 @@ func transientOutput(options exporter.Options, destination, api string) (string,
 	if _, err := rand.Read(entropy); err != nil {
 		return "", err
 	}
-	for _, parent := range []string{os.TempDir(), filepath.Dir(destination)} {
+	for _, parent := range []string{filepath.Dir(destination), os.TempDir()} {
 		out, err := filepath.Abs(filepath.Join(parent, "rommeta-direct-"+hex.EncodeToString(entropy)))
 		if err != nil {
 			return "", err
@@ -142,7 +147,7 @@ func runDirectDestination(options exporter.Options, api string, systems []string
 	progress := newTerminalProgress(os.Stdout)
 	defer progress.Done()
 	options.Progress = func(stage, name string, current, total int) {
-		progress.UpdateTask("export", stage, current, total, name)
+		updateExportProgress(progress, stage, name, current, total)
 	}
 	single := options.Platform != ""
 	var plans []*exporter.Plan
@@ -218,10 +223,29 @@ func runDirectDestination(options exporter.Options, api string, systems []string
 		return err
 	}
 	nativeOptions.Source = nil
+	nativeOptions.ReuseAssets = true
 	installed, err := frontend.Build(nativeOptions)
 	if err != nil {
 		return err
 	}
 	progress.Done()
 	return applyDestination(installed)
+}
+
+func updateExportProgress(progress *terminalProgress, stage, name string, current, total int) {
+	original := stage
+	switch {
+	case stage == "catalog" || stage == "ROMs" || strings.HasSuffix(stage, " / catalog") || strings.HasSuffix(stage, " / ROMs"):
+		stage = "scan"
+	case stage == "write" || strings.HasSuffix(stage, " / write") || stage == "download" || strings.Contains(stage, " / download"):
+		stage = "media"
+	case stage == "hash ROMs" || strings.HasSuffix(stage, " / hash ROMs"):
+		stage = "hash ROMs"
+	default:
+		stage = "plan"
+	}
+	if stage == "plan" && name == "" {
+		name = original
+	}
+	progress.UpdateTask("export", stage, current, total, name)
 }

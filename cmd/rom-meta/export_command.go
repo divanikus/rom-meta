@@ -136,7 +136,7 @@ func runExport(args []string) error {
 	}
 	progress := newTerminalProgress(os.Stdout)
 	options.Progress = func(stage, name string, current, total int) {
-		progress.UpdateTask("export", stage, current, total, name)
+		updateExportProgress(progress, stage, name, current, total)
 	}
 	defer progress.Done()
 	if all || selected != "" {
@@ -205,7 +205,7 @@ func runNetworkExport(options exporter.Options, api string, systems []string, al
 	progress := newTerminalProgress(os.Stdout)
 	defer progress.Done()
 	options.Progress = func(stage, name string, current, total int) {
-		progress.UpdateTask("export", stage, current, total, name)
+		updateExportProgress(progress, stage, name, current, total)
 	}
 	batch := exporter.BatchOptions{Options: options, All: all, Systems: systems}
 	job, err := exportclient.Build(ctx, exportclient.Options{BatchOptions: batch, API: api, Token: os.Getenv("ROMMETA_API_TOKEN")})

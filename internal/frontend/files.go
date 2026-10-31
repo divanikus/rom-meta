@@ -1,6 +1,7 @@
 package frontend
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/csv"
 	"encoding/hex"
@@ -305,35 +306,6 @@ func (p *Plan) Apply() (backup string, err error) {
 	if p.source != nil {
 		return "", fmt.Errorf("generated preview must be materialized before apply")
 	}
-	stage, err := os.MkdirTemp(p.Root, ".rommeta-merge-")
-	if err != nil {
-		return "", err
-	}
-	defer os.RemoveAll(stage)
-	for i, c := range p.files {
-		if p.Progress != nil {
-			p.Progress("prepare", c.path, i+1, len(p.files))
-		}
-		target := filepath.Join(stage, fmt.Sprint(i))
-		if c.source != "" {
-			err = exclusiveCopy(c.source, target)
-		} else {
-			err = os.WriteFile(target, c.data, 0o644)
-		}
-		if err != nil {
-			return "", err
-		}
-		f, e := digest(target)
-		if e != nil {
-			return "", e
-		}
-		if f.hash != c.hash {
-			return "", fmt.Errorf("staged file changed: %s", c.path)
-		}
-	}
-	if err = p.validate(); err != nil {
-		return "", err
-	}
 	parent, err := safeJoin(p.Root, "Backups/RomMeta")
 	if err != nil {
 		return "", err
@@ -381,7 +353,7 @@ func (p *Plan) Apply() (backup string, err error) {
 	// Assets first; platform XML and identity map are published afterwards.
 	for i, c := range p.files {
 		if p.Progress != nil {
-			p.Progress("install", c.path, i+1, len(p.files))
+			p.Progress("write", c.path, i, len(p.files))
 		}
 		target, e := safeJoin(c.root, c.path)
 		if e != nil {
@@ -397,15 +369,86 @@ func (p *Plan) Apply() (backup string, err error) {
 		if current != p.guards[target] {
 			return backup, fmt.Errorf("library changed during merge: %s", target)
 		}
-		staged := filepath.Join(stage, fmt.Sprint(i))
-		if !current.exists {
-			err = exclusiveCopy(staged, target)
-		} else {
-			err = os.Rename(staged, target)
-		}
+		err = p.publish(c, target, current)
 		if err != nil {
 			return backup, err
 		}
 	}
+	if p.Progress != nil {
+		p.Progress("write", "", len(p.files), len(p.files))
+	}
 	return backup, nil
+}
+
+// publish writes a new asset once or replaces metadata through one adjacent temp
+// file. Internally generated packages may reuse immutable assets by hard link;
+// the caller removes that task-owned package after apply, leaving final files.
+func (p *Plan) publish(c fileChange, target string, current fingerprint) (err error) {
+	if c.source != "" && p.reuseAssets && !current.exists {
+		proof, e := digest(c.source)
+		if e != nil {
+			return e
+		}
+		if !proof.exists || proof.hash != c.hash {
+			return fmt.Errorf("package asset changed: %s", c.path)
+		}
+		if e = os.Link(c.source, target); e == nil {
+			return nil
+		}
+		// Different filesystems or unsupported links retain the one-copy path.
+	}
+	var in io.ReadCloser
+	if c.source != "" {
+		in, err = os.Open(c.source)
+	} else {
+		in = io.NopCloser(bytes.NewReader(c.data))
+	}
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	var out *os.File
+	if current.exists {
+		out, err = os.CreateTemp(filepath.Dir(target), ".rommeta-write-")
+	} else {
+		out, err = os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	}
+	if err != nil {
+		return err
+	}
+	temporary := out.Name()
+	committed := false
+	defer func() {
+		out.Close()
+		if !committed {
+			_ = os.Remove(temporary)
+		}
+	}()
+	hash := sha256.New()
+	if _, err = io.Copy(io.MultiWriter(out, hash), in); err != nil {
+		return err
+	}
+	if err = out.Close(); err != nil {
+		return err
+	}
+	if hex.EncodeToString(hash.Sum(nil)) != c.hash {
+		return fmt.Errorf("package asset changed while writing: %s", c.path)
+	}
+	if current.exists {
+		proof, e := digest(target)
+		if e != nil {
+			return e
+		}
+		if proof != current {
+			return fmt.Errorf("library changed during merge: %s", target)
+		}
+		if err = os.Chmod(temporary, 0o644); err != nil {
+			return err
+		}
+		if err = os.Rename(temporary, target); err != nil {
+			return err
+		}
+	}
+	committed = true
+	return nil
 }

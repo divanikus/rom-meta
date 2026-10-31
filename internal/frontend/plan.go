@@ -9,6 +9,8 @@ import (
 )
 
 type Options struct {
+	// ReuseAssets is only for immutable task-owned packages removed after apply.
+	ReuseAssets                                 bool
 	Progress                                    func(stage, name string, current, total int)
 	Target, PackageRoot, Destination, MediaRoot string
 	Source                                      *Source
@@ -24,20 +26,21 @@ type Change struct {
 	Playlists int      `json:"added_playlists"`
 }
 type Plan struct {
-	Progress   func(stage, name string, current, total int) `json:"-"`
-	Target     string                                       `json:"target"`
-	MediaRoot  string                                       `json:"media_root,omitempty"`
-	source     *Source
-	Package    string   `json:"package,omitempty"`
-	Root       string   `json:"destination"`
-	Changes    []Change `json:"games"`
-	Conflicts  []string `json:"conflicts"`
-	Warnings   []string `json:"warnings"`
-	Files      []string `json:"changed_files"`
-	files      []fileChange
-	guards     map[string]fingerprint
-	external   map[string]fingerprint
-	identities map[string]string
+	reuseAssets bool
+	Progress    func(stage, name string, current, total int) `json:"-"`
+	Target      string                                       `json:"target"`
+	MediaRoot   string                                       `json:"media_root,omitempty"`
+	source      *Source
+	Package     string   `json:"package,omitempty"`
+	Root        string   `json:"destination"`
+	Changes     []Change `json:"games"`
+	Conflicts   []string `json:"conflicts"`
+	Warnings    []string `json:"warnings"`
+	Files       []string `json:"changed_files"`
+	files       []fileChange
+	guards      map[string]fingerprint
+	external    map[string]fingerprint
+	identities  map[string]string
 }
 
 // Build uses the same additive plan and apply contract for each native adapter.
@@ -61,7 +64,7 @@ func Build(options Options) (*Plan, error) {
 	if inside(root, pkg) || inside(pkg, root) {
 		return nil, fmt.Errorf("package and destination directories must not overlap")
 	}
-	p := &Plan{Progress: options.Progress, Target: options.Target, Root: root, Package: pkg, source: options.Source, guards: map[string]fingerprint{}, external: map[string]fingerprint{}, identities: map[string]string{}, Changes: []Change{}, Conflicts: []string{}, Warnings: []string{}, Files: []string{}}
+	p := &Plan{reuseAssets: options.ReuseAssets, Progress: options.Progress, Target: options.Target, Root: root, Package: pkg, source: options.Source, guards: map[string]fingerprint{}, external: map[string]fingerprint{}, identities: map[string]string{}, Changes: []Change{}, Conflicts: []string{}, Warnings: []string{}, Files: []string{}}
 	p.reportProgress("read destination", options.Target, 0, 0)
 	if options.MediaRoot != "" && p.Target != "es-de" {
 		return nil, fmt.Errorf("--media-root is only supported for ES-DE")

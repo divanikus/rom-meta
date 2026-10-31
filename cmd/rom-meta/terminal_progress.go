@@ -19,7 +19,6 @@ type terminalProgress struct {
 	interactive        bool
 	color              bool
 	lastLineCount      int
-	lastWidths         []int
 	byteItems          map[string]byteProgressItem
 	lastByteReads      map[string]int64
 	taskLine           string
@@ -268,37 +267,23 @@ func (p *terminalProgress) renderLines(lines []string) {
 	if len(lines) == 0 && p.lastLineCount == 0 {
 		return
 	}
-	if p.lastLineCount > 0 {
-		fmt.Fprint(p.out, "\r")
-		for i := 1; i < p.lastLineCount; i++ {
-			fmt.Fprint(p.out, "\x1b[1A\r")
-		}
+	// A fresh renderer may inherit a cursor left after another progress stage.
+	// Always own the entire row; padding can itself wrap at the terminal edge.
+	fmt.Fprint(p.out, "\r")
+	for i := 1; i < p.lastLineCount; i++ {
+		fmt.Fprint(p.out, "\x1b[1A\r")
 	}
-
 	drawCount := len(lines)
 	if p.lastLineCount > drawCount {
 		drawCount = p.lastLineCount
 	}
-	widths := make([]int, len(lines))
 	for index := 0; index < drawCount; index++ {
-		line := ""
-		width := 0
+		fmt.Fprint(p.out, "\x1b[2K")
 		if index < len(lines) {
-			line = lines[index]
-			width = runeWidth(line)
-			widths[index] = width
+			fmt.Fprint(p.out, lines[index])
 		}
-		oldWidth := 0
-		if index < len(p.lastWidths) {
-			oldWidth = p.lastWidths[index]
-		}
-		padding := 0
-		if oldWidth > width {
-			padding = oldWidth - width
-		}
-		fmt.Fprintf(p.out, "%s%s", line, strings.Repeat(" ", padding+2))
 		if index < drawCount-1 {
-			fmt.Fprint(p.out, "\n")
+			fmt.Fprint(p.out, "\r\n")
 		}
 	}
 	if extra := drawCount - len(lines); extra > 0 {
@@ -308,7 +293,6 @@ func (p *terminalProgress) renderLines(lines []string) {
 		}
 	}
 	p.lastLineCount = len(lines)
-	p.lastWidths = widths
 }
 
 func (p *terminalProgress) Done() {
@@ -323,9 +307,8 @@ func (p *terminalProgress) Done() {
 	if !p.interactive || p.lastLineCount == 0 {
 		return
 	}
-	fmt.Fprintln(p.out)
+	fmt.Fprint(p.out, "\r\n")
 	p.lastLineCount = 0
-	p.lastWidths = nil
 }
 
 func formatTaskProgressLine(task, stage string, current, total int, label string, color bool) string {

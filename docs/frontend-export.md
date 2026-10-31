@@ -25,11 +25,20 @@ coverage and native emulator readiness are reported separately. Preview counts
 source sets that still need extraction/installation and launch setup; matching
 a package does not make it ready to play.
 
-Progress totals belong to the named stage. After ROM observation, export reports
-metadata/media selection, display names, frontend projection, XML rendering and
-native library/media planning. Long stages show the current input/card; native
-file freshness checks have their own counter. A completed ROM bar does not mean
-the export is finished. Preparation/planning remains read-only until --apply.
+The CLI groups work into scan, plan, media and write. Plan covers metadata/media
+selection and the native changes; media prepares selected assets; write checks
+inputs, keeps ordinary backups and publishes the library in one file pass. It
+has no separate prepare/install pass. Counts belong to the current phase, not
+the complete command. Planning stays read-only until --apply.
+
+Direct export reuses already-prepared temporary media on the same filesystem;
+other destinations use one verified copy. User-supplied --package assets are
+always copied, keeping that package independent.
+
+Assets are written before XML and identity state, with ordinary backups for
+replaced metadata. A failed write removes its partial file and reports the backup/
+changes receipt. Already-added assets may remain; later metadata is not published
+after a failed asset write.
 
 ## CHD recognition and full-file checks
 
