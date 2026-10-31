@@ -254,3 +254,82 @@ func TestNetworkCHDHashFallbackPinsRevisionAndProfile(t *testing.T) {
 		})
 	}
 }
+
+func TestNetworkQualifiedCHDEditionsMatchLocalProjection(t *testing.T) {
+	root, roms := t.TempDir(), t.TempDir()
+	data := exportCHDBytes()
+	card(t, root, "saturn", "Game", "Game", "Game (USA) (Disc 1)", "unused.chd", data)
+	game := filepath.Join(root, "platforms", "saturn", "Game")
+	put(t, filepath.Join(game, "game.yaml"), []byte("title: Game\nreleases:\n  Game (USA) (Disc 1): {}\n  Game (USA) (Disc 2): {}\n  Game (USA) (Disc 1) (Beta) (1996-02-05): {}\n  Game (USA) (Disc 2) (Beta) (1996-02-05): {}\n"))
+	put(t, filepath.Join(game, "fingerprints.yaml"), []byte("items: []\n"))
+	for _, disc := range []string{"I", "II"} {
+		for _, beta := range []string{"", " (Beta)"} {
+			put(t, filepath.Join(roms, "Game (USA) (Disc "+disc+")"+beta+".chd"), data)
+		}
+	}
+	s := server(t, root, nil)
+	for _, hash := range []bool{false, true} {
+		options := exporter.Options{ROMRoot: roms, Platform: "saturn", Target: "launchbox", Out: filepath.Join(t.TempDir(), "output"), HashROMs: hash}
+		job, err := Build(context.Background(), Options{API: s.URL, BatchOptions: exporter.BatchOptions{Options: options}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		network := job.Batch.Plans[0]
+		if network.Matched != 4 || len(network.LaunchBox.Groups) != 1 || len(network.LaunchBox.Groups[0].Versions) != 2 {
+			t.Fatalf("network grouping: %+v", network)
+		}
+		options.DataRoot = root
+		options.System = "saturn"
+		local, err := exporter.Build(options)
+		if err != nil {
+			t.Fatal(err)
+		}
+		a, err := exporter.RenderLaunchBox(network)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := exporter.RenderLaunchBox(local)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(a, b) {
+			t.Fatalf("local/API differ:\n%s\n%s", a, b)
+		}
+	}
+}
+
+func TestNetworkQualifiedCHDPlaylistAndEditionConflict(t *testing.T) {
+	for _, mixed := range []bool{false, true} {
+		t.Run(fmt.Sprint(mixed), func(t *testing.T) {
+			root, roms := t.TempDir(), t.TempDir()
+			data := exportCHDBytes()
+			card(t, root, "saturn", "Game", "Game", "Game (USA) (Disc 1)", "unused.chd", data)
+			game := filepath.Join(root, "platforms", "saturn", "Game")
+			put(t, filepath.Join(game, "game.yaml"), []byte("title: Game\nreleases:\n  Game (USA) (Disc 1): {}\n  Game (USA) (Disc 2): {}\n"))
+			put(t, filepath.Join(game, "fingerprints.yaml"), []byte("items: []\n"))
+			dir := filepath.Join(roms, "Game.m3u")
+			one := "Game (USA) (Disc I) (Beta).chd"
+			two := "Game (USA) (Disc II) (Beta).chd"
+			if mixed {
+				two = "Game (Europe) (Disc II) (Beta).chd"
+			}
+			put(t, filepath.Join(dir, "Game.m3u"), []byte(one+"\n"+two+"\n"))
+			put(t, filepath.Join(dir, one), data)
+			put(t, filepath.Join(dir, two), data)
+			s := server(t, root, nil)
+			assertLocalParity(t, root, roms, "saturn", s.URL)
+			job, err := Build(context.Background(), Options{API: s.URL, BatchOptions: exporter.BatchOptions{Options: exporter.Options{ROMRoot: roms, Platform: "saturn", Out: filepath.Join(t.TempDir(), "output")}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			record := job.Batch.Plans[0].Records[0]
+			if mixed {
+				if record.Status != "unsupported" || !strings.Contains(record.Reason, "editions") {
+					t.Fatalf("mixed set accepted: %+v", record)
+				}
+			} else if record.Status != "matched" || len(record.Playlist) != 2 || record.Playlist[0].Release != "" || record.GameTitle != "Game" {
+				t.Fatalf("observed set lost: %+v", record)
+			}
+		})
+	}
+}

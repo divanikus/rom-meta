@@ -62,6 +62,21 @@ func (catalog *LookupCatalog) scope(platform string) []string {
 }
 
 func mergeCatalogIndex(dst, src *catalogIndex) {
+	for key, games := range src.ExportCanonical {
+		for _, g := range games {
+			addOpticalName(&dst.ExportCanonical, key, g)
+		}
+	}
+	for key, games := range src.ExportNames {
+		for _, g := range games {
+			addOpticalName(&dst.ExportNames, key, g)
+		}
+	}
+	for key, games := range src.ExportShortNames {
+		for _, g := range games {
+			addOpticalName(&dst.ExportShortNames, key, g)
+		}
+	}
 	if len(src.ByCHD) > 0 && dst.ByCHD == nil {
 		dst.ByCHD = map[string][]fingerprint{}
 	}

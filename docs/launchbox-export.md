@@ -1,7 +1,7 @@
 # LaunchBox export
 
 Generate one native LaunchBox card per matched catalog game. Regional releases,
-revisions, prepared translations and hacks become **Additional Versions** under
+revisions, betas, prepared translations and hacks become **Additional Versions** under
 that card, including its primary launch. Grouping uses catalog game identity,
 never similar display titles. Unknown/ambiguous inputs remain independent cards.
 
@@ -90,14 +90,18 @@ All members must bind to the same game/compatible prepared edition. The actual
 inner M3U is launched and its original order remains. Several regional or modified
 M3Us can be versions under one game card, each with its own disc set.
 
-For loose official CHD/ISO files, export can create a package M3U when exact
-catalog release names differ only by a single Disc/Disk token, all other
+For loose matched CHD/ISO files, export can create a package M3U when catalog
+release names or complete observed version names differ only by a single
+Disc/Disk token (decimal or canonical Roman numerals), all other
 qualifiers/region/language/revision agree, and selected disc numbers are exactly
 1..N (2..32). Duplicates, gaps, mixed editions and conflicting declared totals do
 not assemble. Generated M3Us use disc-number order and absolute original paths.
 This checks observed sequence completeness; it does not prove that the catalog
 or original release contains no further discs. Review warnings and avoid limiting
-a disc-set selection. Prepared modified sets need a supplied M3U.
+a disc-set selection. Beta/prototype tags, language/version labels and bracket
+labels remain part of the set identity. Retail and beta discs never mix.
+Unregistered modifications can share the catalog game without claiming a
+registered variant. Prepared modified sets still need a supplied M3U.
 
 Unassembled numbered discs remain separate selectable versions with explicit
 warnings. Ordinary flat M3U, CUE/BIN, GDI and PBP remain unsupported launch inputs.
@@ -195,8 +199,16 @@ still needs emulator verification.
 
 If paths or IDs point to multiple existing cards, multiple catalog games point to
 one native card, or version IDs/paths conflict, apply refuses the entire merge.
-Existing separate cards are not automatically deleted or folded: their history,
-playlist memberships and curation need a deliberate native consolidation first.
+Ordinary existing cards retain their history, memberships and curation and need
+a deliberate native consolidation first. There is one automatic repair: obsolete,
+unchanged RomMeta input placeholders can be folded into their now-recognized
+catalog card. This requires the exact saved ownership/UUID, source launch path
+and current manifest game association. The exporter removes only those empty
+cards and their default versions, redirects saved bindings and playlist GameId
+references, and installs the newly grouped versions. LaunchBox-generated default
+fields are accepted; owner changes or nonempty unknown fields block the repair.
+Preview/report shows `consolidated_cards`; backups cover every replaced XML/state
+file. Repeating the same export then writes nothing.
 See LaunchBox's [bulk-editing and combining guidance](https://launchbox.featurebase.app/help/articles/8922784-bulk-editing-and-auditing-a-large-launchbox-library).
 The first ungrouped exporter used per-launch card IDs; exact launch/M3U evidence
 allows adoption when it identifies one existing card unambiguously.

@@ -23,6 +23,9 @@ func printDestinationPlan(plan *frontend.Plan) {
 	}
 	for _, change := range plan.Changes {
 		fmt.Printf("%s / %s: %s | %d fields | %d new versions | %d media | %d playlists\n", change.Platform, change.Title, change.Action, len(change.Fields), change.Versions, change.Media, change.Playlists)
+		if change.Consolidated > 0 {
+			fmt.Printf("  %d obsolete RomMeta cards consolidated\n", change.Consolidated)
+		}
 	}
 	for _, warning := range plan.Warnings {
 		fmt.Println("Warning:", warning)

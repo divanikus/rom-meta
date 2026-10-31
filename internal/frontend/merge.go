@@ -139,6 +139,7 @@ func buildLaunchBox(p *Plan) error {
 		return err
 	}
 	count := 0
+	retiredTargets := map[string]string{}
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".xml") {
 			continue
@@ -180,6 +181,10 @@ func buildLaunchBox(p *Plan) error {
 		if err != nil {
 			return err
 		}
+		library, retired, repairProblems, err := p.consolidatePlaceholders(platform, games, library, state)
+		if err != nil {
+			return err
+		}
 		existing, versions, err := records(library)
 		if err != nil {
 			return err
@@ -206,7 +211,7 @@ func buildLaunchBox(p *Plan) error {
 			}
 		}
 		targets := map[string]string{}
-		problems := map[string]string{}
+		problems := repairProblems
 		used := map[string][]string{}
 		ordered := orderedGames(games)
 		for i, game := range ordered {
@@ -284,6 +289,11 @@ func buildLaunchBox(p *Plan) error {
 			p.reportProgress("plan library/media", platform+" / "+g.fields["Title"], i, len(ordered))
 			target := targets[game]
 			change := Change{Platform: platform, Title: g.fields["Title"], ID: target, Action: "unchanged"}
+			for _, incomingID := range retired {
+				if incomingID == game {
+					change.Consolidated++
+				}
+			}
 			if reason := problems[game]; reason != "" {
 				change.Action = "conflict"
 				p.Conflicts = append(p.Conflicts, platform+" / "+change.Title+": "+reason)
@@ -407,7 +417,7 @@ func buildLaunchBox(p *Plan) error {
 					change.Playlists++
 				}
 			}
-			if found && (change.Playlists > 0 || len(change.Fields) > 0 || change.Versions > 0 || change.Media > 0) {
+			if found && (change.Consolidated > 0 || change.Playlists > 0 || len(change.Fields) > 0 || change.Versions > 0 || change.Media > 0) {
 				change.Action = "enrich"
 			}
 			sort.Strings(change.Fields)
@@ -415,6 +425,18 @@ func buildLaunchBox(p *Plan) error {
 			p.Changes = append(p.Changes, change)
 		}
 		p.reportProgress("plan library/media", platform, len(ordered), len(ordered))
+		for oldID, incomingID := range retired {
+			target := targets[incomingID]
+			if target == "" || problems[incomingID] != "" {
+				continue
+			}
+			retiredTargets[oldID] = target
+			for key, value := range state.Cards {
+				if id(value) == oldID {
+					state.Cards[key] = target
+				}
+			}
+		}
 		result := library.edit(replacements, additions)
 		if !bytes.Equal(result, old) {
 			if _, err = p.write(relative, result, ""); err != nil {
@@ -424,6 +446,9 @@ func buildLaunchBox(p *Plan) error {
 	}
 	if count == 0 {
 		return fmt.Errorf("package contains no LaunchBox game cards")
+	}
+	if err = p.remapPlaylistCards(retiredTargets); err != nil {
+		return err
 	}
 	data, _ := json.MarshalIndent(state, "", "  ")
 	if _, err = p.write(statePath, append(data, '\n'), ""); err != nil {

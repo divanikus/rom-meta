@@ -16,14 +16,15 @@ type Options struct {
 	Source                                      *Source
 }
 type Change struct {
-	Platform  string   `json:"platform"`
-	Title     string   `json:"title"`
-	ID        string   `json:"id"`
-	Action    string   `json:"action"`
-	Fields    []string `json:"filled_fields,omitempty"`
-	Versions  int      `json:"added_versions"`
-	Media     int      `json:"added_media"`
-	Playlists int      `json:"added_playlists"`
+	Consolidated int      `json:"consolidated_cards,omitempty"`
+	Platform     string   `json:"platform"`
+	Title        string   `json:"title"`
+	ID           string   `json:"id"`
+	Action       string   `json:"action"`
+	Fields       []string `json:"filled_fields,omitempty"`
+	Versions     int      `json:"added_versions"`
+	Media        int      `json:"added_media"`
+	Playlists    int      `json:"added_playlists"`
 }
 type Plan struct {
 	reuseAssets bool

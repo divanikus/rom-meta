@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -131,6 +130,14 @@ func launchBoxKind(r Record) string {
 	if r.Variant != "" {
 		return "variant"
 	}
+	if r.TitleContext != nil {
+		if stage := opticalStage(r.TitleContext.Release); stage != "original" {
+			return stage
+		}
+		if opticalModified(r) {
+			return "unverified-modification"
+		}
+	}
 	return "original"
 }
 func preference(values, preferred []string) int {
@@ -188,6 +195,9 @@ func launchBoxVersionName(r Record) string {
 		return name
 	}
 	name := r.Release
+	if name == "" && r.TitleContext != nil {
+		name = r.TitleContext.Release
+	}
 	if name == "" {
 		name = r.MetadataRelease
 	}
@@ -206,29 +216,39 @@ func launchBoxVersionName(r Record) string {
 	return name
 }
 
-// Only an exact catalog release spelling with its Disc token removed can form
-// an observed optical set. Other qualifiers remain significant.
-var launchBoxDiscRE = regexp.MustCompile(`(?i)\((?:disc|disk) ([1-9][0-9]*)(?: of ([1-9][0-9]*))?\)`)
+// A matched game plus the complete catalog or observed version spelling forms
+// an optical set. Only its Disc token is removed; all other qualifiers remain.
+var launchBoxDiscRE = regexp.MustCompile(`(?i)\((?:disc|disk) ([1-9][0-9]*|[ivx]+)(?: of ([1-9][0-9]*|[ivx]+))?\)`)
 
 func launchBoxDiscKey(r Record) (string, int, int) {
-	if r.Status != "matched" || r.Game == "" || r.Release == "" || r.Variant != "" || len(r.Playlist) > 0 || r.TitleContext == nil || r.TitleContext.Disc == "" {
+	if r.Status != "matched" || r.Game == "" || r.Variant != "" || len(r.Playlist) > 0 || r.TitleContext == nil || r.TitleContext.Disc == "" {
 		return "", 0, 0
 	}
 	ext := strings.ToLower(filepath.Ext(r.ROM))
 	if ext != ".chd" && ext != ".iso" {
 		return "", 0, 0
 	}
-	matches := launchBoxDiscRE.FindAllStringSubmatchIndex(r.Release, -1)
+	name := r.Release
+	if name == "" {
+		name = r.TitleContext.Release
+	}
+	matches := launchBoxDiscRE.FindAllStringSubmatchIndex(name, -1)
 	if len(matches) != 1 {
 		return "", 0, 0
 	}
 	m := matches[0]
-	number, _ := strconv.Atoi(r.Release[m[2]:m[3]])
+	number := opticalNumber(name[m[2]:m[3]])
+	if number == 0 {
+		return "", 0, 0
+	}
 	total := 0
 	if m[4] >= 0 {
-		total, _ = strconv.Atoi(r.Release[m[4]:m[5]])
+		total = opticalNumber(name[m[4]:m[5]])
+		if total == 0 {
+			return "", 0, 0
+		}
 	}
-	name := strings.TrimSpace(r.Release[:m[0]] + r.Release[m[1]:])
+	name = strings.TrimSpace(name[:m[0]] + name[m[1]:])
 	key := r.Game + "\n" + name + "\n" + strings.Join(r.TitleContext.Regions, ",") + "\n" + strings.Join(r.TitleContext.Languages, ",") + "\n" + r.TitleContext.Revision
 	return key, number, total
 }

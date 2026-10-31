@@ -12,6 +12,9 @@ import (
 )
 
 type catalogIndex struct {
+	ExportCanonical    map[string][]*game
+	ExportShortNames   map[string][]*game
+	ExportNames        map[string][]*game
 	ByCompleteName     map[string][]fingerprint
 	ByCompleteGameName map[string][]*game
 	BySize             map[int64][]fingerprint
@@ -88,6 +91,7 @@ func addVariantName(index *catalogIndex, name string, g *game, variant string) {
 	}
 }
 func indexNames(index *catalogIndex, g *game) {
+	indexExportNames(index, g)
 	_ = catalogyaml.Mapping(catalogyaml.Value(g.root, "variants"), func(name string, _ *yaml.Node) error {
 		addVariantName(index, name, g, name)
 		return nil
@@ -185,6 +189,7 @@ func nameFallback(root string, index *catalogIndex, record *Record, profile Prof
 		sort.Strings(record.Candidates)
 	} else {
 		record.Reason = "no strong fingerprint or unique catalog name"
+		return qualifiedNameFallback(root, index, record, profile, system)
 	}
 	return nil
 }

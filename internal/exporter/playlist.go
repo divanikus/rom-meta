@@ -156,7 +156,7 @@ func (r *ExportResolver) resolvePlaylist(input ExportInput, profile Profile) (Re
 	for i, observed := range input.Parts {
 		part := parts[i]
 		name := strings.TrimPrefix(observed.ROM, input.ROM+"/")
-		if part.Status != "matched" || (part.Release == "" && part.Variant == "") {
+		if part.Status != "matched" || (part.Release == "" && part.Variant == "" && !observedOpticalEdition(part)) {
 			return hold("playlist member has no unique exact release binding: " + name)
 		}
 		if first == nil {
@@ -164,6 +164,13 @@ func (r *ExportResolver) resolvePlaylist(input ExportInput, profile Profile) (Re
 			first = &copy
 		} else if first.Game != part.Game || (first.Variant == "") != (part.Variant == "") || !sameVariantEdition(*first, part) {
 			return hold("playlist mixes catalog games")
+		}
+		if first != nil && (observedOpticalEdition(*first) || observedOpticalEdition(part)) {
+			firstKey, _, _ := launchBoxDiscKey(*first)
+			partKey, _, _ := launchBoxDiscKey(part)
+			if firstKey == "" || firstKey != partKey {
+				return hold("playlist mixes observed optical editions")
+			}
 		}
 		if part.MatchedBy != "hash" {
 			allHashes = false
@@ -174,6 +181,7 @@ func (r *ExportResolver) resolvePlaylist(input ExportInput, profile Profile) (Re
 		}
 		record.Playlist = append(record.Playlist, member)
 	}
+	record.GameTitle = first.GameTitle
 	record.Status, record.Game, record.MetadataRelease = "matched", first.Game, first.MetadataRelease
 	record.Variant, record.VariantInfo = first.Variant, first.VariantInfo
 	record.Fields, record.Media = first.Fields, first.Media
@@ -187,7 +195,7 @@ func (r *ExportResolver) resolvePlaylist(input ExportInput, profile Profile) (Re
 		media.OutputPath, _ = ExportOutputPath(r.System, record, role, filepath.Ext(media.OutputPath))
 		record.Media[role] = media
 	}
-	record.Warnings = append(record.Warnings, "Playlist metadata/media uses the first member's release; no new catalog edition identity is invented")
+	record.Warnings = append(record.Warnings, "Playlist metadata/media uses the first member's metadata basis; no new catalog edition identity is invented")
 	if !allHashes {
 		record.Warnings = append(record.Warnings, "Playlist relies on weaker member names; CHD container identity is not a raw-disc proof")
 	}
@@ -196,4 +204,8 @@ func (r *ExportResolver) resolvePlaylist(input ExportInput, profile Profile) (Re
 
 func playlistSystem(system string) bool {
 	return validSystemID(system) && !systems[system].Arcade
+}
+
+func observedOpticalEdition(r Record) bool {
+	return r.Disc != nil && r.Status == "matched" && r.MatchedBy == "game-name" && r.Game != "" && r.Release == "" && r.Variant == "" && r.TitleContext != nil
 }

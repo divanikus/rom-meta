@@ -43,7 +43,14 @@ after a failed asset write.
 ## CHD recognition and full-file checks
 
 Ordinary CHD v5 exports read the 124-byte header, size and modification time, then
-use prepared variant fingerprints or catalog release names. Apply rechecks those
+use prepared variant fingerprints or catalog release names. If an exact name
+fails, export can associate a unique catalog game using recognized filename
+qualifiers and saved provider aliases. This remains `game-name` evidence: the
+observed version name is kept, `release`/`variant` stay empty, and
+`metadata_release` supplies only a metadata basis. Catalog names take precedence
+over broad provider aliases. Explicitly modified names can use an unambiguous
+shortened title; shared series names remain ambiguous. This export-only fallback
+does not relax consumer lookup or prove a translation version. Apply rechecks those
 facts without rereading the disc payload. This also applies to CHD members inside
 directory M3U playlists. Metadata selection is not a dump-integrity check.
 

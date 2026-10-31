@@ -29,16 +29,18 @@ type lookupFingerprint struct {
 	SHA1, SHA256, MD5, CRC string
 }
 type lookupEntry struct {
-	CompleteGameNames             []string
-	CompleteReleaseNames          map[string][]string
-	CompleteVariantNames          map[string][]string
-	SchemaVersion                 int
-	VariantNames                  map[string][]string
-	Title                         string
-	GameNames                     []string
-	ReleaseNames                  map[string][]string
-	Fingerprints                  []lookupFingerprint
-	GameDigest, FingerprintDigest string
+	ExportCanonical, ExportShortNames []string
+	ExportNames                       []string
+	CompleteGameNames                 []string
+	CompleteReleaseNames              map[string][]string
+	CompleteVariantNames              map[string][]string
+	SchemaVersion                     int
+	VariantNames                      map[string][]string
+	Title                             string
+	GameNames                         []string
+	ReleaseNames                      map[string][]string
+	Fingerprints                      []lookupFingerprint
+	GameDigest, FingerprintDigest     string
 }
 type lookupRow struct {
 	stamp string
@@ -103,7 +105,7 @@ func openLookupDisk(dir, root, platform string) *lookupDisk {
 		}
 		digest := sha256.Sum256(payload)
 		var entry lookupEntry
-		if hex.EncodeToString(digest[:]) != checksum || json.Unmarshal(payload, &entry) != nil || entry.SchemaVersion != 3 {
+		if hex.EncodeToString(digest[:]) != checksum || json.Unmarshal(payload, &entry) != nil || entry.SchemaVersion != 4 {
 			continue
 		}
 		c.rows[folder] = lookupRow{stamp, entry}
@@ -241,7 +243,7 @@ func lookupDocument(root, name string) (*yaml.Node, string, error) {
 	return doc.Root(), hex.EncodeToString(sum[:]), nil
 }
 func readLookupEntry(root, path string) (lookupEntry, error) {
-	entry := lookupEntry{SchemaVersion: 3, CompleteReleaseNames: map[string][]string{}, CompleteVariantNames: map[string][]string{}, ReleaseNames: map[string][]string{}, VariantNames: map[string][]string{}}
+	entry := lookupEntry{SchemaVersion: 4, CompleteReleaseNames: map[string][]string{}, CompleteVariantNames: map[string][]string{}, ReleaseNames: map[string][]string{}, VariantNames: map[string][]string{}}
 	doc, digest, err := lookupDocument(root, filepath.Join(path, "game.yaml"))
 	if os.IsNotExist(err) {
 		return entry, nil
@@ -269,6 +271,15 @@ func readLookupEntry(root, path string) (lookupEntry, error) {
 		if err = indexFingerprints(index, g, fps); err != nil {
 			return entry, err
 		}
+	}
+	for key := range index.ExportCanonical {
+		entry.ExportCanonical = append(entry.ExportCanonical, key)
+	}
+	for key := range index.ExportShortNames {
+		entry.ExportShortNames = append(entry.ExportShortNames, key)
+	}
+	for key := range index.ExportNames {
+		entry.ExportNames = append(entry.ExportNames, key)
 	}
 	for key, games := range index.GamesByName {
 		for range games {
@@ -318,6 +329,18 @@ func (e lookupEntry) add(index *catalogIndex, path string) *game {
 		return nil
 	}
 	g := &game{path: path, name: e.Title, documentDigest: e.GameDigest}
+	if index.ExportNames == nil {
+		index.ExportNames = map[string][]*game{}
+	}
+	for _, key := range e.ExportNames {
+		index.ExportNames[key] = append(index.ExportNames[key], g)
+	}
+	for _, key := range e.ExportCanonical {
+		addOpticalName(&index.ExportCanonical, key, g)
+	}
+	for _, key := range e.ExportShortNames {
+		addOpticalName(&index.ExportShortNames, key, g)
+	}
 	for _, key := range e.GameNames {
 		index.GamesByName[key] = append(index.GamesByName[key], g)
 	}

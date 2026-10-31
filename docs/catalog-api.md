@@ -306,6 +306,11 @@ With `export_features: [chd-header-v1]`, export accepts `kind: disc`, an empty
 `proof` and one ordinary CHD v5 `disc` header/stat observation. Playlist `parts`
 can mix these with existing fully hashed `payload` members. The same shared
 resolver handles local and API export; consumer `/v1/lookup` is unchanged.
+Export-only qualified optical game associations use existing `game-name` records
+with an empty `release`/`variant`, observed `title_context` and an explicit metadata
+basis. Saved catalog/provider aliases and unique shortened modified titles do not
+become verified release or variant identities. Directory M3Us may retain these
+members only when the complete observed edition keys agree after removing Disc.
 
 A header-only record returns its unchanged `disc`, physical size and metadata
 binding, without `payload`, `sha1` or an invented verified-dump claim. Bounded
