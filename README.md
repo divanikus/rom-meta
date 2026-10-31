@@ -182,6 +182,7 @@ separate server-side integration.
 ## Documentation and development
 
 - [Documentation index](docs/README.md)
+- [0.3.0-rc1 release notes](docs/releases/0.3.0-rc1.md)
 - [0.2.0 release notes](docs/releases/0.2.0.md)
 - [Contributing and verification](CONTRIBUTING.md)
 
