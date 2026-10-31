@@ -342,7 +342,8 @@ func buildESDE(p *Plan, body []byte) error {
 		for i := len(p.Changes) - len(addedEntries); i < len(p.Changes); i++ {
 			positions[esdePath(plan.ROMRoot, p.Changes[i].ID)] = i
 		}
-		for _, record := range plan.Records {
+		for recordIndex, record := range plan.Records {
+			p.reportProgress("plan library/media", plan.System+" / "+record.ROM, recordIndex, len(plan.Records))
 			i, ok := positions[esdePath(plan.ROMRoot, record.ROM)]
 			if !ok || p.Changes[i].Action == "conflict" {
 				continue
@@ -386,6 +387,7 @@ func buildESDE(p *Plan, body []byte) error {
 				}
 			}
 		}
+		p.reportProgress("plan library/media", plan.System, len(plan.Records), len(plan.Records))
 		merged := listing.edit(replacements, additions)
 		result := unfragment(outer, prefix, map[int][]byte{index: merged})
 		if !bytes.Equal(old, result) {

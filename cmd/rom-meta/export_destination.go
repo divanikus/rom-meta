@@ -73,10 +73,16 @@ func applyDestination(plan *frontend.Plan) error {
 	return nil
 }
 func runPackageDestination(target, pkg, destination, mediaRoot, report string, apply bool) error {
-	plan, err := frontend.Build(frontend.Options{Target: target, PackageRoot: pkg, Destination: destination, MediaRoot: mediaRoot})
+	progress := newTerminalProgress(os.Stdout)
+	defer progress.Done()
+	notify := func(stage, name string, current, total int) {
+		progress.UpdateTask("export", stage, current, total, name)
+	}
+	plan, err := frontend.Build(frontend.Options{Progress: notify, Target: target, PackageRoot: pkg, Destination: destination, MediaRoot: mediaRoot})
 	if err != nil {
 		return err
 	}
+	progress.Done()
 	printDestinationPlan(plan)
 	if err = destinationReport(plan, report); err != nil {
 		return err
@@ -173,6 +179,7 @@ func runDirectDestination(options exporter.Options, api string, systems []string
 	for _, skip := range skipped {
 		fmt.Printf("Skipped %s: %s\n", skip.System, skip.Reason)
 	}
+	options.Progress("render XML", options.Target, 0, 0)
 	files, err := exporter.PreviewFiles(plans, single)
 	if err != nil {
 		return err
@@ -181,11 +188,12 @@ func runDirectDestination(options exporter.Options, api string, systems []string
 	for name, file := range files {
 		source.Files[name] = frontend.SourceFile{Data: file.Data, SHA256: file.SHA256, Size: file.Size}
 	}
-	nativeOptions := frontend.Options{Target: options.Target, PackageRoot: stage, Destination: destination, MediaRoot: mediaRoot, Source: source}
+	nativeOptions := frontend.Options{Progress: options.Progress, Target: options.Target, PackageRoot: stage, Destination: destination, MediaRoot: mediaRoot, Source: source}
 	plan, err := frontend.Build(nativeOptions)
 	if err != nil {
 		return err
 	}
+	progress.Done()
 	printDestinationPlan(plan)
 	if err = destinationReport(plan, report); err != nil {
 		return err
@@ -214,5 +222,6 @@ func runDirectDestination(options exporter.Options, api string, systems []string
 	if err != nil {
 		return err
 	}
+	progress.Done()
 	return applyDestination(installed)
 }

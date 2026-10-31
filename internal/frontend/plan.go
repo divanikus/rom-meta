@@ -9,6 +9,7 @@ import (
 )
 
 type Options struct {
+	Progress                                    func(stage, name string, current, total int)
 	Target, PackageRoot, Destination, MediaRoot string
 	Source                                      *Source
 }
@@ -60,7 +61,8 @@ func Build(options Options) (*Plan, error) {
 	if inside(root, pkg) || inside(pkg, root) {
 		return nil, fmt.Errorf("package and destination directories must not overlap")
 	}
-	p := &Plan{Target: options.Target, Root: root, Package: pkg, source: options.Source, guards: map[string]fingerprint{}, external: map[string]fingerprint{}, identities: map[string]string{}, Changes: []Change{}, Conflicts: []string{}, Warnings: []string{}, Files: []string{}}
+	p := &Plan{Progress: options.Progress, Target: options.Target, Root: root, Package: pkg, source: options.Source, guards: map[string]fingerprint{}, external: map[string]fingerprint{}, identities: map[string]string{}, Changes: []Change{}, Conflicts: []string{}, Warnings: []string{}, Files: []string{}}
+	p.reportProgress("read destination", options.Target, 0, 0)
 	if options.MediaRoot != "" && p.Target != "es-de" {
 		return nil, fmt.Errorf("--media-root is only supported for ES-DE")
 	}
@@ -144,4 +146,10 @@ func (p *Plan) protectSourceTrees(body []byte) error {
 		return nil
 	}
 	return visit(body)
+}
+
+func (p *Plan) reportProgress(stage, name string, current, total int) {
+	if p.Progress != nil {
+		p.Progress(stage, name, current, total)
+	}
 }

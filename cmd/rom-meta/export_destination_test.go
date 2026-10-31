@@ -238,3 +238,43 @@ func TestDirectAPIAssetFailureLeavesDestinationUntouched(t *testing.T) {
 		})
 	}
 }
+
+func TestExportShowsProgressAfterROMObservation(t *testing.T) {
+	for _, target := range []string{"es-de", "launchbox"} {
+		for _, network := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/api=%t", target, network), func(t *testing.T) {
+				root, roms := exportFixture(t)
+				destination := exportDestination(t, target)
+				args := []string{"export", "--target", target, "--platform", "n64", "--rom-root", roms, "--destination", destination}
+				if network {
+					api, err := catalogapi.NewLookup(catalogapi.Options{Export: exporter.Options{DataRoot: root}, LookupCacheDir: "-"})
+					if err != nil {
+						t.Fatal(err)
+					}
+					server := httptest.NewServer(api)
+					defer server.Close()
+					args = append(args, "--api", server.URL)
+				} else {
+					args = append(args, "--data-root", root)
+				}
+				code, output := commandOutput(t, args...)
+				if code != 0 {
+					t.Fatalf("export failed: %s", output)
+				}
+				phase, observation := "metadata/media", "export ROMs"
+				if network {
+					phase, observation = "n64 / API", "export n64 / ROMs"
+				}
+				stages := []string{observation, "export " + phase + " 0/1", "export " + phase + " 1/1", "frontend projection", "render XML", "read destination", "plan library/media", "files to write"}
+				offset := 0
+				for _, stage := range stages {
+					at := strings.Index(output[offset:], stage)
+					if at < 0 {
+						t.Fatalf("missing/out-of-order stage %q after %d:\n%s", stage, offset, output)
+					}
+					offset += at + len(stage)
+				}
+			})
+		}
+	}
+}

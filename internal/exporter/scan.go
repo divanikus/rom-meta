@@ -131,7 +131,7 @@ func Build(options Options) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
-	resolver := &ExportResolver{Root: root, Platform: platform, PlatformName: selection.Name, System: system, index: index, arcade: arcade}
+	resolver := &ExportResolver{Context: options.Context, Progress: options.Progress, Root: root, Platform: platform, PlatformName: selection.Name, System: system, index: index, arcade: arcade}
 	plan, err := resolver.Resolve(inputs, profile)
 	if err != nil {
 		return nil, err
@@ -148,6 +148,9 @@ func Build(options Options) (*Plan, error) {
 	}
 	plan.ROMRoot, plan.Out, plan.Context = romRoot, out, options.Context
 	plan.PlatformSelection = selection
+	if options.Progress != nil {
+		options.Progress("frontend projection", target, 0, 0)
+	}
 	if err := ProjectTarget(plan, target); err != nil {
 		return nil, err
 	}

@@ -208,7 +208,9 @@ func buildLaunchBox(p *Plan) error {
 		targets := map[string]string{}
 		problems := map[string]string{}
 		used := map[string][]string{}
-		for _, game := range orderedGames(games) {
+		ordered := orderedGames(games)
+		for i, game := range ordered {
+			p.reportProgress("match library", platform+" / "+games[game].fields["Title"], i, len(ordered))
 			candidates := map[string]bool{}
 			if _, ok := existing[game]; ok {
 				candidates[game] = true
@@ -245,6 +247,8 @@ func buildLaunchBox(p *Plan) error {
 			targets[game] = target
 			used[target] = append(used[target], game)
 		}
+		p.reportProgress("match library", platform, len(ordered), len(ordered))
+		p.reportProgress("check versions", platform, 0, 0)
 		for _, group := range used {
 			if len(group) > 1 {
 				for _, game := range group {
@@ -275,8 +279,9 @@ func buildLaunchBox(p *Plan) error {
 				}
 			}
 		}
-		for _, game := range orderedGames(games) {
+		for i, game := range ordered {
 			g := games[game]
+			p.reportProgress("plan library/media", platform+" / "+g.fields["Title"], i, len(ordered))
 			target := targets[game]
 			change := Change{Platform: platform, Title: g.fields["Title"], ID: target, Action: "unchanged"}
 			if reason := problems[game]; reason != "" {
@@ -409,6 +414,7 @@ func buildLaunchBox(p *Plan) error {
 			state.Cards[platform+"/"+game] = target
 			p.Changes = append(p.Changes, change)
 		}
+		p.reportProgress("plan library/media", platform, len(ordered), len(ordered))
 		result := library.edit(replacements, additions)
 		if !bytes.Equal(result, old) {
 			if _, err = p.write(relative, result, ""); err != nil {

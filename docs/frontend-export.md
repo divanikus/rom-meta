@@ -25,6 +25,12 @@ coverage and native emulator readiness are reported separately. Preview counts
 source sets that still need extraction/installation and launch setup; matching
 a package does not make it ready to play.
 
+Progress totals belong to the named stage. After ROM observation, export reports
+metadata/media selection, display names, frontend projection, XML rendering and
+native library/media planning. Long stages show the current input/card; native
+file freshness checks have their own counter. A completed ROM bar does not mean
+the export is finished. Preparation/planning remains read-only until --apply.
+
 ## CHD recognition and full-file checks
 
 Ordinary CHD v5 exports read the 124-byte header, size and modification time, then

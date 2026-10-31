@@ -308,7 +308,7 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 				end = len(observations)
 			}
 			if options.Progress != nil {
-				options.Progress(system+" / API", selected.platform, end, len(observations))
+				options.Progress(system+" / API", selected.platform, offset, len(observations))
 			}
 			request := catalogapi.ExportRequest{Platform: selected.platform, System: system, Inputs: observations[offset:end], ArcadeSnapshot: options.ArcadeSnapshot, Profile: profile, Revision: c.revision}
 			response, observed, requestErr := c.exportBatch(ctx, request, child)
@@ -339,8 +339,14 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 					job.assets[media.SourcePath] = asset
 				}
 			}
+			if options.Progress != nil {
+				options.Progress(system+" / API", selected.platform, end, len(observations))
+			}
 		}
 		if plan != nil {
+			if options.Progress != nil {
+				options.Progress("frontend projection", system, 0, 0)
+			}
 			plan.Profile.LaunchBox = launchBoxPolicy
 			if err = exporter.FinalizeExport(plan); err != nil {
 				return nil, err

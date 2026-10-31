@@ -174,7 +174,10 @@ func (p *Plan) writeTo(root, relative string, data []byte, source string) (bool,
 	return true, nil
 }
 func (p *Plan) validate() error {
+	checked, total := 0, len(p.external)+len(p.guards)
 	for name, expected := range p.external {
+		p.reportProgress("check files", filepath.Base(name), checked, total)
+		checked++
 		got, err := digest(name)
 		if err != nil {
 			return err
@@ -184,6 +187,8 @@ func (p *Plan) validate() error {
 		}
 	}
 	for name, expected := range p.guards {
+		p.reportProgress("check files", filepath.Base(name), checked, total)
+		checked++
 		root := p.Root
 		if inside(p.Package, name) {
 			root = p.Package
@@ -205,6 +210,7 @@ func (p *Plan) validate() error {
 			return fmt.Errorf("file changed since planning; rebuild merge plan: %s", name)
 		}
 	}
+	p.reportProgress("check files", "", total, total)
 	return nil
 }
 func checkProcesses(target string) error {

@@ -98,6 +98,8 @@ func (s *LookupServer) export(ctx context.Context, request ExportRequest) (*Expo
 		}
 		s.exportResolver, s.exportKey = resolver, key
 	}
+	s.exportResolver.Context, s.exportResolver.Progress = ctx, s.progress
+	defer func() { s.exportResolver.Context = nil }()
 	plan, err := s.exportResolver.Resolve(request.Inputs, profile)
 	if err != nil {
 		return nil, err

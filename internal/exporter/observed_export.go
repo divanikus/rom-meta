@@ -1,6 +1,7 @@
 package exporter
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -28,6 +29,8 @@ type ExportInput struct {
 }
 
 type ExportResolver struct {
+	Context                context.Context
+	Progress               func(stage, name string, current, total int)
 	Root, Platform, System string
 	PlatformName           string
 	DocumentDigests        map[string]string
@@ -159,9 +162,17 @@ func validExportInput(input ExportInput, system string, part bool) bool {
 func (r *ExportResolver) Resolve(inputs []ExportInput, profile Profile) (*Plan, error) {
 	plan := &Plan{PlatformName: r.PlatformName, SchemaVersion: 1, Target: "es-de", Platform: r.Platform, System: r.System, DataRoot: r.Root, Profile: profile, Records: []Record{}}
 	seen := map[string]bool{}
-	for _, input := range inputs {
+	for i, input := range inputs {
+		if r.Context != nil {
+			if err := r.Context.Err(); err != nil {
+				return nil, err
+			}
+		}
 		if !validExportInput(input, r.System, false) || seen[input.ROM] {
 			return nil, fmt.Errorf("invalid or duplicate export observation: %q", input.ROM)
+		}
+		if r.Progress != nil {
+			r.Progress("metadata/media", input.ROM, i, len(inputs))
 		}
 		seen[input.ROM] = true
 		record, err := r.resolve(input, profile)
@@ -169,6 +180,10 @@ func (r *ExportResolver) Resolve(inputs []ExportInput, profile Profile) (*Plan, 
 			return nil, err
 		}
 		plan.Records = append(plan.Records, record)
+	}
+	if r.Progress != nil {
+		r.Progress("metadata/media", "", len(inputs), len(inputs))
+		r.Progress("display names", r.System, 0, 0)
 	}
 	if err := finishExportPlan(plan); err != nil {
 		return nil, err
