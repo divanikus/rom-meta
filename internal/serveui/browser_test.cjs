@@ -376,7 +376,11 @@ test('card sections keep overview, media, sources and raw separate without loadi
  b.run(`state.game={game:{folder:'Card',releases:[{name:'USA'}],aliases:Array.from({length:20},(_,i)=>'Alias '+i)},profile:{description:'Overview prose',developer:'Studio',genres:['Adventure'],themes:['Fantasy'],alternate_titles:[{title:'<Alternate name>',region:'Japan',language:'ja'}]},catalog_yaml:'private_catalog_field: sample',source_blocks:[{source:'launchbox',match_count:1,profile:{description:'Provider evidence'}}],local_media:[{type:'image',kind:'screenshot',name:'shot.png',url:'/media?path=shot.png'}]};renderDetails()`);
  assert.match(b.element('detail-body').innerHTML,/Overview prose/);assert.match(b.element('detail-body').innerHTML,/Studio/);
  const overview=b.element('detail-body').innerHTML;
- assert.match(overview,/overview-details/);assert.match(overview,/Adventure/);assert.match(overview,/Fantasy/);
+ const facts=overview.match(/<aside class="side-panel profile-facts">([\s\S]*?)<\/aside>/)[1];
+ assert.match(facts,/Studio/);assert.match(facts,/Adventure/);assert.match(facts,/Fantasy/);
+ assert.ok(overview.indexOf('overview-description')>overview.indexOf('</aside>'));
+ assert.ok(overview.indexOf('Alternate Names')>overview.indexOf('overview-description'));
+ assert.doesNotMatch(overview,/<h3>Game details<\/h3>/);
  assert.match(overview,/&lt;Alternate name&gt;/);assert.match(overview,/Japan \/ ja/);assert.match(overview,/Alias 19/);
  assert.doesNotMatch(overview,/<details|More game details|<Alternate name>/);
  assert.doesNotMatch(b.element('detail-body').innerHTML,/media-grid|Provider evidence|private_catalog_field/);

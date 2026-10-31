@@ -889,8 +889,10 @@
     .overview-description { display:grid; gap:12px; }
     .overview-description .description { max-width:90ch; }
     .overview-details { display:grid; gap:24px; min-width:0; }
-    .overview-details .fact-list,.overview-details .title-list { grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr)); gap:8px; }
-    .overview-details .fact-row { grid-template-columns:minmax(0,1fr); gap:6px; border:1px solid var(--line); border-radius:6px; background:var(--panel); }
+    .profile-facts { min-width:0; }
+    .profile-facts .fact-list { grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr)); }
+    .profile-facts .fact-row { grid-template-columns:minmax(0,1fr); gap:6px; align-content:start; }
+    .overview-details .title-list { grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr)); gap:8px; }
     .overview-details .title-item { grid-template-columns:minmax(0,1fr); gap:6px; }
     .overview-details .title-item .primary,.overview-details .title-item .secondary { white-space:normal; overflow-wrap:anywhere; }
     .overview-details .title-item .secondary { justify-self:start; }
@@ -1818,13 +1820,12 @@
       const description = profile.description ? '<div class="description">' + paragraphs(profile.description) + '</div>' : '<div class="empty">No description available.</div>';
       const chosen = response.export_preview?.fields?.description;
       const descriptionMeta = chosen ? '<div class="description-choice chips">' + chips([sourceLabel(chosen.source || "catalog"), chosen.language?.toUpperCase(), chosen.from_variant ? "Variant: " + variantLabel((game.variants || []).find((item) => item.name === chosen.from_variant) || {name:chosen.from_variant},game.variants || []) : chosen.from_release ? "Release: " + chosen.from_release : ""].filter(Boolean), '') + '</div>' : profile.source ? '<div class="description-choice chips">' + chips([sourceLabel(profile.source),profile.description_language?.toUpperCase()].filter(Boolean), '') + '</div>' : '';
-      const factRows = [fact("Release date",profile.release_date),fact("Developer",profile.developer),fact("Publisher",profile.publisher),fact("Players",profile.players)].filter(Boolean).join("");
-      const additional = [fact("Genres",listText(profile.genres)),fact("Themes",listText(profile.themes)),fact("Rating",ratingText(profile)),fact("Collections",listText(profile.collections)),fact("Franchises",listText(profile.franchises)),fact(state.exportMode ? "Metadata release" : "Default release",state.exportMode ? response.export_preview?.release : game.default_release)].filter(Boolean).join("");
+      const factRows = [fact("Release date",profile.release_date),fact("Developer",profile.developer),fact("Publisher",profile.publisher),fact("Players",profile.players),fact("Genres",listText(profile.genres)),fact("Themes",listText(profile.themes)),fact("Rating",ratingText(profile)),fact("Collections",listText(profile.collections)),fact("Franchises",listText(profile.franchises)),fact(state.exportMode ? "Metadata release" : "Default release",state.exportMode ? response.export_preview?.release : game.default_release)].filter(Boolean).join("");
       const aliases = state.exportMode ? "" : renderTitleVariants(profile.alternate_titles || [], game.aliases || []);
       return '<section class="game-overview"><div class="profile-layout">' +
         '<div class="cover-panel">' + coverHTML + '</div>' +
-        '<aside class="side-panel"><div class="fact-list">' + (factRows || fact("Folder", game.folder)) + '</div></aside>' +
-        '</div><section class="overview-description"><h3>Description</h3>' + descriptionMeta + description + '</section>' + (additional || aliases ? '<div class="overview-details">' + (additional ? '<section class="section"><h3>Game details</h3><div class="fact-list">' + additional + '</div></section>' : '') + aliases + '</div>' : '') + '</section>';
+        '<aside class="side-panel profile-facts"><div class="fact-list">' + (factRows || fact("Folder", game.folder)) + '</div></aside>' +
+        '</div><section class="overview-description"><h3>Description</h3>' + descriptionMeta + description + '</section>' + (aliases ? '<div class="overview-details">' + aliases + '</div>' : '') + '</section>';
     }
 
     function renderSourceSection(response) {
