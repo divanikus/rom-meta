@@ -35,7 +35,7 @@ func OpenAPI(lookup, protected bool) any {
 			return httpdocs.Schema{"400": text("Invalid request, unknown field, trailing JSON or query parameters"), "401": text("Missing/invalid bearer token"), "405": text("Unsupported method"), "409": text("Source drift or lookup unavailable; finish catalog writes before retrying")}
 		}
 		paths := httpdocs.Schema{}
-		health := httpdocs.Schema{"type": "object", "properties": httpdocs.Schema{"schema_version": httpdocs.Schema{"type": "integer", "enum": []int{1}}, "mode": httpdocs.Schema{"type": "string", "enum": []string{"catalog"}}, "export_schema_version": httpdocs.Schema{"type": "integer", "enum": []int{1}}, "platforms": schemas.Ref([]exporter.LookupPlatform{})}, "required": []string{"schema_version", "mode", "export_schema_version", "platforms"}}
+		health := httpdocs.Schema{"type": "object", "properties": httpdocs.Schema{"schema_version": httpdocs.Schema{"type": "integer", "enum": []int{1}}, "mode": httpdocs.Schema{"type": "string", "enum": []string{"catalog"}}, "export_schema_version": httpdocs.Schema{"type": "integer", "enum": []int{1}}, "export_features": httpdocs.Schema{"type": "array", "items": httpdocs.Schema{"type": "string"}}, "platforms": schemas.Ref([]exporter.LookupPlatform{})}, "required": []string{"schema_version", "mode", "export_schema_version", "platforms"}}
 		addGet := func(path, summary, description string, result httpdocs.Schema) {
 			responses := errors()
 			responses["200"] = httpdocs.Response("Success", result)
@@ -85,7 +85,8 @@ func OpenAPI(lookup, protected bool) any {
 			ep["profile"].(httpdocs.Schema)["description"] = "Optional YAML policy bytes parsed against catalog defaults; never a server filename"
 			ep["profile"].(httpdocs.Schema)["maxLength"] = 1 << 20
 			observed := schemas.Types["ExportInput"].(httpdocs.Schema)["properties"].(httpdocs.Schema)
-			observed["kind"] = httpdocs.Schema{"type": "string", "enum": []string{"payload", "arcade", "playlist", "serial", "catalog", "unsupported"}}
+			observed["kind"] = httpdocs.Schema{"type": "string", "enum": []string{"payload", "disc", "arcade", "playlist", "serial", "catalog", "unsupported"}}
+			schemas.Types["Record"].(httpdocs.Schema)["properties"].(httpdocs.Schema)["hash_required"] = httpdocs.Schema{"type": "array", "maxItems": 32, "items": httpdocs.Schema{"type": "string"}, "description": "Provisional CHD hash requests limited to this observed input or its playlist members; retry with full payload observations under the same revision/profile."}
 			observed["rom"] = httpdocs.Schema{"type": "string", "minLength": 1, "maxLength": 8192, "description": "Safe relative client identity; never opened on the server"}
 			observed["parts"].(httpdocs.Schema)["maxItems"] = 32
 			observed["serial"].(httpdocs.Schema)["maxLength"] = 9

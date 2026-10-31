@@ -1,7 +1,6 @@
 package exporter
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"sort"
@@ -51,7 +50,7 @@ func bindObservedPayload(root string, index *catalogIndex, record *Record, profi
 	return nil
 }
 
-func observePlaylist(ctx context.Context, romRoot, path, system string) (ExportInput, error) {
+func observePlaylist(options Options, romRoot, path string) (ExportInput, error) {
 	rel, _ := filepath.Rel(romRoot, path)
 	input := ExportInput{ROM: filepath.ToSlash(rel), Kind: "unsupported", Representation: "playlist-directory"}
 	hold := func(reason string) (ExportInput, error) {
@@ -119,17 +118,10 @@ func observePlaylist(ctx context.Context, romRoot, path, system string) (ExportI
 			return hold("duplicate playlist member")
 		}
 		seen[strings.ToLower(real)] = true
-		proof, err := inspectROMContext(ctx, real, system)
+		partRel, _ := filepath.Rel(romRoot, real)
+		part, err := observeExportPayload(options, romRoot, real, filepath.ToSlash(partRel))
 		if err != nil {
 			return input, err
-		}
-		partRel, _ := filepath.Rel(romRoot, real)
-		part := ExportInput{ROM: filepath.ToSlash(partRel), Kind: "payload", Proof: proof}
-		if ext == ".chd" {
-			observed, err := observeDisc(romRoot, system, part.ROM)
-			if err == nil {
-				part.Disc = observed.Disc
-			}
 		}
 		input.Parts = append(input.Parts, part)
 	}
@@ -148,11 +140,21 @@ func (r *ExportResolver) resolvePlaylist(input ExportInput, profile Profile) (Re
 	hold := func(reason string) (Record, error) { record.Reason = reason; return record, nil }
 	var first *Record
 	allHashes := true
+	parts := make([]Record, 0, len(input.Parts))
 	for _, observed := range input.Parts {
 		part, err := r.resolve(observed, profile)
 		if err != nil {
 			return record, err
 		}
+		parts = append(parts, part)
+		record.HashRequired = append(record.HashRequired, part.HashRequired...)
+	}
+	if len(record.HashRequired) > 0 {
+		record.Status, record.Reason = "unmatched", "playlist CHD members require full-file hashes"
+		return record, nil
+	}
+	for i, observed := range input.Parts {
+		part := parts[i]
 		name := strings.TrimPrefix(observed.ROM, input.ROM+"/")
 		if part.Status != "matched" || (part.Release == "" && part.Variant == "") {
 			return hold("playlist member has no unique exact release binding: " + name)
@@ -166,7 +168,11 @@ func (r *ExportResolver) resolvePlaylist(input ExportInput, profile Profile) (Re
 		if part.MatchedBy != "hash" {
 			allHashes = false
 		}
-		record.Playlist = append(record.Playlist, PlaylistInput{ROM: part.ROM, Size: part.Size, SHA1: part.SHA1, Release: part.Release, Variant: part.Variant, MatchedBy: part.MatchedBy})
+		member := PlaylistInput{ROM: part.ROM, Size: part.Size, SHA1: part.SHA1, Release: part.Release, Variant: part.Variant, MatchedBy: part.MatchedBy}
+		if observed.Kind == "disc" {
+			member.Disc = part.Disc
+		}
+		record.Playlist = append(record.Playlist, member)
 	}
 	record.Status, record.Game, record.MetadataRelease = "matched", first.Game, first.MetadataRelease
 	record.Variant, record.VariantInfo = first.Variant, first.VariantInfo

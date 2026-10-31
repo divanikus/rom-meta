@@ -16,6 +16,7 @@ import (
 )
 
 type Options struct {
+	HashROMs                                             bool
 	LegacyOnly                                           bool
 	selector                                             *PlatformSelector
 	selection                                            *PlatformSelection
@@ -83,12 +84,13 @@ type Media struct {
 }
 
 type PlaylistInput struct {
-	ROM       string `json:"rom"`
-	Size      int64  `json:"size"`
-	SHA1      string `json:"sha1"`
-	Variant   string `json:"variant,omitempty"`
-	Release   string `json:"release,omitempty"`
-	MatchedBy string `json:"matched_by"`
+	Disc      *DiscObservation `json:"disc,omitempty"`
+	ROM       string           `json:"rom"`
+	Size      int64            `json:"size"`
+	SHA1      string           `json:"sha1"`
+	Variant   string           `json:"variant,omitempty"`
+	Release   string           `json:"release,omitempty"`
+	MatchedBy string           `json:"matched_by"`
 }
 
 // VariantInfo retains modification identity separately from inherited metadata.
@@ -113,6 +115,7 @@ type DiscVariant struct {
 }
 
 type Record struct {
+	HashRequired    []string            `json:"hash_required,omitempty"`
 	SourceOnly      bool                `json:"source_only,omitempty"`
 	GameTitle       string              `json:"game_title,omitempty"`
 	DiscVariants    []DiscVariant       `json:"disc_variants,omitempty"`

@@ -25,6 +25,28 @@ coverage and native emulator readiness are reported separately. Preview counts
 source sets that still need extraction/installation and launch setup; matching
 a package does not make it ready to play.
 
+## CHD recognition and full-file checks
+
+Ordinary CHD v5 exports read the 124-byte header, size and modification time, then
+use prepared variant fingerprints or catalog release names. Apply rechecks those
+facts without rereading the disc payload. This also applies to CHD members inside
+directory M3U playlists. Metadata selection is not a dump-integrity check.
+
+When a stored CHD-container fingerprint has the same physical size, export
+selectively hashes that file before choosing a target. This retains renamed-file
+recognition and conflicts between prepared variants and container fingerprints.
+Ambiguity remains explicit when no usable fingerprint can resolve it. Unsupported
+headers retain the full-container reader. ISO/raw-cartridge behavior is unchanged.
+
+To inspect complete CHD-container hashes explicitly, repeat the usual preview
+command with `--hash-roms` and omit `--apply`. This reads full files and compares
+available container fingerprints; it does not decompress/verify CHD data or match
+compressed-container hashes to Redump track hashes. Applying that explicit mode
+also rechecks full hashes. Ordinary metadata export does not need that extra pass.
+
+Network mode negotiates `chd-header-v1` with the server. An older server keeps the
+previous full-hash behavior; update both client and API to use fast CHD export.
+
 ## Common options and behavior
 
 | Option | Both targets |
@@ -37,6 +59,7 @@ a package does not make it ready to play.
 | `--destination <directory>` | Add games and enrich the installed frontend |
 | `--profile <yaml>` | Shared selection priorities; adapter-specific preferences remain optional |
 | `--match <text>`, `--limit <count>` | Bound the observed input selection; avoid partial disc sets |
+| `--hash-roms` | Read complete CHD containers for explicit hash-based inspection instead of the normal header/catalog path |
 | `--report <new.json>` | Optional new machine-readable destination plan |
 | `--apply` | Apply; omission always means preview |
 | `--out <new directory>` | Optional portable package instead of a destination update |

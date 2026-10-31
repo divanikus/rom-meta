@@ -94,11 +94,13 @@ rom-meta export --api "http://192.168.1.10:8787" --all --rom-root "/games/roms" 
 support and server catalog availability; server catalog contents
 determine availability. Custom roots still need separate `--platform` exports.
 
-The client hashes ROMs locally and sends batches of 100 observations, never ROM
+The client observes ROMs locally and sends batches of 100 observations, never ROM
 bytes. The server needs no ROM mount. It loads one selected index at a time and
 hashes selected media. Preview creates no output or client media downloads.
-Progress separates observation, API resolution, download and package writing.
-CHD/ISO export reads full containers, unlike the RomM example's limited CHD observations.
+Progress separates observation, optional hash fallback, API resolution, download
+and package writing. CHD v5 uses bounded header/catalog recognition when the API
+advertises `chd-header-v1`; older servers keep full hashing. ISO reads full containers.
+See [CHD recognition and explicit checks](frontend-export.md#chd-recognition-and-full-file-checks).
 
 `--profile` sends client YAML bytes, not a server filename; otherwise server
 defaults apply. If protection is enabled, set `ROMMETA_API_TOKEN` to the server's
@@ -198,9 +200,16 @@ or provider-title inference occurs.
 default); game-only media remains game-wide. Unknown/ambiguous ordinary inputs
 retain filename-only entries.
 
-CHD uses `representation: chd-container`. Container hashes can match only recorded
-CHD fingerprints, never raw-disc/Redump track hashes. Otherwise use name fallback.
+CHD uses `representation: chd-container`. Normal v5 observation carries `disc`
+header/stat evidence without `payload` or whole-file `sha1`. Prepared translations
+can match declared combined SHA1 (`variant-chd-header`); other files use catalog
+name evidence. A possible same-size CHD-container fingerprint triggers selective
+full hashing, retaining stronger matches and identity conflicts. Container hashes
+can match only recorded CHD fingerprints, never raw-disc/Redump track hashes.
 Embedded digests are not raw-track proof; no decompression/integrity check occurs.
+Use `--hash-roms` for explicit full-container inspection. Size/mtime/header checks
+assume immutable ROMs; equal-size payload edits preserving mtime/header are detected
+only in full-hash mode.
 See [chdman](https://docs.mamedev.org/tools/chdman.html).
 
 Arcade matches exact archive short names through

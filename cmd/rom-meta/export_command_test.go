@@ -42,3 +42,11 @@ func TestNetworkExportRejectsMixedCatalogRoots(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestFullROMHashFlagModeValidation(t *testing.T) {
+	for _, args := range [][]string{{"--list-platforms", "--hash-roms"}, {"--package", "unused", "--destination", "unused", "--hash-roms"}} {
+		if err := runExport(args); err == nil || !strings.Contains(err.Error(), "hash-roms") {
+			t.Fatalf("accepted incompatible hash mode: %v / %v", args, err)
+		}
+	}
+}

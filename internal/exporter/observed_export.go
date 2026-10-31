@@ -96,6 +96,9 @@ func validExportInput(input ExportInput, system string, part bool) bool {
 	if input.Kind == "catalog" {
 		return false
 	}
+	if input.Kind == "disc" {
+		return DiscLookupSystem(system) && strings.EqualFold(filepath.Ext(input.ROM), ".chd") && input.Disc != nil && !input.Disc.Directory && input.Proof.Equal(PayloadProof{}) && input.Catalog == nil && input.Representation == "" && len(input.Parts) == 0 && input.Serial == "" && input.Reason == "" && ValidDiscObservation(input.ROM, discSize(input.Disc), input.Disc)
+	}
 	if input.Disc != nil && input.Kind != "payload" {
 		return false
 	}
@@ -142,7 +145,7 @@ func validExportInput(input ExportInput, system string, part bool) bool {
 		}
 		seen := map[string]bool{}
 		for _, member := range input.Parts {
-			if member.Kind != "payload" || !strings.HasPrefix(member.ROM, input.ROM+"/") || seen[strings.ToLower(member.ROM)] || !validExportInput(member, system, true) {
+			if (member.Kind != "payload" && member.Kind != "disc") || !strings.HasPrefix(member.ROM, input.ROM+"/") || seen[strings.ToLower(member.ROM)] || !validExportInput(member, system, true) {
 				return false
 			}
 			seen[strings.ToLower(member.ROM)] = true
@@ -183,6 +186,8 @@ func (r *ExportResolver) resolve(input ExportInput, profile Profile) (Record, er
 	record.Size, record.SHA1, record.Member = p.Size, p.SHA1, p.Member
 	ext := strings.ToLower(filepath.Ext(input.ROM))
 	switch input.Kind {
+	case "disc":
+		return r.resolveCHD(input, profile)
 	case "catalog":
 		return r.resolveCatalogExport(input, profile)
 	case "playlist":
@@ -318,7 +323,7 @@ func ObserveExport(options Options) ([]ExportInput, error) {
 		case group:
 			input, e = observeROMSet(options.Context, root, path, options.System)
 		case playlist:
-			input, e = observePlaylist(options.Context, root, path, options.System)
+			input, e = observePlaylist(options, root, path)
 		case options.System == "ps3" && ext == ".ps3":
 			input, e = observeSerial(root, path)
 		case systems[options.System].Arcade:
@@ -333,8 +338,7 @@ func ObserveExport(options Options) ([]ExportInput, error) {
 		case ext == ".7z" || ext == ".rar" || systems[options.System].Disc && !payloadExtension(options.System, ext):
 			input.Reason = "reader accepts raw cartridge files/single-payload ZIPs or standalone CHD/ISO discs"
 		default:
-			input.Kind = "payload"
-			input.Proof, e = inspectROMContext(options.Context, path, options.System)
+			input, e = observeExportPayload(options, root, path, rel)
 			if e != nil {
 				input.Kind, input.Reason = "unsupported", e.Error()
 				input.Proof = PayloadProof{}
@@ -343,12 +347,6 @@ func ObserveExport(options Options) ([]ExportInput, error) {
 		}
 		if e == nil && input.Kind == "unsupported" && !options.LegacyOnly && entry.Type().IsRegular() && !systems[options.System].Arcade {
 			input, e = observeROMSet(options.Context, root, path, options.System)
-		}
-		if e == nil && input.Kind == "payload" && ext == ".chd" {
-			observed, observeErr := observeDisc(root, options.System, rel)
-			if observeErr == nil {
-				input.Disc = observed.Disc
-			}
 		}
 		if e != nil {
 			return e

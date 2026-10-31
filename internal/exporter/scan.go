@@ -136,6 +136,16 @@ func Build(options Options) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
+	upgraded, changed, err := HashRequiredInputs(options, inputs, plan.Records)
+	if err != nil {
+		return nil, err
+	}
+	if changed {
+		plan, err = resolver.Resolve(upgraded, profile)
+		if err != nil {
+			return nil, err
+		}
+	}
 	plan.ROMRoot, plan.Out, plan.Context = romRoot, out, options.Context
 	plan.PlatformSelection = selection
 	if err := ProjectTarget(plan, target); err != nil {

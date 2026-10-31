@@ -168,7 +168,9 @@ spellings for [shared platform selection](platform-selection.md); metadata `alia
 and lookup support retain their existing meaning. Clients fall back to embedded
 names for older servers.
 `export_schema_version: 1` and `export_systems` separately advertise frontend readers,
-including modern systems and MAME. `/v1/health` returns the last published view
+including modern systems and MAME. Optional top-level `export_features` containing
+`chd-header-v1` enables bounded CHD export observations and selective hash retries.
+Clients retain full CHD hashing when that feature is absent. `/v1/health` returns the last published view
 without waiting for active work; it does not establish freshness or completion.
 
 Optional `export_mode: romset-v1` enables [generic ROM-set export](romset-export.md)
@@ -275,7 +277,8 @@ folder), `system` (advertised ES-DE ID), `inputs`. Optional fields: YAML `profil
 `catalog_snapshot`, `revision`. The CLI `export --api` builds these observations;
 see `/docs` for full schemas.
 
-Input `kind` is `payload`, `arcade`, `playlist`, `serial` or `unsupported`.
+Input `kind` is `payload`, `disc` (when advertised), `arcade`, `playlist`, `serial`,
+`catalog` (generic ROM sets) or `unsupported`.
 Payloads contain whole-file or single cartridge ZIP-member hashes. Playlists carry
 up to 32 ordered CHD/ISO members; PS3 descriptors carry a bounded serial. ROM
 bytes are not uploaded and client paths are never opened on the server.
@@ -296,6 +299,27 @@ otherwise `export_unavailable`. `/v1/lookup` retains its stricter proof contract
 Selected deflated media uses seekable OS temporary files: up to 1 GiB/eight idle
 members plus active readers. Budget temporary disk space, especially with tmpfs.
 Stored video members seek in place. No frontend installation or catalog edit occurs.
+
+### Bounded CHD export observations
+
+With `export_features: [chd-header-v1]`, export accepts `kind: disc`, an empty
+`proof` and one ordinary CHD v5 `disc` header/stat observation. Playlist `parts`
+can mix these with existing fully hashed `payload` members. The same shared
+resolver handles local and API export; consumer `/v1/lookup` is unchanged.
+
+A header-only record returns its unchanged `disc`, physical size and metadata
+binding, without `payload`, `sha1` or an invented verified-dump claim. Bounded
+playlist members retain their own `disc` facts and empty SHA1. The client checks
+all observations again before apply, including headers even when size/mtime stay.
+
+If a possible same-size whole-container fingerprint needs bytes, the provisional
+record is `unmatched` with `hash_required` listing only observed CHD input paths
+(or that playlist's observed members). It has no selected game or assets. The
+client validates the complete request, hashes only those files locally and retries
+with `kind: payload` under the same revision/profile. The final record retains
+container/header conflicts. Neither pass uploads ROM bytes or opens client paths
+on the server. Old clients still send fully hashed observations; old servers keep
+the existing protocol when they do not advertise the feature.
 
 ## Prepared variants
 

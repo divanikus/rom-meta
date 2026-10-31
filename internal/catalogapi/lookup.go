@@ -153,7 +153,7 @@ func (s *LookupServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == "GET" {
-			_ = json.NewEncoder(w).Encode(map[string]any{"schema_version": Version, "export_schema_version": 1, "mode": "catalog", "platforms": platforms})
+			_ = json.NewEncoder(w).Encode(map[string]any{"schema_version": Version, "export_schema_version": 1, "export_features": []string{"chd-header-v1"}, "mode": "catalog", "platforms": platforms})
 		}
 		return
 	}

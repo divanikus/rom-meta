@@ -152,6 +152,14 @@ func writePlan(plan *Plan, staging, sidecarDir string, progress func(string, str
 				return err
 			}
 		}
+		if len(record.HashRequired) > 0 {
+			return fmt.Errorf("unresolved ROM hash request: %s", record.ROM)
+		}
+		if record.Disc != nil && record.SHA1 == "" {
+			if err := CheckDiscObservation(plan.ROMRoot, plan.System, record.ROM, record.Disc); err != nil {
+				return err
+			}
+		}
 		if record.SHA1 != "" {
 			inputName := record.ROM
 			if record.LaunchFile != "" {
@@ -178,6 +186,12 @@ func writePlan(plan *Plan, staging, sidecarDir string, progress func(string, str
 			}
 		}
 		for _, part := range record.Playlist {
+			if part.Disc != nil && part.SHA1 == "" {
+				if err := CheckDiscObservation(plan.ROMRoot, plan.System, part.ROM, part.Disc); err != nil {
+					return err
+				}
+				continue
+			}
 			path, err := realPath(filepath.Join(plan.ROMRoot, filepath.FromSlash(part.ROM)))
 			if err != nil {
 				return err

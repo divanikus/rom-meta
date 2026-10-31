@@ -41,7 +41,7 @@ func TestVariantCombinedCHDExportAndLookup(t *testing.T) {
 			}
 			r := result.Records[0]
 			if r.Representation != "chd-container" || r.Variant != "Fixed" || r.MatchedBy != "variant-chd-header" || r.Release != "" || r.MetadataRelease != wantBasis || r.Disc == nil ||
-				r.Fields["description"].Value != wantDescription || r.Payload == nil || r.Payload.SHA1 == fmt.Sprintf("%x", chd[84:104]) {
+				r.Fields["description"].Value != wantDescription || r.Payload != nil || r.SHA1 != "" {
 				t.Fatalf("CHD identity/proof conflated: %+v", r)
 			}
 			for i := 0; i < 2; i++ {

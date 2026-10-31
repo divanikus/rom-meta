@@ -30,6 +30,7 @@ type Options struct {
 }
 
 type Job struct {
+	discInputs    map[string]discStamp
 	catalogInputs map[string]catalogStamp
 	Batch         *exporter.BatchPlan
 	Single        bool
@@ -40,6 +41,7 @@ type Job struct {
 }
 
 type client struct {
+	chdHeaders    bool
 	origin, token string
 	http          *http.Client
 	revision      string
@@ -168,16 +170,22 @@ func outputPath(path string) (string, error) {
 
 func (c *client) platforms(ctx context.Context) (*exporter.PlatformSelector, error) {
 	var capabilities struct {
-		SchemaVersion int                       `json:"schema_version"`
-		ExportVersion int                       `json:"export_schema_version"`
-		Mode          string                    `json:"mode"`
-		Platforms     []exporter.LookupPlatform `json:"platforms"`
+		SchemaVersion  int                       `json:"schema_version"`
+		ExportVersion  int                       `json:"export_schema_version"`
+		ExportFeatures []string                  `json:"export_features"`
+		Mode           string                    `json:"mode"`
+		Platforms      []exporter.LookupPlatform `json:"platforms"`
 	}
 	if err := c.json(ctx, "GET", "/v1/platforms", nil, &capabilities); err != nil {
 		return nil, err
 	}
 	if capabilities.SchemaVersion != 1 || capabilities.ExportVersion != 1 || capabilities.Mode != "catalog" || capabilities.Platforms == nil {
 		return nil, fmt.Errorf("API must serve catalog mode with network export capabilities")
+	}
+	for _, feature := range capabilities.ExportFeatures {
+		if feature == "chd-header-v1" {
+			c.chdHeaders = true
+		}
 	}
 	return exporter.NewPlatformSelector(platformnames.DefaultRegistry(), capabilities.Platforms), nil
 }
@@ -251,7 +259,7 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 		return nil, err
 	}
 	batch := &exporter.BatchPlan{SchemaVersion: 1, Target: target, ROMRoot: root, Out: out, Plans: []*exporter.Plan{}, Skipped: []exporter.SkippedSystem{}}
-	job := &Job{catalogInputs: map[string]catalogStamp{}, Batch: batch, Single: options.Platform != "", client: c, assets: map[string]catalogapi.ExportAsset{}, stamps: map[string]os.FileInfo{}, progress: options.Progress}
+	job := &Job{discInputs: map[string]discStamp{}, catalogInputs: map[string]catalogStamp{}, Batch: batch, Single: options.Platform != "", client: c, assets: map[string]catalogapi.ExportAsset{}, stamps: map[string]os.FileInfo{}, progress: options.Progress}
 	var selectedFolders []exporter.FolderSelection
 	if job.Single {
 		selection, catalog, err := selector.Single(options.Platform, root)
@@ -279,6 +287,7 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 		child.Context = ctx
 		child.ROMRoot, child.System = folder, system
 		child.LegacyOnly = !selector.GenericExportAvailable(chosen.Catalog)
+		child.HashROMs = options.HashROMs || !c.chdHeaders
 		if options.Progress != nil {
 			child.Progress = func(stage, name string, current, total int) {
 				options.Progress(system+" / "+stage, name, current, total)
@@ -292,11 +301,6 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 			}
 			return nil, err
 		}
-		for _, input := range observations {
-			if err = job.remember(folder, input); err != nil {
-				return nil, err
-			}
-		}
 		plan := &exporter.Plan{PlatformName: selection.Name, PlatformSelection: selection, SchemaVersion: 1, Target: "es-de", Platform: selected.platform, System: system, ROMRoot: folder, Out: out, SourceAPI: c.origin, Records: []exporter.Record{}}
 		for offset := 0; offset < len(observations); offset += 100 {
 			end := offset + 100
@@ -307,8 +311,8 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 				options.Progress(system+" / API", selected.platform, end, len(observations))
 			}
 			request := catalogapi.ExportRequest{Platform: selected.platform, System: system, Inputs: observations[offset:end], ArcadeSnapshot: options.ArcadeSnapshot, Profile: profile, Revision: c.revision}
-			var response catalogapi.ExportResponse
-			if err = c.json(ctx, "POST", "/v1/export", request, &response); err != nil {
+			response, observed, requestErr := c.exportBatch(ctx, request, child)
+			if err = requestErr; err != nil {
 				var apiErr *apiError
 				if !job.Single && offset == 0 && errors.As(err, &apiErr) && apiErr.status == http.StatusConflict && apiErr.Code == "snapshot_required" {
 					skip("MAME snapshot selection required; use --arcade-snapshot")
@@ -317,20 +321,13 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 				}
 				return nil, err
 			}
-			if response.SchemaVersion != 1 || response.Revision == "" || response.Plan == nil || response.Plan.Platform != selected.platform || response.Plan.System != system || response.Plan.Target != "es-de" || len(response.Plan.Records) != end-offset {
-				return nil, fmt.Errorf("API export response does not match selected inputs")
-			}
-			if c.revision != "" && c.revision != response.Revision {
-				return nil, fmt.Errorf("catalog changed between export requests")
-			}
-			c.revision = response.Revision
 			if offset == 0 {
 				plan.Profile = response.Plan.Profile
 			} else if !reflect.DeepEqual(plan.Profile, response.Plan.Profile) {
 				return nil, fmt.Errorf("export policy changed between batches")
 			}
 			for i, record := range response.Plan.Records {
-				if err = validateRecord(observations[offset+i], &record, system, response.Assets); err != nil {
+				if err = job.remember(folder, system, observed[i]); err != nil {
 					return nil, err
 				}
 				plan.Records = append(plan.Records, record)
@@ -370,6 +367,10 @@ func validateRecord(input exporter.ExportInput, record *exporter.Record, system 
 		if record.Status != "unsupported" || record.SHA1 != "" || len(record.Playlist) > 0 || len(record.Media) > 0 {
 			return fmt.Errorf("API changed unsupported input")
 		}
+	} else if input.Kind == "disc" {
+		if record.Representation != "chd-container" || record.Payload != nil || !reflect.DeepEqual(input.Disc, record.Disc) || record.Size != discInputSize(input) || record.SHA1 != "" || record.Member != "" || record.Catalog != nil || record.Status == "matched" && record.MatchedBy != "name" && record.MatchedBy != "game-name" && record.MatchedBy != "variant-chd-header" {
+			return fmt.Errorf("API changed bounded CHD evidence")
+		}
 	} else if input.Kind == "catalog" {
 		if record.Representation != "catalog-name-stat" || record.SourceOnly != exporter.ROMSetSourceOnly(input) || !reflect.DeepEqual(input.Catalog, record.Catalog) || record.Size != catalogInputSize(input) || record.Payload != nil || record.Disc != nil || record.SHA1 != "" || record.Member != "" || record.Status == "matched" && record.MatchedBy != "catalog-name" && record.MatchedBy != "game-name" {
 			return fmt.Errorf("API changed ROM-set name/stat evidence")
@@ -403,7 +404,14 @@ func validateRecord(input exporter.ExportInput, record *exporter.Record, system 
 		}
 		for i, part := range record.Playlist {
 			proof := input.Parts[i]
-			if part.ROM != proof.ROM || part.Size != proof.Proof.Size || part.SHA1 != proof.Proof.SHA1 {
+			if part.ROM != proof.ROM {
+				return fmt.Errorf("API changed playlist member")
+			}
+			if proof.Kind == "disc" {
+				if part.Size != discInputSize(proof) || part.SHA1 != "" || !reflect.DeepEqual(part.Disc, proof.Disc) || part.MatchedBy != "name" && part.MatchedBy != "game-name" && part.MatchedBy != "variant-chd-header" {
+					return fmt.Errorf("API changed playlist CHD evidence")
+				}
+			} else if part.Size != proof.Proof.Size || part.SHA1 != proof.Proof.SHA1 || part.Disc != nil {
 				return fmt.Errorf("API changed playlist member")
 			}
 		}
@@ -432,7 +440,28 @@ func validateRecord(input exporter.ExportInput, record *exporter.Record, system 
 	return nil
 }
 
-func (j *Job) remember(root string, input exporter.ExportInput) error {
+func (j *Job) remember(root, system string, input exporter.ExportInput) error {
+	rememberDisc := func(part exporter.ExportInput) error {
+		if part.Kind != "disc" {
+			return nil
+		}
+		if err := exporter.CheckDiscObservation(root, system, part.ROM, part.Disc); err != nil {
+			return err
+		}
+		if j.discInputs == nil {
+			j.discInputs = map[string]discStamp{}
+		}
+		j.discInputs[filepath.Join(root, filepath.FromSlash(part.ROM))] = discStamp{Root: root, System: system, ROM: part.ROM, Disc: part.Disc}
+		return nil
+	}
+	if err := rememberDisc(input); err != nil {
+		return err
+	}
+	for _, part := range input.Parts {
+		if err := rememberDisc(part); err != nil {
+			return err
+		}
+	}
 	if input.Kind == "catalog" {
 		if err := exporter.CheckROMSetObservation(root, input.ROM, input.Catalog); err != nil {
 			return err
@@ -464,6 +493,11 @@ func (j *Job) remember(root string, input exporter.ExportInput) error {
 	return nil
 }
 func (j *Job) fresh() error {
+	for _, input := range j.discInputs {
+		if err := exporter.CheckDiscObservation(input.Root, input.System, input.ROM, input.Disc); err != nil {
+			return err
+		}
+	}
 	for _, input := range j.catalogInputs {
 		if err := exporter.CheckROMSetObservation(input.Root, input.Input.ROM, input.Input.Catalog); err != nil {
 			return err
