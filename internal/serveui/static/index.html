@@ -1900,7 +1900,9 @@
     function renderMediaReason(reason) {
       if (!reason) return "";
       const kind = ({original:"Original artwork", reconstructed:"Reconstructed artwork", unknown:"Unclassified artwork", fanart:"Fan art"})[reason.variant];
-      return '<div class="media-choice">' + (kind ? '<span class="chip">' + escapeHTML(kind) + '</span>' : "") + '<p>' + escapeHTML(reason.summary) + '</p><details class="media-reason"><summary>Why this file?</summary><div class="media-reason-details">' + (reason.details || []).map((text) => '<p>' + escapeHTML(text) + '</p>').join("") + (reason.compared_with ? '<p><strong>Compared with:</strong><br>' + escapeHTML(reason.compared_with) + '</p>' : "") + (reason.order?.length ? '<p><strong>Priority order:</strong><br>' + reason.order.map(escapeHTML).join(" → ") + '</p>' : "") + '</div></details></div>';
+      const summary = reason.summary === "No other usable candidate under this profile." ? "Only eligible file." : reason.summary;
+      const alternative = reason.compared_with ? '<details class="media-reason"><summary>Alternative</summary><p class="media-reason-details">' + escapeHTML(reason.compared_with) + '</p></details>' : "";
+      return '<div class="media-choice">' + (kind ? '<span class="chip">' + escapeHTML(kind) + '</span>' : "") + '<p>' + escapeHTML(summary) + '</p>' + alternative + '</div>';
     }
 
     function openLightbox(src, type, title) {

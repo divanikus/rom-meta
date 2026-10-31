@@ -85,9 +85,9 @@ is unavailable. Video/manual rules are unaffected. Save profile writes ordinary
 `selection.media` rules with `variant` order/`variants` lists, so CLI/API export
 uses the same policy. This does not assess image quality or remove a case/spine.
 
-Each selected tile in **Media** shows its labelled artwork type and the decisive reason.
-**Why this file?** shows release/scope context, priority order and the nearest usable
-alternative. The Go selector produces this explanation from the same ranked
+Each selected tile in **Media** shows its labelled artwork type and one selection
+reason. A sole eligible file needs no expanded explanation. **Alternative** shows
+only the nearest usable comparison filename when one exists. The Go selector produces this explanation from the same ranked
 candidates; the browser does not rank artwork. File numbers break ties only after
 the configured criteria. Reviewed exact-file overrides retain precedence.
 Checkboxes enable sources; up/down buttons set priority. Defaults come from the

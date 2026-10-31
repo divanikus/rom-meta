@@ -361,12 +361,15 @@ test('artwork preference is global, refreshed and included in saved profile requ
 
 test('selected media explains actual server choice, escapes details and keeps reasons out of Library', () => {
  const b=browser(async()=>json({}));
- b.run(`state.exportMode=true;state.detailPreview={media:{cover:{source_path:'media/box-front-01.jpg',source:'launchbox'}},media_reasons:{cover:{variant:'original',summary:'Original artwork is preferred to reconstructed artwork.',details:['Region matches the selected release: USA.','<unsafe>'],compared_with:'box-front-04.png',order:['Release region','Artwork type','Source','Format','File number']}}}`);
+ b.run(`state.exportMode=true;state.detailPreview={media:{cover:{source_path:'media/box-front-01.jpg',source:'launchbox'}},media_reasons:{cover:{variant:'original',summary:'Original artwork is preferred to reconstructed artwork. <unsafe>',details:['Region matches the selected release: USA.','<unsafe>'],compared_with:'box-front-04.png',order:['Release region','Artwork type','Source','Format','File number']}}}`);
  const files=b.run('selectedMedia(state.detailPreview)');assert.equal(files[0].choice.variant,'original');
  const html=b.run('renderMediaSection({local_media:selectedMedia(state.detailPreview)})');
- assert.match(html,/Why this file/);assert.match(html,/Original artwork/);assert.match(html,/box-front-04.png/);assert.match(html,/&lt;unsafe&gt;/);assert.doesNotMatch(html,/<unsafe>/);
+ assert.match(html,/Alternative/);assert.match(html,/Original artwork/);assert.match(html,/box-front-04.png/);assert.match(html,/&lt;unsafe&gt;/);assert.doesNotMatch(html,/<unsafe>/);
  b.run('state.exportMode=false');assert.doesNotMatch(b.run('renderMediaSection({local_media:selectedMedia(state.detailPreview)})'),/Why this file/);
  assert.equal(b.run('renderMediaReason(null)'),'');
+ const single=b.run('renderMediaReason({summary:"No other usable candidate under this profile.",details:["Shared game artwork."],order:["Region","Format"]})');
+ assert.match(single,/Only eligible file/);assert.doesNotMatch(single,/<details|Shared game artwork|Priority order/);
+ assert.doesNotMatch(html,/Priority order|Why this file/);
 });
 
 
