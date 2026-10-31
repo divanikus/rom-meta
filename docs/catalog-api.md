@@ -28,30 +28,29 @@ badges/filter still describe provider coverage, not all available metadata.
 
 ### Card sections
 
-The card keeps a stable hierarchy in both Library and Export preview:
+The card has three tabs in both Library and Export preview:
 
 - **Overview**: the cover and a vertical field list form the left column; the
-  description and, in Library, all alternate names form the right column. Field
-  labels sit left of their values. Long values and names wrap; narrow cards stack
-  the cover, fields and content.
-- **Media**: the gallery, source filters in Library, and selected-file explanations
-  in Export preview. Technical filenames/reasons stay with their media.
+  description and, in Library, all alternate names form the right column. Media
+  and Sources continue below on the same page. Library retains gallery source
+  filters and original provider observations/alternate descriptions; Export preview
+  shows selected media and choice explanations, without original provider blocks.
+  Long values/names wrap; narrow cards stack the cover, fields and content.
 - **Releases & fingerprints**: the edition register and recorded file names,
   sizes, formats, payload kinds, CRC32, MD5, SHA-1 and SHA-256 when available.
   Expand a file to see complete selectable hashes and derivative IDs. Filter by
   exact release/variant or search filenames/hashes; Show more loads another page.
-- **Sources** (Library): original provider observations and alternate descriptions.
 - **Raw**: stored catalog YAML in Library; native XML template, media destinations
   and selected-field provenance in Export preview.
 
-Overview stays free of galleries and raw evidence. Layout follows the actual card
-panel width, so facts do not get squeezed beneath a cover merely because the
-browser is wide. Edition selection/feedback remains in the opened export card;
-selection notes are collapsed. Fingerprints are catalog records, not a live ROM
-verification. They load only when requested, independently of export policy and
-without opening a writable catalog cache or media/ROM payloads. Malformed
-fingerprints do not block Overview. Per-card fingerprint results are cached for
-the page session; reselect/reload to refresh external edits.
+Media and Sources have labelled blocks within Overview, not additional card tabs.
+Provider selection and gallery filters retain keyboard focus on the same page.
+Layout follows the actual card panel width. Edition selection/feedback remains in
+an opened export card; selection notes are collapsed. Fingerprints are catalog
+records, not a live ROM verification. They load only when requested, independently
+of export policy and without writable caches or media/ROM payload reads. Malformed
+fingerprints do not block Overview. Per-card results are cached for the page
+session; reselect/reload to refresh external edits.
 
 `GET /api/fingerprints?platform=<folder>&game=<folder>` returns `fingerprints`,
 `total` (filtered), `registered_total`, `offset` and `limit`. Default pages contain

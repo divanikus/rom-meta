@@ -897,6 +897,8 @@
     .overview-details .title-item .secondary { justify-self:end; }
     .card-tabs { display:flex; flex-wrap:wrap; gap:6px; position:sticky; top:-16px; z-index:4; padding:10px 0; background:#0f1419; }
     .card-section { min-width:0; }
+    .card-main { display:grid; grid-template-columns:minmax(0,1fr); gap:24px; }
+    .card-main > .section { min-width:0; grid-template-columns:minmax(0,1fr); border-top:1px solid var(--line); padding-top:20px; }
     .card-section > .section,.game-overview { grid-template-columns:minmax(0,1fr); }
     .fact-value { min-width:0; overflow-wrap:anywhere; }
     .export-context { padding:12px; border:1px solid var(--line); border-radius:6px; }
@@ -1744,7 +1746,7 @@
     }
 
     function setDetailTab(tab) {
-      if (!["preview","media","files","sources","raw"].includes(tab)) return;
+      if (!["preview","files","raw"].includes(tab)) return;
       state.detailTab = tab;
       $("detail-body").scrollTop = 0;
       renderDetails();
@@ -1753,6 +1755,7 @@
 
     function renderDetails() {
       const focusID = document.activeElement?.id, focusTab = document.activeElement?.dataset?.detailTab;
+      const focusSource = document.activeElement?.dataset?.sourceIndex, focusMedia = document.activeElement?.dataset?.mediaSource;
       const stored = state.game;
       if (!stored) {
         $("detail-title").textContent = "Select a game";
@@ -1760,7 +1763,7 @@
         $("detail-body").innerHTML = '<div class="empty">Choose a platform and game from the lists.</div>';
         return;
       }
-      if (state.exportMode && state.detailTab === "sources") state.detailTab = "preview";
+      if (!["preview","files","raw"].includes(state.detailTab)) state.detailTab = "preview";
       const ready = !state.exportMode || !!state.detailPreview;
       const response = state.exportMode && ready ? exportResponse(stored) : stored;
       const game = response.game, profile = response.profile || {};
@@ -1771,21 +1774,21 @@
         chips((profile.genres || []).slice(0, 3), ''),
         '<span class="chip">' + escapeHTML(profile.platform || game.platform) + '</span>'
       ].flat().filter(Boolean).join("");
-      const sections = [["preview","Overview"],["media","Media · " + (response.local_media || []).length],["files","Releases & fingerprints"],...(!state.exportMode ? [["sources","Sources"]] : []),["raw","Raw"]];
+      const sections = [["preview","Overview"],["files","Releases & fingerprints"],["raw","Raw"]];
       const tabs = '<nav class="card-tabs" aria-label="Card sections">' + sections.map(([id,label]) => '<button type="button" class="tab-button' + (state.detailTab === id ? ' active' : '') + '" data-detail-tab="' + id + '" aria-pressed="' + (state.detailTab === id) + '">' + escapeHTML(label) + '</button>').join("") + '</nav>';
       let content;
       if (state.detailTab === "files") content = renderFingerprintSection(stored.game);
       else if (state.exportMode && !ready) content = '<div class="' + (state.detailPreviewError ? 'error' : 'loading') + '">' + escapeHTML(state.detailPreviewError || 'Selecting export metadata…') + '</div>';
-      else if (state.detailTab === "media") content = renderMediaSection(response);
-      else if (state.detailTab === "sources") content = renderSourceSection(stored);
       else if (state.detailTab === "raw") {
         content = state.exportMode ? renderExportRaw() + renderExportProvenance(response) : '<section class="section"><h3>Stored catalog YAML</h3><pre class="export-xml">' + escapeHTML(stored.catalog_yaml || '') + '</pre></section>';
-      } else content = renderProfile(response);
+      } else content = '<div class="card-main">' + renderProfile(response) + renderMediaSection(response) + (!state.exportMode ? renderSourceSection(stored) : "") + '</div>';
       $("detail-body").innerHTML = tabs + (state.exportMode && state.detailTab !== "files" ? renderExportEdition(stored) : '') + '<div class="card-section">' + content + '</div>';
       bindExportEdition();
       document.querySelectorAll("[data-source-index]").forEach((button) => button.addEventListener("click", () => { state.sourceIndex = Number(button.dataset.sourceIndex); renderDetails(); }));
       document.querySelectorAll("[data-media-source]").forEach((button) => button.addEventListener("click", () => { state.mediaSource = button.dataset.mediaSource || "all"; renderDetails(); }));
       if (focusTab) document.querySelectorAll("[data-detail-tab]").forEach((button) => { if (button.dataset.detailTab === focusTab) button.focus(); });
+      if (focusSource !== undefined) document.querySelectorAll("[data-source-index]").forEach((button) => { if (button.dataset.sourceIndex === focusSource) button.focus({preventScroll:true}); });
+      if (focusMedia !== undefined) document.querySelectorAll("[data-media-source]").forEach((button) => { if (button.dataset.mediaSource === focusMedia) button.focus({preventScroll:true}); });
       if (["fingerprint-query","fingerprint-edition","export-edition"].includes(focusID)) {
         const field = $(focusID); field?.focus();
         if (focusID === "fingerprint-query") field?.setSelectionRange?.(field.value.length,field.value.length);

@@ -251,9 +251,8 @@ test('explicit modes keep provider descriptions outside export preview', () => {
   assert.doesNotMatch(b.element('detail-body').innerHTML,/Unselected provider prose|Stored source evidence|data-source-index/);
   b.run('setExportMode(false)');
   assert.match(b.element('detail-body').innerHTML,/Stored prose/);
-  assert.doesNotMatch(b.element('detail-body').innerHTML,/Unselected provider prose/);
-  b.run('setDetailTab("sources")');
   assert.match(b.element('detail-body').innerHTML,/Unselected provider prose/);
+  assert.doesNotMatch(b.element('detail-body').innerHTML,/data-detail-tab="(?:media|sources)"/);
   assert.equal(b.element('library-mode').attributes['aria-pressed'],'true');
   assert.equal(b.element('export-mode').attributes['aria-pressed'],'false');
 });
@@ -371,7 +370,7 @@ test('selected media explains actual server choice, escapes details and keeps re
 });
 
 
-test('card sections keep overview, media, sources and raw separate without loading fingerprints', () => {
+test('main card combines overview media and sources while fingerprints and raw stay separate', () => {
  const calls=[];const b=browser(async(path)=>{calls.push(path);return json({});});
  b.run(`state.game={game:{folder:'Card',releases:[{name:'USA'}],aliases:Array.from({length:20},(_,i)=>'Alias '+i)},profile:{description:'Overview prose',developer:'Studio',genres:['Adventure'],themes:['Fantasy'],alternate_titles:[{title:'<Alternate name>',region:'Japan',language:'ja'}]},catalog_yaml:'private_catalog_field: sample',source_blocks:[{source:'launchbox',match_count:1,profile:{description:'Provider evidence'}}],local_media:[{type:'image',kind:'screenshot',name:'shot.png',url:'/media?path=shot.png'}]};renderDetails()`);
  assert.match(b.element('detail-body').innerHTML,/Overview prose/);assert.match(b.element('detail-body').innerHTML,/Studio/);
@@ -384,11 +383,13 @@ test('card sections keep overview, media, sources and raw separate without loadi
  assert.ok(overview.indexOf('Alternate Names')>overview.indexOf('overview-description'));
  assert.doesNotMatch(overview,/<h3>Game details<\/h3>/);
  assert.match(overview,/&lt;Alternate name&gt;/);assert.match(overview,/Japan \/ ja/);assert.match(overview,/Alias 19/);
- assert.doesNotMatch(overview,/<details|More game details|<Alternate name>/);
- assert.doesNotMatch(b.element('detail-body').innerHTML,/media-grid|Provider evidence|private_catalog_field/);
- b.run('setDetailTab("media")');assert.match(b.element('detail-body').innerHTML,/media-grid/);assert.doesNotMatch(b.element('detail-body').innerHTML,/Overview prose|Provider evidence/);
- b.run('setDetailTab("sources")');assert.match(b.element('detail-body').innerHTML,/Provider evidence/);assert.doesNotMatch(b.element('detail-body').innerHTML,/Overview prose/);
+ assert.doesNotMatch(overview,/More game details|<Alternate name>/);
+ assert.match(overview,/media-grid/);assert.match(overview,/Provider evidence/);
+ assert.ok(overview.indexOf('media-grid')>overview.indexOf('profile-layout'));
+ assert.doesNotMatch(overview,/private_catalog_field|data-detail-tab="(?:media|sources)"/);
  b.run('setDetailTab("raw")');assert.match(b.element('detail-body').innerHTML,/private_catalog_field/);
+ assert.doesNotMatch(b.element('detail-body').innerHTML,/media-grid|Provider evidence|Overview prose/);
+ b.run('setDetailTab("preview")');assert.match(b.element('detail-body').innerHTML,/media-grid/);assert.match(b.element('detail-body').innerHTML,/Provider evidence/);
  assert.equal(calls.length,0);
 });
 
