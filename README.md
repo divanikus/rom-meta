@@ -120,7 +120,7 @@ Video loads on playback. The ordinary view includes saved game fields and source
 evidence. Choose **Export preview** to adjust one shared frontend/language/media
 profile while browsing, then **Save profile** to download YAML for CLI export.
 Advanced offers discovered sources and frontend-supported media types. Cards
-show metadata, Media and Sources together in Overview; Releases & fingerprints
+show metadata, Sources and then Media together in Overview; Releases & fingerprints
 and Raw have separate tabs. Registered file names, sizes and hashes load on demand;
 export mode shows selected media and a native XML preview. Variants use readable
 translation labels.

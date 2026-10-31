@@ -385,7 +385,8 @@ test('main card combines overview media and sources while fingerprints and raw s
  assert.match(overview,/&lt;Alternate name&gt;/);assert.match(overview,/Japan \/ ja/);assert.match(overview,/Alias 19/);
  assert.doesNotMatch(overview,/More game details|<Alternate name>/);
  assert.match(overview,/media-grid/);assert.match(overview,/Provider evidence/);
- assert.ok(overview.indexOf('media-grid')>overview.indexOf('profile-layout'));
+ assert.ok(overview.indexOf('Provider evidence')>overview.indexOf('profile-layout'));
+ assert.ok(overview.indexOf('media-grid')>overview.indexOf('Provider evidence'));
  assert.doesNotMatch(overview,/private_catalog_field|data-detail-tab="(?:media|sources)"/);
  b.run('setDetailTab("raw")');assert.match(b.element('detail-body').innerHTML,/private_catalog_field/);
  assert.doesNotMatch(b.element('detail-body').innerHTML,/media-grid|Provider evidence|Overview prose/);

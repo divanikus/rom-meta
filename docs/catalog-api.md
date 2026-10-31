@@ -31,8 +31,8 @@ badges/filter still describe provider coverage, not all available metadata.
 The card has three tabs in both Library and Export preview:
 
 - **Overview**: the cover and a vertical field list form the left column; the
-  description and, in Library, all alternate names form the right column. Media
-  and Sources continue below on the same page. Library retains gallery source
+  description and, in Library, all alternate names form the right column. Sources
+  come next, followed by Media on the same page. Library retains gallery source
   filters and original provider observations/alternate descriptions; Export preview
   shows selected media and choice explanations, without original provider blocks.
   Long values/names wrap; narrow cards stack the cover, fields and content.
@@ -43,7 +43,7 @@ The card has three tabs in both Library and Export preview:
 - **Raw**: stored catalog YAML in Library; native XML template, media destinations
   and selected-field provenance in Export preview.
 
-Media and Sources have labelled blocks within Overview, not additional card tabs.
+Sources and Media have labelled blocks within Overview, in that order, not extra tabs.
 Provider selection and gallery filters retain keyboard focus on the same page.
 Layout follows the actual card panel width. Edition selection/feedback remains in
 an opened export card; selection notes are collapsed. Fingerprints are catalog

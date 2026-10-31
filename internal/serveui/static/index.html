@@ -1781,7 +1781,7 @@
       else if (state.exportMode && !ready) content = '<div class="' + (state.detailPreviewError ? 'error' : 'loading') + '">' + escapeHTML(state.detailPreviewError || 'Selecting export metadata…') + '</div>';
       else if (state.detailTab === "raw") {
         content = state.exportMode ? renderExportRaw() + renderExportProvenance(response) : '<section class="section"><h3>Stored catalog YAML</h3><pre class="export-xml">' + escapeHTML(stored.catalog_yaml || '') + '</pre></section>';
-      } else content = '<div class="card-main">' + renderProfile(response) + renderMediaSection(response) + (!state.exportMode ? renderSourceSection(stored) : "") + '</div>';
+      } else content = '<div class="card-main">' + renderProfile(response) + (!state.exportMode ? renderSourceSection(stored) : "") + renderMediaSection(response) + '</div>';
       $("detail-body").innerHTML = tabs + (state.exportMode && state.detailTab !== "files" ? renderExportEdition(stored) : '') + '<div class="card-section">' + content + '</div>';
       bindExportEdition();
       document.querySelectorAll("[data-source-index]").forEach((button) => button.addEventListener("click", () => { state.sourceIndex = Number(button.dataset.sourceIndex); renderDetails(); }));
