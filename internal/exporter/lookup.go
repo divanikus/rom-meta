@@ -1,6 +1,7 @@
 package exporter
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -50,6 +51,8 @@ type LookupCatalog struct {
 	// CacheDir is optional derived state; empty uses platform/_index.sqlite, '-' disables it.
 	CacheDir          string
 	requireIndexWrite bool
+	indexContext      context.Context
+	indexProgress     func(stage, name string, current, total int)
 }
 type LookupResolver struct {
 	Catalog         *LookupCatalog

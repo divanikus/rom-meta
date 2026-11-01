@@ -2,7 +2,7 @@
 
 Use one command for both built-in targets, ES-DE and LaunchBox. It adds missing
 games and enriches existing entries using a prepared local catalog or the same
-catalog API. ROMs and catalogs remain unchanged. Choose the destination and
+catalog API. ROMs and catalog payloads remain unchanged. Choose the destination and
 inspect the plan; add `--apply` to write it with backups.
 
 ```powershell
@@ -25,7 +25,14 @@ coverage and native emulator readiness are reported separately. Preview counts
 source sets that still need extraction/installation and launch setup; matching
 a package does not make it ready to play.
 
-The CLI shows two phases: scan and write. After loading the catalog index, local
+The CLI shows two phases: scan and write. Local export reuses the existing
+platform `_index.sqlite` recognition summaries. Missing, outdated-format or
+changed entries are rebuilt and saved, visibly labelled `reindexing`; warm loads
+check source file stamps and parse full YAML only for selected cards. This
+optional disposable index may be maintained even during preview. Unwritable
+index storage falls back to source reads and reports that it could not be saved.
+
+After loading the index, local
 scan observes each ROM and immediately matches it and selects metadata/media
 before advancing to the next file. Selective CHD hash retries stay with that input;
 the collection is not resolved a second time. Whole-selection title/disc grouping,

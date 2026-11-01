@@ -388,6 +388,9 @@ func (catalog *LookupCatalog) openIndex(resolver *LookupResolver, folder string)
 	if err != nil {
 		return err
 	}
+	if catalog.indexProgress != nil {
+		catalog.indexProgress("index", "Opening saved recognition index", 0, 0)
+	}
 	cache := openLookupDisk(catalog.CacheDir, catalog.Root, filepath.Base(folder))
 	if cache != nil {
 		defer cache.db.Close()
@@ -399,7 +402,12 @@ func (catalog *LookupCatalog) openIndex(resolver *LookupResolver, folder string)
 	if resolver.index == nil {
 		resolver.index = newCatalogIndex()
 	}
-	for _, item := range entries {
+	for i, item := range entries {
+		if catalog.indexContext != nil {
+			if err := catalog.indexContext.Err(); err != nil {
+				return err
+			}
+		}
 		if !item.IsDir() || strings.HasPrefix(item.Name(), ".") || strings.HasPrefix(item.Name(), "_") || catalogrules.IsIgnoredGameFolder(item.Name()) {
 			continue
 		}
@@ -424,7 +432,13 @@ func (catalog *LookupCatalog) openIndex(resolver *LookupResolver, folder string)
 		if ok && portableLookupStamp(row.stamp) == portableLookupStamp(before) {
 			entry = row.entry
 			resolver.IndexStats.Cached++
+			if catalog.indexProgress != nil {
+				catalog.indexProgress("index", item.Name(), i+1, len(entries))
+			}
 		} else {
+			if catalog.indexProgress != nil {
+				catalog.indexProgress("reindexing", item.Name(), i+1, len(entries))
+			}
 			entry, err = readLookupEntry(catalog.Root, path)
 			if err != nil {
 				return fmt.Errorf("%s: %w", item.Name(), err)
@@ -448,6 +462,9 @@ func (catalog *LookupCatalog) openIndex(resolver *LookupResolver, folder string)
 		}
 	}
 	err = cache.save(updates, seen)
+	if err != nil && catalog.indexProgress != nil {
+		catalog.indexProgress("index", "Index could not be saved; future exports will rebuild affected entries", 0, 0)
+	}
 	if catalog.requireIndexWrite {
 		return err
 	}

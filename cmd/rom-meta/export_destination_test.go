@@ -91,6 +91,16 @@ func reportPlan(t *testing.T, name string) *frontend.Plan {
 	}
 	return &p
 }
+func exportCatalogPayloadTree(t *testing.T, root string) map[string]string {
+	result := exportTree(t, root)
+	for name := range result {
+		if strings.HasPrefix(name, "platforms/") && strings.Count(name, "/") == 2 && filepath.Base(name) == "_index.sqlite" {
+			delete(result, name)
+		}
+	}
+	return result
+}
+
 func TestUnifiedDirectExportLocalAndAPI(t *testing.T) {
 	for _, target := range []string{"es-de", "launchbox"} {
 		t.Run(target, func(t *testing.T) {
@@ -104,7 +114,7 @@ func TestUnifiedDirectExportLocalAndAPI(t *testing.T) {
 			t.Setenv("TMP", stageParent)
 			t.Setenv("TEMP", stageParent)
 			t.Setenv("TMPDIR", stageParent)
-			beforeCatalog, beforeROM := exportTree(t, root), exportTree(t, roms)
+			beforeCatalog, beforeROM := exportCatalogPayloadTree(t, root), exportTree(t, roms)
 			api, err := catalogapi.NewLookup(catalogapi.Options{Export: exporter.Options{DataRoot: root}, LookupCacheDir: "-"})
 			if err != nil {
 				t.Fatal(err)
@@ -168,7 +178,7 @@ func TestUnifiedDirectExportLocalAndAPI(t *testing.T) {
 			if !reflect.DeepEqual(exportTree(t, local), exportTree(t, remote)) {
 				t.Fatal("local/API native files differ")
 			}
-			if !reflect.DeepEqual(beforeCatalog, exportTree(t, root)) || !reflect.DeepEqual(beforeROM, exportTree(t, roms)) {
+			if !reflect.DeepEqual(beforeCatalog, exportCatalogPayloadTree(t, root)) || !reflect.DeepEqual(beforeROM, exportTree(t, roms)) {
 				t.Fatal("changed source catalog or ROMs")
 			}
 		})
@@ -396,6 +406,23 @@ func TestDirectExportCompletesWriteOnceWithoutIntermediateFiles(t *testing.T) {
 					t.Fatalf("expected one completed native write, got %d: %s", complete, output)
 				}
 			})
+		}
+	}
+}
+
+func TestExportShowsReindexingOnlyForRebuiltCatalogEntries(t *testing.T) {
+	root, roms := exportFixture(t)
+	args := []string{"export", "--target", "es-de", "--platform", "n64", "--data-root", root, "--rom-root", roms, "--out", filepath.Join(t.TempDir(), "package")}
+	for pass := 0; pass < 2; pass++ {
+		code, output := commandOutput(t, args...)
+		if code != 0 {
+			t.Fatal(output)
+		}
+		if strings.Contains(output, "reindexing:") != (pass == 0) {
+			t.Fatalf("unexpected reindexing on pass %d: %s", pass, output)
+		}
+		if !strings.Contains(output, "index:") {
+			t.Fatal("saved index activity not visible", output)
 		}
 	}
 }

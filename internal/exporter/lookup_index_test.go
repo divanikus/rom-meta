@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"rommeta/internal/catalogrules"
+	"rommeta/internal/catalogyaml"
 	"strconv"
 	"strings"
 	"testing"
@@ -365,4 +367,58 @@ func TestLookupReleasesParsedCardsBetweenRequests(t *testing.T) {
 			assertReleased()
 		})
 	}
+}
+
+// Fresh-source reference for recognition-cache parity tests.
+
+func buildIndex(root, platform string, progress func(string, string, int, int)) (*catalogIndex, error) {
+	index := &catalogIndex{BySize: map[int64][]fingerprint{}, ByName: map[string][]fingerprint{}, GamesByName: map[string][]*game{}}
+	entries, err := catalogfs.ReadDir(platform)
+	if err != nil {
+		return nil, err
+	}
+	for i, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") || strings.HasPrefix(entry.Name(), "_") || catalogrules.IsIgnoredGameFolder(entry.Name()) {
+			continue
+		}
+		if progress != nil {
+			progress("catalog", entry.Name(), i+1, len(entries))
+		}
+		path := filepath.Join(platform, entry.Name())
+		real, err := realPath(path)
+		if err != nil {
+			return nil, err
+		}
+		if !within(root, real) {
+			return nil, fmt.Errorf("game folder escapes catalog root")
+		}
+		path = real
+		doc, err := readDocument(filepath.Join(path, "game.yaml"))
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", entry.Name(), err)
+		}
+		if _, err := catalogyaml.Variants(doc); err != nil {
+			return nil, fmt.Errorf("%s: %w", entry.Name(), err)
+		}
+		g := &game{path: path, name: field(doc, "title"), root: doc}
+		if g.name == "" {
+			g.name = entry.Name()
+		}
+		indexNames(index, g)
+		fingerprints, err := readDocument(filepath.Join(path, "fingerprints.yaml"))
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		err = indexFingerprints(index, g, fingerprints)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return index, nil
 }

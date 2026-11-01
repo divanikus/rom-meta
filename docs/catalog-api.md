@@ -350,7 +350,8 @@ server did not alter either observation. No caller ROM path is opened by the API
 names, fingerprints and document digests. It contains no full cards, media or
 absolute paths and may travel with a platform or be omitted from exports.
 
-A missing index is built on first lookup. Later loads compare metadata file
+Local export uses this same index and reports rebuilt entries as `reindexing`.
+A missing or outdated-format index is built on first lookup/export. Later loads compare metadata file
 size/mtime/layout at 100 ns timestamp precision across Linux, Windows and SMB.
 Only changed/new bundles are parsed; deleted games are removed. Unchanged packs
 need no ZIP reads during this pass. Selected cards are loaded and independently

@@ -8,7 +8,7 @@ never similar display titles. Unknown/ambiguous inputs remain independent cards.
 ## Export and enrich the installation
 
 Run the client on the Windows machine that will launch the games, using paths
-available there. ROMs and catalogs are never copied or changed.
+available there. ROMs and catalog payloads are never copied or changed.
 
 ```powershell
 rom-meta export --target launchbox --platform n64 --data-root "D:\Catalog" --rom-root "D:\Games\n64" --profile "D:\Profiles\launchbox.yaml" --destination "D:\LaunchBox"

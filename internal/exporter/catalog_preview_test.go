@@ -20,7 +20,7 @@ func TestCatalogPreviewAgreesWithRealExportSelection(t *testing.T) {
 			if packed {
 				catalogfstest.Pack(t, filepath.Dir(path))
 			}
-			before := treeHashes(t, options.DataRoot)
+			before := catalogPayloadHashes(t, options.DataRoot)
 			plan, err := Build(options)
 			if err != nil {
 				t.Fatal(err)
@@ -49,7 +49,7 @@ func TestCatalogPreviewAgreesWithRealExportSelection(t *testing.T) {
 			if preview.Fields["description"].Value != "Русское описание" || len(preview.Media) != len(record.Media) {
 				t.Fatal(preview)
 			}
-			if !reflect.DeepEqual(before, treeHashes(t, options.DataRoot)) {
+			if !reflect.DeepEqual(before, catalogPayloadHashes(t, options.DataRoot)) {
 				t.Fatal("preview mutated catalog")
 			}
 		})

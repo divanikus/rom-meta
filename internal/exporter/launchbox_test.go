@@ -29,7 +29,7 @@ func TestLaunchBoxCartridgesMediaAndStableIDs(t *testing.T) {
 	profile(t, &options, "schema_version: 1\ntarget: es-de\ntitles: {variants: none}\n")
 	put(t, filepath.Join(options.ROMRoot, "first.z64"), payload)
 	putZip(t, filepath.Join(options.ROMRoot, "nested", "second.zip"), map[string][]byte{"payload.z64": payload})
-	beforeCatalog, beforeROM := treeHashes(t, options.DataRoot), treeHashes(t, options.ROMRoot)
+	beforeCatalog, beforeROM := catalogPayloadHashes(t, options.DataRoot), treeHashes(t, options.ROMRoot)
 	plan, err := Build(options)
 	if err != nil {
 		t.Fatal(err)
@@ -85,7 +85,7 @@ func TestLaunchBoxCartridgesMediaAndStableIDs(t *testing.T) {
 	if launchBoxID(&again, again.Records[0]) != g.ID || launchBoxVersionID(&again, again.Records[0]) == originalVersionID {
 		t.Fatal("game/version path identity boundary")
 	}
-	if !reflect.DeepEqual(beforeCatalog, treeHashes(t, options.DataRoot)) || !reflect.DeepEqual(beforeROM, treeHashes(t, options.ROMRoot)) {
+	if !reflect.DeepEqual(beforeCatalog, catalogPayloadHashes(t, options.DataRoot)) || !reflect.DeepEqual(beforeROM, treeHashes(t, options.ROMRoot)) {
 		t.Fatal("modified inputs")
 	}
 	if err := Apply(plan, nil); err == nil {

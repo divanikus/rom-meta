@@ -131,6 +131,18 @@ func treeHashes(t *testing.T, root string) map[string]string {
 	return result
 }
 
+// Catalog payload preservation excludes only the existing disposable index.
+func catalogPayloadHashes(t *testing.T, root string) map[string]string {
+	result := treeHashes(t, root)
+	for name := range result {
+		slash := filepath.ToSlash(name)
+		if strings.HasPrefix(slash, "platforms/") && strings.Count(slash, "/") == 2 && filepath.Base(name) == "_index.sqlite" {
+			delete(result, name)
+		}
+	}
+	return result
+}
+
 func TestOfflineZIPExportPrioritiesPreservationAndDeterminism(t *testing.T) {
 	options, gamePath, payload := fixture(t)
 	// Escaping is tested on an explicit release title, independently of the card name.
@@ -156,7 +168,7 @@ selection:
     screenshot:
       sources: [launchbox]
 `)
-	beforeCatalog, beforeROM := treeHashes(t, options.DataRoot), treeHashes(t, options.ROMRoot)
+	beforeCatalog, beforeROM := catalogPayloadHashes(t, options.DataRoot), treeHashes(t, options.ROMRoot)
 	plan, err := Build(options)
 	if err != nil {
 		t.Fatal(err)
@@ -221,7 +233,7 @@ selection:
 	if fmt.Sprint(firstOutput) != fmt.Sprint(treeHashes(t, options.Out)) {
 		t.Fatal("repeat output differs")
 	}
-	if fmt.Sprint(beforeCatalog) != fmt.Sprint(treeHashes(t, options.DataRoot)) || fmt.Sprint(beforeROM) != fmt.Sprint(treeHashes(t, options.ROMRoot)) {
+	if fmt.Sprint(beforeCatalog) != fmt.Sprint(catalogPayloadHashes(t, options.DataRoot)) || fmt.Sprint(beforeROM) != fmt.Sprint(treeHashes(t, options.ROMRoot)) {
 		t.Fatal("input trees changed")
 	}
 	if _, err := os.Stat(filepath.Join(options.DataRoot, ".rommeta")); !os.IsNotExist(err) {

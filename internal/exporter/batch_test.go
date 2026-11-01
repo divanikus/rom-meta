@@ -36,7 +36,7 @@ func TestBatchCartridgeDiscAndArcadeOutputPreservation(t *testing.T) {
 	arcadeCard := arcadeFixture(t, options)
 	putZip(t, filepath.Join(options.ROMRoot, "arcade", "game1.zip"), map[string][]byte{"one.bin": []byte("component"), "two.bin": []byte("component")})
 	put(t, filepath.Join(options.ROMRoot, "unsupported", "something.dat"), []byte("private"))
-	beforeCatalog, beforeROM := treeHashes(t, options.DataRoot), treeHashes(t, options.ROMRoot)
+	beforeCatalog, beforeROM := catalogPayloadHashes(t, options.DataRoot), treeHashes(t, options.ROMRoot)
 	batch, err := BuildBatch(BatchOptions{Options: options, All: true})
 	if err != nil {
 		t.Fatal(err)
@@ -92,7 +92,7 @@ func TestBatchCartridgeDiscAndArcadeOutputPreservation(t *testing.T) {
 	if fmt.Sprint(first) != fmt.Sprint(treeHashes(t, options.Out)) {
 		t.Fatal("batch output is not deterministic")
 	}
-	if fmt.Sprint(beforeCatalog) != fmt.Sprint(treeHashes(t, options.DataRoot)) || fmt.Sprint(beforeROM) != fmt.Sprint(treeHashes(t, options.ROMRoot)) {
+	if fmt.Sprint(beforeCatalog) != fmt.Sprint(catalogPayloadHashes(t, options.DataRoot)) || fmt.Sprint(beforeROM) != fmt.Sprint(treeHashes(t, options.ROMRoot)) {
 		t.Fatal("source trees changed")
 	}
 	if _, err := os.Stat(arcadeCard); err != nil {

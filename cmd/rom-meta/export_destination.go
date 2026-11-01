@@ -242,6 +242,8 @@ func updateExportProgress(progress *terminalProgress, stage, name string, curren
 	}
 	if name == "" {
 		name = original
+	} else if original == "index" || original == "reindexing" || strings.HasSuffix(original, " / index") || strings.HasSuffix(original, " / reindexing") {
+		name = original + ": " + name
 	}
 	progress.UpdateTask("export", stage, current, total, name)
 }
