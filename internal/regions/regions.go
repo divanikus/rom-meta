@@ -1,6 +1,9 @@
 package regions
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 var datDisplayNames = map[string]string{
 	"argentina":          "Argentina",
@@ -236,4 +239,18 @@ func regionKey(value string) string {
 		}
 	}
 	return b.String()
+}
+
+// DisplayOptions lists canonical catalog regions for visual preference controls.
+func DisplayOptions() []string {
+	seen := map[string]bool{}
+	result := []string{}
+	for _, name := range datDisplayNames {
+		if !seen[name] {
+			seen[name] = true
+			result = append(result, name)
+		}
+	}
+	sort.Strings(result)
+	return result
 }

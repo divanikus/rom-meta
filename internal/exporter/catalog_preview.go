@@ -99,3 +99,18 @@ func PreviewCatalog(ctx context.Context, root, gamePath string, node *yaml.Node,
 	}
 	return CatalogPreview{Release: record.MetadataRelease, Variant: record.Variant, Fields: record.Fields, Media: record.Media, Warnings: record.Warnings, MediaReasons: reasons, record: record}, nil
 }
+
+// PreferredCatalogRelease previews region policy over catalog editions only.
+// The CLI separately ranks the actual available ROMs; an explicit Edition wins.
+func PreferredCatalogRelease(node *yaml.Node, profile Profile) (string, error) {
+	best := ""
+	var rank []int
+	err := catalogyaml.Mapping(catalogyaml.Value(node, "releases"), func(name string, _ *yaml.Node) error {
+		candidate := versionRank(Record{Release: name, TitleContext: releaseTitleContext(node, name)}, profile.LaunchBox)
+		if best == "" || lessRank(candidate, rank) || !lessRank(rank, candidate) && name < best {
+			best, rank = name, candidate
+		}
+		return nil
+	})
+	return best, err
+}

@@ -18,9 +18,11 @@ import (
 	"rommeta/internal/catalogcache"
 	"rommeta/internal/catalogrules"
 	"rommeta/internal/exporter"
+	"rommeta/internal/regions"
 )
 
 type exportSettings struct {
+	LaunchBoxRegions  []string `json:"launchbox_regions,omitempty"`
 	Target            string   `json:"target,omitempty"`
 	Language          string   `json:"language"`
 	Media             string   `json:"media"`
@@ -170,7 +172,7 @@ func (s *server) exportProfile(settings exportSettings) (exporter.Profile, strin
 		}
 		p.Selection.Media[role] = rule
 	}
-	// Marshal only portable selection. Frontend and workstation paths remain CLI
+	// Marshal portable selection and explicit version preferences. Workstation paths remain CLI
 	// inputs; a saved profile can therefore be reused by both frontend adapters.
 	fields := map[string]any{}
 	for key, rule := range p.Selection.Fields {
@@ -181,6 +183,9 @@ func (s *server) exportProfile(settings exportSettings) (exporter.Profile, strin
 		media[key] = portableRule(rule)
 	}
 	wire := map[string]any{"schema_version": p.SchemaVersion, "titles": p.Titles, "selection": map[string]any{"description": portableRule(p.Selection.Description), "fields": fields, "media": media}}
+	if settings.LaunchBoxRegions != nil {
+		wire["launchbox"] = map[string]any{"regions": settings.LaunchBoxRegions}
+	}
 	content, err := yaml.Marshal(wire)
 	if err != nil {
 		return p, "", "", err
@@ -251,7 +256,13 @@ func (s *server) exportPreview(w http.ResponseWriter, r *http.Request) {
 		found, document, err := catalogcache.ReadGameDocument(s.root, platform, input.Folder)
 		if err == nil {
 			var preview exporter.CatalogPreview
-			preview, err = exporter.PreviewCatalog(r.Context(), s.root, found.Path, document.Root(), p, input.Release, input.Variant)
+			release := input.Release
+			if target == "launchbox" && release == "" && input.Variant == "" && len(p.LaunchBox.Regions) > 0 {
+				release, err = exporter.PreferredCatalogRelease(document.Root(), p)
+			}
+			if err == nil {
+				preview, err = exporter.PreviewCatalog(r.Context(), s.root, found.Path, document.Root(), p, release, input.Variant)
+			}
 			if err == nil {
 				item.Preview = &preview
 				if request.IncludeRaw {
@@ -286,7 +297,7 @@ func (s *server) exportOptions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	options := exportSourceOptions{Metadata: p.Selection.Description.Sources, Artwork: p.Selection.Media["cover"].Sources, Video: p.Selection.Media["video"].Sources, Available: []string{}, MediaRoles: map[string][]exporter.MediaRole{"es-de": exporter.ExportMediaRoles("es-de"), "launchbox": exporter.ExportMediaRoles("launchbox")}}
+	options := exportSourceOptions{Regions: regions.DisplayOptions(), Metadata: p.Selection.Description.Sources, Artwork: p.Selection.Media["cover"].Sources, Video: p.Selection.Media["video"].Sources, Available: []string{}, MediaRoles: map[string][]exporter.MediaRole{"es-de": exporter.ExportMediaRoles("es-de"), "launchbox": exporter.ExportMediaRoles("launchbox")}}
 	content, err := catalogfs.ReadFile(filepath.Join(s.root, "source-policies.yaml"))
 	if err == nil {
 		var document *catalogyaml.Document
@@ -304,6 +315,7 @@ func (s *server) exportOptions(w http.ResponseWriter, r *http.Request) {
 }
 
 type exportSourceOptions struct {
+	Regions    []string                        `json:"regions"`
 	Metadata   []string                        `json:"metadata_sources"`
 	Artwork    []string                        `json:"artwork_sources"`
 	Video      []string                        `json:"video_sources"`

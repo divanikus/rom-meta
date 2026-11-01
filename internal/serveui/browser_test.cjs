@@ -416,3 +416,36 @@ test('fingerprint filters cancel stale requests and escape registered file evide
  pending[0].resolve(json({total:1,fingerprints:[{name:'stale.zip'}]}));await old;assert.doesNotMatch(b.element('detail-body').innerHTML,/stale.zip/);
  const abandoned=b.run('loadFingerprints()');b.run('resetFingerprints();state.gameRequestID++;state.selectedFolder="Other"');assert.equal(pending[2].signal.aborted,true);pending[2].resolve(json({total:1,fingerprints:[{name:'wrong-card.zip'}]}));await abandoned;assert.equal(b.run('state.fingerprints'),null);
 });
+
+
+test('region priorities reorder visually, follow preview and download, and survive target changes', async () => {
+ const requests=[];
+ const b=browser(async(path,options)=>{requests.push(JSON.parse(options.body));return json({target:'launchbox',profile_yaml:'launchbox: {regions: [USA, Europe]}',games:[]});});
+ b.run(`state.exportSettings.target='launchbox';state.sourceDefaults={regions:['USA','Europe','Japan','Korea']};renderRegionControls();changeRegionPreference('Europe','enable');changeRegionPreference('USA','enable');changeRegionPreference('USA','up')`);
+ assert.equal(b.run('state.exportSettings.launchbox_regions.join(",")'),'USA,Europe');
+ assert.equal(b.element('export-region-summary').textContent,'Regions: USA → Europe');
+ const markup=b.element('export-region-controls').innerHTML;
+ assert.ok(markup.indexOf('data-region="USA"')<markup.indexOf('data-region="Europe"'));
+ assert.match(markup,/Add another region/);assert.match(markup,/Korea/);
+ await b.run('requestPreview([{folder:"Card"}],undefined)');await b.run('saveProfile()');
+ assert.ok(requests.every(input=>input.settings.launchbox_regions.join(',')==='USA,Europe'));
+ assert.equal(b.element('profile-yaml').textContent,'launchbox: {regions: [USA, Europe]}');
+ let hidden;
+ b.element('export-regions').classList.toggle=(name,value)=>{hidden=value};
+ b.run(`state.exportSettings.target='es-de';renderRegionControls()`);assert.equal(hidden,true);
+ b.run(`state.exportSettings.target='launchbox';state.platform='Another';renderRegionControls()`);assert.equal(hidden,false);
+ assert.equal(b.run('state.exportSettings.launchbox_regions.join(",")'),'USA,Europe');
+ b.run(`changeRegionPreference(null,'reset')`);
+ assert.equal(b.run('state.exportSettings.launchbox_regions.length'),0);
+ assert.match(b.element('export-region-controls').innerHTML,/alphabetical order/);
+ await b.run('saveProfile()');assert.deepEqual(requests.at(-1).settings.launchbox_regions,[]);
+});
+
+test('automatic Edition names region selection and escapes catalog release text', () => {
+ const b=browser(async()=>json({}));
+ b.run(`state.exportSettings.target='launchbox';state.exportSettings.launchbox_regions=['USA'];state.detailPreview={release:'Game <USA>'};state.edition=''`);
+ const html=b.run(`renderExportEdition({game:{releases:[{name:'Game <USA>'},{name:'Japan'}]}})`);
+ assert.match(html,/Region preference · Game &lt;USA&gt;/);assert.doesNotMatch(html,/<USA>/);
+ b.run(`state.edition='release:Japan';state.detailPreview.release='Japan'`);
+ assert.doesNotMatch(b.run(`renderExportEdition({game:{releases:[{name:'USA'},{name:'Japan'}]}})`),/Region preference · Japan/);
+});

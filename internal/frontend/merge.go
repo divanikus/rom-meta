@@ -210,10 +210,26 @@ func buildLaunchBox(p *Plan) error {
 		}
 		targets := map[string]string{}
 		problems := map[string]string{}
-		used := map[string][]string{}
+		type claim struct {
+			game   string
+			change int
+		}
+		claims := map[string]claim{}
+		conflictPositions := map[string]int{}
+		conflict := func(game, title, reason string) {
+			problems[game] = reason
+			message := platform + " / " + title + ": " + reason
+			if i, ok := conflictPositions[game]; ok {
+				p.Conflicts[i] = message
+			} else {
+				conflictPositions[game] = len(p.Conflicts)
+				p.Conflicts = append(p.Conflicts, message)
+			}
+		}
 		ordered := orderedGames(games)
 		for i, game := range ordered {
-			p.reportProgress("match library", platform+" / "+games[game].fields["Title"], i, len(ordered))
+			g := games[game]
+			p.reportProgress("plan library/media", platform+" / "+g.fields["Title"], i, len(ordered))
 			candidates := map[string]bool{}
 			if _, ok := existing[game]; ok {
 				candidates[game] = true
@@ -225,67 +241,58 @@ func buildLaunchBox(p *Plan) error {
 					}
 				}
 			}
-			observe(games[game].fields["ApplicationPath"])
+			observe(g.fields["ApplicationPath"])
 			for _, launch := range pathsByGame[game] {
 				observe(launch)
 			}
 			for _, v := range appsByGame[game] {
-				if id(v.fields["GameID"]) == game {
-					observe(v.fields["ApplicationPath"])
-				}
-			}
-			if len(candidates) > 1 {
-				problems[game] = "launch paths/IDs point to multiple existing cards; consolidate them in LaunchBox first"
-				continue
+				observe(v.fields["ApplicationPath"])
 			}
 			target := game
-			for candidate := range candidates {
-				target = candidate
-			}
-			targets[game] = target
-			used[target] = append(used[target], game)
-		}
-		p.reportProgress("match library", platform, len(ordered), len(ordered))
-		p.reportProgress("check versions", platform, 0, 0)
-		for _, group := range used {
-			if len(group) > 1 {
-				for _, game := range group {
-					problems[game] = "multiple catalog games point to one existing card"
+			if len(candidates) > 1 {
+				target = ""
+				problems[game] = "launch paths/IDs point to multiple existing cards; consolidate them in LaunchBox first"
+			} else {
+				for candidate := range candidates {
+					target = candidate
+				}
+				targets[game] = target
+				if previous, ok := claims[target]; ok {
+					reason := "multiple catalog games point to one existing card"
+					previousChange := p.Changes[previous.change]
+					conflict(previous.game, previousChange.Title, reason)
+					p.Changes[previous.change] = Change{Platform: platform, Title: previousChange.Title, ID: target, Action: "conflict"}
+					problems[game] = reason
+				} else {
+					claims[target] = claim{game, len(p.Changes)}
 				}
 			}
-		}
-		// Check all version IDs/paths before planning any part of a card.
-		for game, target := range targets {
-			for _, v := range appsByGame[game] {
-				if id(v.fields["GameID"]) != game {
-					continue
-				}
-				if v.fields["Section"] != "Version" {
-					return fmt.Errorf("package contains a non-version additional app")
-				}
-				matches := 0
-				for _, oldVersion := range versionsByGame[target] {
-					if id(oldVersion.fields["GameID"]) == target && oldVersion.fields["Section"] == "Version" && p.sameLaunch(oldVersion.fields["ApplicationPath"], v.fields["ApplicationPath"]) {
-						matches++
+			matchingVersions := map[string]*native{}
+			if problems[game] == "" {
+				for _, v := range appsByGame[game] {
+					if v.fields["Section"] != "Version" {
+						return fmt.Errorf("package contains a non-version additional app")
 					}
-
-				}
-				if oldVersion, ok := versionsByID[id(v.fields["Id"])]; ok && (id(oldVersion.fields["GameID"]) != target || oldVersion.fields["Section"] != "Version" || !p.sameLaunch(oldVersion.fields["ApplicationPath"], v.fields["ApplicationPath"])) {
-					problems[game] = "an existing additional app/version has a conflicting ID or launch path"
-				}
-				if matches > 1 {
-					problems[game] = "multiple existing versions have the same launch path"
+					matches := 0
+					for j := range versionsByGame[target] {
+						oldVersion := &versionsByGame[target][j]
+						if oldVersion.fields["Section"] == "Version" && p.sameLaunch(oldVersion.fields["ApplicationPath"], v.fields["ApplicationPath"]) {
+							matches++
+							matchingVersions[id(v.fields["Id"])] = oldVersion
+						}
+					}
+					if oldVersion, ok := versionsByID[id(v.fields["Id"])]; ok && (id(oldVersion.fields["GameID"]) != target || oldVersion.fields["Section"] != "Version" || !p.sameLaunch(oldVersion.fields["ApplicationPath"], v.fields["ApplicationPath"])) {
+						problems[game] = "an existing additional app/version has a conflicting ID or launch path"
+					}
+					if matches > 1 {
+						problems[game] = "multiple existing versions have the same launch path"
+					}
 				}
 			}
-		}
-		for i, game := range ordered {
-			g := games[game]
-			p.reportProgress("plan library/media", platform+" / "+g.fields["Title"], i, len(ordered))
-			target := targets[game]
 			change := Change{Platform: platform, Title: g.fields["Title"], ID: target, Action: "unchanged"}
 			if reason := problems[game]; reason != "" {
+				conflict(game, change.Title, reason)
 				change.Action = "conflict"
-				p.Conflicts = append(p.Conflicts, platform+" / "+change.Title+": "+reason)
 				p.Changes = append(p.Changes, change)
 				continue
 			}
@@ -356,14 +363,7 @@ func buildLaunchBox(p *Plan) error {
 				if id(v.fields["GameID"]) != game {
 					continue
 				}
-				var matching *native
-				for i := range versionsByGame[target] {
-					oldVersion := &versionsByGame[target][i]
-					if id(oldVersion.fields["GameID"]) == target && oldVersion.fields["Section"] == "Version" && p.sameLaunch(oldVersion.fields["ApplicationPath"], v.fields["ApplicationPath"]) {
-						matching = oldVersion
-						break
-					}
-				}
+				matching := matchingVersions[id(v.fields["Id"])]
 				if matching != nil {
 					if keyPath(root, matching.fields["ApplicationPath"]) == keyPath(root, v.fields["ApplicationPath"]) {
 						if err = p.playlist(v.fields["ApplicationPath"]); err != nil {
@@ -418,6 +418,9 @@ func buildLaunchBox(p *Plan) error {
 			p.Changes = append(p.Changes, change)
 		}
 		p.reportProgress("plan library/media", platform, len(ordered), len(ordered))
+		if len(p.Conflicts) > 0 {
+			continue
+		}
 		for oldID, incomingID := range retired {
 			target := targets[incomingID]
 			if target == "" || problems[incomingID] != "" {
@@ -434,6 +437,14 @@ func buildLaunchBox(p *Plan) error {
 	}
 	if count == 0 {
 		return fmt.Errorf("package contains no LaunchBox game cards")
+	}
+	if len(p.Conflicts) > 0 {
+		// A late shared-target conflict invalidates the entire current plan. Nothing
+		// has been written; discard draft files instead of rematching every card.
+		p.files = nil
+		p.Files = []string{}
+		p.outputFiles = nil
+		return nil
 	}
 	if err = p.remapPlaylistCards(retiredTargets); err != nil {
 		return err

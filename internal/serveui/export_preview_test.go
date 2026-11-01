@@ -268,3 +268,67 @@ func TestExportRegistryDiscoveryCustomMediaAndRaw(t *testing.T) {
 		}
 	}
 }
+
+func TestWebRegionPriorityRoundTripPreviewAndCLI(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "platforms", "Test", "Card", "game.yaml"), "title: Game\ndefault_release: Game (Japan)\nreleases:\n  Game (Europe): {regions: [Europe]}\n  Game (Japan): {regions: [Japan]}\n  Game (USA): {regions: [USA]}\n")
+	h, err := Handler(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var choices exportSourceOptions
+	requestJSON(t, h, "/api/export-options", &choices)
+	if !strings.Contains(strings.Join(choices.Regions, ","), "USA") {
+		t.Fatal("missing region choices")
+	}
+	settings := exportSettings{Target: "launchbox", Language: "en", Media: "none", LaunchBoxRegions: []string{"USA", "Europe", "Japan"}}
+	request := exportPreviewRequest{Platform: "Test", Settings: settings, Games: []previewGameRequest{{Folder: "Card"}}}
+	response := postPreview(t, h, request)
+	if response.Games[0].Error != "" || response.Games[0].Preview.Release != "Game (USA)" {
+		t.Fatal(response.Games)
+	}
+	profile, err := exporter.ExportProfile(root, response.ProfileYAML)
+	if err != nil || strings.Join(profile.LaunchBox.Regions, ",") != "usa,europe,japan" {
+		t.Fatal(profile.LaunchBox, err)
+	}
+	plan := &exporter.Plan{System: "saturn", PlatformName: "Sega Saturn", ROMRoot: t.TempDir(), Profile: profile}
+	for _, region := range []string{"Europe", "Japan", "USA"} {
+		name := "Game (" + region + ")"
+		plan.Records = append(plan.Records, exporter.Record{ROM: name + ".chd", Release: name, Game: "platforms/Test/Card", Status: "matched", GameTitle: "Game", Fields: map[string]exporter.Value{"title": {Value: "Game"}}, TitleContext: &exporter.TitleContext{Release: name, Regions: []string{region}}})
+	}
+	if err = exporter.ProjectTarget(plan, "launchbox"); err != nil {
+		t.Fatal(err)
+	}
+	first := plan.LaunchBox.Groups[0].Versions[0].Records[0]
+	if plan.Records[first].ROM != "Game (USA).chd" {
+		t.Fatal("saved web policy did not select the CLI primary", plan.Records[first].ROM)
+	}
+	request.Games[0].Release = "Game (Japan)"
+	if got := postPreview(t, h, request).Games[0].Preview.Release; got != "Game (Japan)" {
+		t.Fatal("explicit Edition lost", got)
+	}
+	request.Games[0].Release = ""
+	request.Settings.Target = "es-de"
+	if got := postPreview(t, h, request).Games[0].Preview.Release; got != "Game (Japan)" {
+		t.Fatal("LaunchBox policy changed ES-DE", got)
+	}
+	request.Settings.Target = "launchbox"
+	request.Settings.LaunchBoxRegions = []string{"Europe", "USA"}
+	if got := postPreview(t, h, request).Games[0].Preview.Release; got != "Game (Europe)" {
+		t.Fatal("region reorder ignored", got)
+	}
+	request.Settings.LaunchBoxRegions = []string{}
+	if got := postPreview(t, h, request).Games[0].Preview.Release; got != "Game (Japan)" {
+		t.Fatal("cleared priority overrides catalog default", got)
+	}
+	for _, bad := range []string{
+		`{"settings":{"target":"launchbox","language":"en","media":"none","launchbox_regions":["USA","usa"]}}`,
+		`{"settings":{"target":"launchbox","language":"en","media":"none","launchbox_regions":["USA\nEurope"]}}`,
+	} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("POST", "/api/export-preview", strings.NewReader(bad)))
+		if w.Code != 400 {
+			t.Fatal("invalid region policy accepted", w.Code, w.Body.String())
+		}
+	}
+}

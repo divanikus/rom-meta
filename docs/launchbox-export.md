@@ -15,7 +15,14 @@ rom-meta export --target launchbox --platform n64 --data-root "D:\Catalog" --rom
 rom-meta export --target launchbox --platform n64 --data-root "D:\Catalog" --rom-root "D:\Games\n64" --profile "D:\Profiles\launchbox.yaml" --destination "D:\LaunchBox" --apply
 ```
 
-Copy [the example profile](../examples/export-launchbox.yaml) to set preferences.
+In the web browser, choose **Export preview → LaunchBox → Regions**. Check the
+regions to prefer and move them with ↑/↓, then use **Save profile**. More regions
+are available through the region menu. Unchecked regions are still exported.
+No preference leaves equal versions in alphabetical order. The catalog preview
+follows this order unless you explicitly choose an Edition; the CLI chooses from
+the actual available ROMs. Existing LaunchBox cards retain their main launch.
+
+Alternatively copy [the example profile](../examples/export-launchbox.yaml).
 Omit `--profile` for default metadata/media policy and an original-first default.
 Ties use full edition descriptors and the original path, so selection is repeatable.
 The optional `launchbox` section ranks versions in this order:

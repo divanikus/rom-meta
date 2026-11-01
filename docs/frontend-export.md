@@ -49,6 +49,10 @@ serializing and reparsing XML or a JSON manifest. The existing destination XML
 is parsed for preservation; new XML is emitted only as final output. Media
 directories and incoming artwork are indexed once per command, with per-card
 lookups in memory. Version and planned-file lookups also use in-memory indexes.
+LaunchBox resolves each card, checks its versions and plans its changes in the
+same card pass. Target claims detect cross-card conflicts as later cards arrive;
+matching versions are reused. A conflict invalidates all draft writes and apply
+refuses the command, without a second full matching pass.
 
 Direct export uses its in-memory native plan once. Local catalog/archive assets
 and API responses are copied straight to final files. Size and any declared hash

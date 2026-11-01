@@ -949,6 +949,10 @@
           <label>Frontend <select id="export-target"><option value="es-de">ES-DE</option><option value="launchbox">LaunchBox</option></select></label>
           <label>Description <select id="export-language"><option value="en">English</option><option value="ru">Русский → English</option><option value="ja">日本語 → English</option><option value="fr">Français → English</option><option value="de">Deutsch → English</option><option value="es">Español → English</option><option value="it">Italiano → English</option><option value="pt">Português → English</option><option value="zh">中文 → English</option><option value="ko">한국어 → English</option></select></label>
           <label>Media <select id="export-media"><option value="all">Images + video</option><option value="images">Images</option><option value="cover">Cover only</option><option value="none">None</option><option value="expanded">All supported media</option><option value="custom" disabled>Custom selection</option></select></label>
+          <details class="export-advanced hidden" id="export-regions"><summary id="export-region-summary">Regions: no preference</summary><div class="advanced-fields">
+            <div class="secondary source-help">Top region first. Unchecked regions remain available. CLI selects from your ROMs; existing cards keep their main launch.</div>
+            <div id="export-region-controls"></div>
+          </div></details>
           <details class="export-advanced" id="export-advanced"><summary>Advanced</summary><div class="advanced-fields">
             <label>Titles <select id="export-title-mode"><option value="regional">Regional title</option><option value="release">Full release name</option></select></label>
             <label>Description scope <select id="export-description-scope"><option value="game">Whole game</option><option value="release">Selected release</option></select></label>
@@ -1077,12 +1081,23 @@
       $("export-controls").classList.toggle("hidden", !enabled);
       $("export-notice").classList.toggle("hidden", !enabled);
       if (enabled) loadExportSources();
+      renderRegionControls();
       resetPreviews(); renderGames(); renderDetails(); loadDetailPreview();
     }
     for (const id of ["target","language","media","title-mode","description-scope","media-scope","artwork-preference"]) {
       $("export-" + id).addEventListener("change", updateExportSettings);
     }
-    $("export-advanced").addEventListener("toggle", () => { if ($("export-advanced").open) loadExportSources(); });
+    $("export-advanced").addEventListener("toggle", () => { if ($("export-advanced").open) { $("export-regions").open = false; loadExportSources(); } });
+    $("export-regions").addEventListener("toggle", () => { if ($("export-regions").open) $("export-advanced").open = false; });
+    $("export-region-controls").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-region-action]");
+      if (button) changeRegionPreference(button.dataset.region, button.dataset.regionAction);
+    });
+    $("export-region-controls").addEventListener("change", (event) => {
+      const input = event.target.closest("[data-region-enabled]");
+      if (input) changeRegionPreference(input.dataset.region, input.checked ? "enable" : "disable");
+      else if (event.target.id === "export-add-region" && event.target.value) changeRegionPreference(event.target.value, "enable");
+    });
     $("export-source-controls").addEventListener("click", (event) => {
       const button = event.target.closest("[data-source-action]");
       if (button) changeSourcePreference(button.dataset.sourceCategory, button.dataset.sourceId, button.dataset.sourceAction);
@@ -1097,7 +1112,7 @@
       let roles = selectedMediaRoles();
       roles = input.checked ? [...new Set([...roles,input.dataset.mediaRole])] : roles.filter((role) => role !== input.dataset.mediaRole);
       state.exportSettings.media_roles = roles; state.exportSettings.media = "custom"; $("export-media").value = "custom";
-      renderMediaControls(); resetPreviews(); renderGames(); renderDetails(); loadDetailPreview();
+      renderMediaControls(); renderRegionControls(); resetPreviews(); renderGames(); renderDetails(); loadDetailPreview();
     });
     $("detail-body").addEventListener("click", (event) => {
       const button = event.target.closest("[data-detail-tab]");
@@ -1132,7 +1147,7 @@
         const allowed = new Set(mediaRoleChoices().map((role) => role.id));
         settings.media_roles = settings.media_roles.filter((role) => allowed.has(role));
       }
-      renderMediaControls(); resetPreviews(); renderGames(); renderDetails(); loadDetailPreview();
+      renderMediaControls(); renderRegionControls(); resetPreviews(); renderGames(); renderDetails(); loadDetailPreview();
     }
 
     function mediaRoleChoices() { return state.sourceDefaults?.media_roles?.[state.exportSettings.target] || []; }
@@ -1145,6 +1160,35 @@
       $("export-media-roles").innerHTML = '<legend>Media types</legend>' + mediaRoleChoices().map((role) => '<label><input type="checkbox" data-media-role="' + escapeAttr(role.id) + '"' + (selected.includes(role.id) ? ' checked' : '') + '> ' + escapeHTML(role.label) + '</label>').join("") + '<div class="secondary">Checked types use eligible local files. Missing artwork is skipped.</div>';
     }
 
+    function renderRegionControls() {
+      $("export-regions").classList.toggle("hidden", state.exportSettings.target !== "launchbox");
+      const selected = state.exportSettings.launchbox_regions || [];
+      $("export-region-summary").textContent = "Regions: " + (selected.length ? selected.join(" → ") : "no preference");
+      const choices = [...new Set([...selected, "USA", "Europe", "Japan", "World"])];
+      const rows = choices.map((region) => {
+        const index = selected.indexOf(region), attrs = ' data-region="' + escapeAttr(region) + '"';
+        return '<div class="source-order-row"><label><input type="checkbox" data-region-enabled' + attrs + (index >= 0 ? ' checked' : '') + '> ' + escapeHTML(region) + '</label>' +
+          '<button class="tab-button" type="button" data-region-action="up"' + attrs + ' aria-label="Move ' + escapeAttr(region) + ' up"' + (index <= 0 ? ' disabled' : '') + '>↑</button>' +
+          '<button class="tab-button" type="button" data-region-action="down"' + attrs + ' aria-label="Move ' + escapeAttr(region) + ' down"' + (index < 0 || index === selected.length-1 ? ' disabled' : '') + '>↓</button></div>';
+      }).join("");
+      const more = (state.sourceDefaults?.regions || []).filter((region) => !choices.includes(region));
+      $("export-region-controls").innerHTML = '<fieldset class="source-order"><legend>Preferred version regions</legend>' + rows +
+        (more.length ? '<select id="export-add-region" aria-label="Add another preferred region"><option value="">Add another region…</option>' + more.map((region) => '<option value="' + escapeAttr(region) + '">' + escapeHTML(region) + '</option>').join("") + '</select>' : '') +
+        '<div class="secondary source-help">' + (selected.length ? 'Other regions follow these choices.' : 'No preference: equal versions use alphabetical order.') + '</div>' +
+        '<button class="tab-button" type="button" data-region-action="reset"' + (!selected.length ? ' disabled' : '') + '>Clear priorities</button></fieldset>';
+    }
+    function changeRegionPreference(region, action) {
+      let selected = (state.exportSettings.launchbox_regions || []).slice(), index = selected.indexOf(region);
+      if (action === "reset") selected = [];
+      else if (action === "enable" && index < 0 && selected.length < 32) selected.push(region);
+      else if (action === "disable") selected = selected.filter((value) => value !== region);
+      else if (action === "up" && index > 0) [selected[index-1],selected[index]] = [selected[index],selected[index-1]];
+      else if (action === "down" && index >= 0 && index < selected.length-1) [selected[index],selected[index+1]] = [selected[index+1],selected[index]];
+      else return;
+      state.exportSettings.launchbox_regions = selected;
+      renderRegionControls(); resetPreviews(); renderGames(); renderDetails(); loadDetailPreview();
+    }
+
     const sourceCategories = {metadata_sources:"Metadata", artwork_sources:"Artwork", video_sources:"Video"};
     function sourceLabel(source) {
       source = String(source || "");
@@ -1155,7 +1199,7 @@
       state.sourceOptionsLoading = true; state.sourceOptionsError = ""; renderSourceControls();
       try { state.sourceDefaults = await fetchJSON("/api/export-options"); }
       catch (error) { state.sourceOptionsError = error.message; }
-      finally { state.sourceOptionsLoading = false; renderSourceControls(); renderMediaControls(); }
+      finally { state.sourceOptionsLoading = false; renderSourceControls(); renderMediaControls(); renderRegionControls(); }
     }
     function sourcePreference(category) {
       return state.exportSettings[category] ?? state.sourceDefaults?.[category] ?? [];
@@ -1304,8 +1348,8 @@
     }
     function renderExportEdition(response) {
       const preview = state.detailPreview, releases = response.game.releases || [], variants = response.game.variants || [];
-      const initial = response.game.default_release ? "Default · " + response.game.default_release : releases.length === 1 ? "Default · " + releases[0].name : "Game-level metadata";
-      const options = ['<option value="">' + initial + '</option>'];
+      const initial = state.exportSettings.target === "launchbox" && state.exportSettings.launchbox_regions?.length ? "Region preference" + (!state.edition && preview?.release ? " · " + preview.release : "") : response.game.default_release ? "Default · " + response.game.default_release : releases.length === 1 ? "Default · " + releases[0].name : "Game-level metadata";
+      const options = ['<option value="">' + escapeHTML(initial) + '</option>'];
       for (const release of releases) options.push('<option value="release:' + escapeAttr(release.name) + '">' + escapeHTML(release.name) + '</option>');
       for (const variant of variants) options.push('<option value="variant:' + escapeAttr(variant.name) + '" title="' + escapeAttr(variant.name) + '">' + escapeHTML(variantLabel(variant, variants)) + '</option>');
       const canChoose = releases.length > 1 || variants.length > 0;

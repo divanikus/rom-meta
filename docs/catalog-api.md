@@ -72,6 +72,14 @@ Export preview shows one selected description with its source/language and only
 selected media. Original provider descriptions and evidence are shown in Library
 mode, outside the export result.
 
+For LaunchBox, **Regions** beside the main controls sets the preferred version
+order with checkboxes and ↑/↓. The menu offers other known catalog regions;
+unselected regions remain eligible. With no preference, equal versions use
+alphabetical order. Save profile writes `launchbox.regions` in this order. The
+automatic Edition previews the preferred catalog release, while an explicit
+Edition still wins. Final primary selection depends on available ROMs; existing
+native cards keep their main launch. ES-DE does not use this LaunchBox policy.
+
 **Advanced** contains title mode, description/media scope, media type checkboxes
 and visual source lists. Media types reflect the chosen frontend; LaunchBox also
 offers cartridges, discs, box spines, banners and icons. A checked role needs an
@@ -142,6 +150,9 @@ It accepts `platform`, up to 32 explicit `games` objects (`folder`, optional
 `title_mode`, `description_scope`, `media_scope`, `metadata_sources`,
 `artwork_sources`, `video_sources`, `media_roles` and `artwork_preference` match the compact controls.
 `artwork_preference` accepts `auto` (default), `original` or `reconstructed`.
+`launchbox_regions` is an ordered list of up to 32 region names; an empty list
+clears priority. `/api/export-options` supplies canonical `regions` menu choices
+without scanning the catalog.
 `media_roles` replaces the preset roles when supplied; `[]` excludes all media.
 `custom` requires this array. Unknown/duplicate/frontend-incompatible roles fail
 validation. Top-level `include_raw: true` adds per-card `raw.xml` and
