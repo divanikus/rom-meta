@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -330,5 +332,70 @@ func TestDirectExportShowsOnlyScanAndWritePhases(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDirectExportCompletesWriteOnceWithoutIntermediateFiles(t *testing.T) {
+	for _, target := range []string{"es-de", "launchbox"} {
+		for _, network := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/api=%t", target, network), func(t *testing.T) {
+				root, roms := exportFixture(t)
+				destination := exportDestination(t, target)
+				temporary := t.TempDir()
+				for _, key := range []string{"TMP", "TEMP", "TMPDIR"} {
+					t.Setenv(key, temporary)
+				}
+				args := []string{"export", "--target", target, "--platform", "n64", "--rom-root", roms, "--destination", destination, "--apply"}
+				if network {
+					api, err := catalogapi.NewLookup(catalogapi.Options{Export: exporter.Options{DataRoot: root}, LookupCacheDir: "-"})
+					if err != nil {
+						t.Fatal(err)
+					}
+					server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						if strings.HasPrefix(r.URL.Path, "/v1/assets/") {
+							for _, parent := range []string{temporary, filepath.Dir(destination)} {
+								entries, err := os.ReadDir(parent)
+								if err != nil {
+									t.Error(err)
+								}
+								for _, e := range entries {
+									if strings.HasPrefix(e.Name(), "rommeta-direct-") || strings.HasPrefix(e.Name(), "rommeta-export-") {
+										t.Error("intermediate export/cache exists while downloading", e.Name())
+									}
+								}
+							}
+						}
+						api.ServeHTTP(w, r)
+					}))
+					defer server.Close()
+					args = append(args, "--api", server.URL)
+				} else {
+					args = append(args, "--data-root", root)
+				}
+				code, output := commandOutput(t, args...)
+				if code != 0 {
+					t.Fatal(output)
+				}
+				events := regexp.MustCompile(`export write ([0-9]+)/([0-9]+)`).FindAllStringSubmatch(output, -1)
+				total, previous, complete := -1, -1, 0
+				for _, event := range events {
+					current, _ := strconv.Atoi(event[1])
+					n, _ := strconv.Atoi(event[2])
+					if total < 0 {
+						total = n
+					}
+					if n != total || current < previous {
+						t.Fatalf("write restarted: %v", events)
+					}
+					if n > 0 && current == n {
+						complete++
+					}
+					previous = current
+				}
+				if complete != 1 {
+					t.Fatalf("expected one completed native write, got %d: %s", complete, output)
+				}
+			})
+		}
 	}
 }

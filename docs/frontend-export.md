@@ -30,14 +30,18 @@ scan observes each ROM and immediately matches it and selects metadata/media
 before advancing to the next file. Selective CHD hash retries stay with that input;
 the collection is not resolved a second time. Whole-selection title/disc grouping,
 XML and native-change calculation finish the read-only scan. Preview stops there.
-Write downloads/prepares selected assets and applies changes with ordinary backups.
+Write streams needed assets directly to their destination and publishes native
+XML after them, with ordinary backups.
 There is no separate plan, media or prepare/install step in the progress display.
 Counts refer to the current operation, not the complete command. Scan appears
 before source access and input counting; totals stay unknown until enumeration.
 
-Direct export reuses already-prepared temporary media on the same filesystem;
-other destinations use one verified copy. User-supplied --package assets are
-always copied, keeping that package independent.
+Direct export uses its in-memory native plan once. Local catalog/archive assets
+and API responses are copied straight to final files. Size and any declared hash
+are checked during copying; the resulting SHA256 is recorded in the recovery receipt. It creates no temporary export package or download cache, and does not
+rebuild/install a second plan. One write counter tracks final destination files
+and reaches completion once. Existing media is kept and unused alternate-version
+media is not copied. User-supplied --package files retain independent-copy behavior.
 
 Assets are written before native XML, with ordinary backups for
 replaced metadata. A failed write removes its partial file and reports the backup/

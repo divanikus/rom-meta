@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -155,7 +156,8 @@ func runDirectDestination(options exporter.Options, api string, systems []string
 	single := options.Platform != ""
 	var plans []*exporter.Plan
 	var skipped []exporter.SkippedSystem
-	var materialize func() error
+	var checkInputs func() error
+	var remoteAsset func(string) (io.ReadCloser, error)
 	if api != "" {
 		job, err := exportclient.Build(ctx, exportclient.Options{BatchOptions: exporter.BatchOptions{Options: options, All: all, Systems: systems}, API: api, Token: os.Getenv("ROMMETA_API_TOKEN")})
 		if err != nil {
@@ -163,7 +165,8 @@ func runDirectDestination(options exporter.Options, api string, systems []string
 		}
 		plans, skipped, stage = job.Batch.Plans, job.Batch.Skipped, job.Batch.Out
 		single = job.Single
-		materialize = func() error { return job.Apply(ctx) }
+		checkInputs = func() error { return job.CheckInputs(ctx) }
+		remoteAsset = func(source string) (io.ReadCloser, error) { return job.OpenAsset(ctx, source) }
 	} else if single {
 		plan, err := exporter.Build(options)
 		if err != nil {
@@ -171,14 +174,21 @@ func runDirectDestination(options exporter.Options, api string, systems []string
 		}
 		plans = []*exporter.Plan{plan}
 		stage = plan.Out
-		materialize = func() error { return exporter.Apply(plan, options.Progress) }
+		checkInputs = func() error { return exporter.CheckInputs(plan) }
 	} else {
 		batch, err := exporter.BuildBatch(exporter.BatchOptions{Options: options, All: all, Systems: systems})
 		if err != nil {
 			return err
 		}
 		plans, skipped, stage = batch.Plans, batch.Skipped, batch.Out
-		materialize = func() error { return exporter.ApplyBatch(batch, options.Progress) }
+		checkInputs = func() error {
+			for _, plan := range batch.Plans {
+				if err := exporter.CheckInputs(plan); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
 	}
 	progress.Done()
 	for _, plan := range plans {
@@ -192,9 +202,14 @@ func runDirectDestination(options exporter.Options, api string, systems []string
 	if err != nil {
 		return err
 	}
-	source := &frontend.Source{Files: map[string]frontend.SourceFile{}}
+	source := &frontend.Source{Check: checkInputs, Files: map[string]frontend.SourceFile{}}
 	for name, file := range files {
-		source.Files[name] = frontend.SourceFile{Data: file.Data, SHA256: file.SHA256, Size: file.Size}
+		open := file.Open
+		if remoteAsset != nil && file.SourcePath != "" {
+			path := file.SourcePath
+			open = func() (io.ReadCloser, error) { return remoteAsset(path) }
+		}
+		source.Files[name] = frontend.SourceFile{Data: file.Data, SHA256: file.SHA256, Size: file.Size, Open: open}
 	}
 	nativeOptions := frontend.Options{Progress: options.Progress, Target: options.Target, PackageRoot: stage, Destination: destination, MediaRoot: mediaRoot, Source: source}
 	plan, err := frontend.Build(nativeOptions)
@@ -210,38 +225,12 @@ func runDirectDestination(options exporter.Options, api string, systems []string
 		fmt.Println("Preview only. Repeat with --apply to update this destination.")
 		return nil
 	}
-	if err = plan.Check(); err != nil {
-		return err
-	}
 	if len(plan.Files) == 0 {
 		fmt.Println("Destination already up to date; no files or backups created.")
 		return nil
 	}
-	// Revalidation of the prepared files belongs to the write operation too.
-	writeProgress := func(stage, name string, current, total int) {
-		if name == "" {
-			name = stage
-		}
-		progress.UpdateTask("export", "write", current, total, name)
-	}
-	plan.Progress = writeProgress
-	nativeOptions.Progress = writeProgress
-	if err = materialize(); err != nil {
-		return err
-	}
-	// materialize publishes a new directory only on success; cleanup owns that result.
-	defer os.RemoveAll(stage)
-	if err = plan.Check(); err != nil {
-		return err
-	}
-	nativeOptions.Source = nil
-	nativeOptions.ReuseAssets = true
-	installed, err := frontend.Build(nativeOptions)
-	if err != nil {
-		return err
-	}
-	progress.Done()
-	return applyDestination(installed)
+	return applyDestination(plan)
+
 }
 
 func updateExportProgress(progress *terminalProgress, stage, name string, current, total int) {

@@ -23,6 +23,7 @@ type fingerprint struct {
 type fileChange struct {
 	root, path, source, hash string
 	data                     []byte
+	size                     int64
 }
 
 func digest(name string) (fingerprint, error) {
@@ -139,6 +140,7 @@ func (p *Plan) writeTo(root, relative string, data []byte, source string) (bool,
 	}
 	p.guards[name] = old
 	want := hashBytes(data)
+	var sourceSize int64
 	if source != "" {
 		f, err := p.packageProof(source)
 		if err != nil {
@@ -151,6 +153,16 @@ func (p *Plan) writeTo(root, relative string, data []byte, source string) (bool,
 			p.guards[source] = f
 		}
 		want = f.hash
+		if p.source != nil {
+			file, err := p.sourceFile(source)
+			if err != nil {
+				return false, err
+			}
+			sourceSize = file.Size
+			if file.Data != nil {
+				sourceSize = int64(len(file.Data))
+			}
+		}
 	}
 	if old.exists && old.hash == want {
 		return false, nil
@@ -166,7 +178,7 @@ func (p *Plan) writeTo(root, relative string, data []byte, source string) (bool,
 			return false, nil
 		}
 	}
-	p.files = append(p.files, fileChange{root: root, path: relative, source: source, hash: want, data: data})
+	p.files = append(p.files, fileChange{root: root, path: relative, source: source, hash: want, data: data, size: sourceSize})
 	display := relative
 	if root != p.Root {
 		display = filepath.Join(root, filepath.FromSlash(relative))
@@ -304,7 +316,23 @@ func (p *Plan) Apply() (backup string, err error) {
 		return "", nil
 	}
 	if p.source != nil {
-		return "", fmt.Errorf("generated preview must be materialized before apply")
+		if p.source.Check == nil {
+			return "", fmt.Errorf("generated preview has no input validation")
+		}
+		for _, c := range p.files {
+			if c.source != "" {
+				file, e := p.sourceFile(c.source)
+				if e != nil {
+					return "", e
+				}
+				if file.Data == nil && (file.Open == nil || file.Size <= 0) {
+					return "", fmt.Errorf("generated preview has no asset reader: %s", c.path)
+				}
+			}
+		}
+		if err = p.source.Check(); err != nil {
+			return "", err
+		}
 	}
 	parent, err := safeJoin(p.Root, "Backups/RomMeta")
 	if err != nil {
@@ -343,10 +371,27 @@ func (p *Plan) Apply() (backup string, err error) {
 			}
 		}
 	}
-	data, _ := json.MarshalIndent(receipt, "", "  ")
-	if err = os.WriteFile(filepath.Join(backup, "changes.json"), append(data, '\n'), 0o600); err != nil {
+	writeReceipt := func() error {
+		for i := range receipt {
+			receipt[i].SHA256 = p.files[i].hash
+			if strings.HasPrefix(receipt[i].SHA256, "deferred:") {
+				receipt[i].SHA256 = ""
+			}
+		}
+		data, e := json.MarshalIndent(receipt, "", "  ")
+		if e != nil {
+			return e
+		}
+		return os.WriteFile(filepath.Join(backup, "changes.json"), append(data, '\n'), 0600)
+	}
+	if err = writeReceipt(); err != nil {
 		return backup, err
 	}
+	defer func() {
+		if e := writeReceipt(); e != nil && err == nil {
+			err = e
+		}
+	}()
 	if err = p.validate(); err != nil {
 		return backup, err
 	}
@@ -369,7 +414,7 @@ func (p *Plan) Apply() (backup string, err error) {
 		if current != p.guards[target] {
 			return backup, fmt.Errorf("library changed during merge: %s", target)
 		}
-		err = p.publish(c, target, current)
+		err = p.publish(&p.files[i], target, current)
 		if err != nil {
 			return backup, err
 		}
@@ -381,24 +426,21 @@ func (p *Plan) Apply() (backup string, err error) {
 }
 
 // publish writes a new asset once or replaces metadata through one adjacent temp
-// file. Internally generated packages may reuse immutable assets by hard link;
-// the caller removes that task-owned package after apply, leaving final files.
-func (p *Plan) publish(c fileChange, target string, current fingerprint) (err error) {
-	if c.source != "" && p.reuseAssets && !current.exists {
-		proof, e := digest(c.source)
-		if e != nil {
-			return e
-		}
-		if !proof.exists || proof.hash != c.hash {
-			return fmt.Errorf("package asset changed: %s", c.path)
-		}
-		if e = os.Link(c.source, target); e == nil {
-			return nil
-		}
-		// Different filesystems or unsupported links retain the one-copy path.
-	}
+// file. Direct assets are streamed from their original source; package assets
+// are independently copied.
+func (p *Plan) publish(c *fileChange, target string, current fingerprint) (err error) {
 	var in io.ReadCloser
-	if c.source != "" {
+	if c.source != "" && p.source != nil {
+		var file SourceFile
+		file, err = p.sourceFile(c.source)
+		if err == nil {
+			if file.Data != nil {
+				in = io.NopCloser(bytes.NewReader(file.Data))
+			} else {
+				in, err = file.Open()
+			}
+		}
+	} else if c.source != "" {
 		in, err = os.Open(c.source)
 	} else {
 		in = io.NopCloser(bytes.NewReader(c.data))
@@ -406,7 +448,12 @@ func (p *Plan) publish(c fileChange, target string, current fingerprint) (err er
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	inputClosed := false
+	defer func() {
+		if !inputClosed {
+			_ = in.Close()
+		}
+	}()
 	var out *os.File
 	if current.exists {
 		out, err = os.CreateTemp(filepath.Dir(target), ".rommeta-write-")
@@ -425,14 +472,30 @@ func (p *Plan) publish(c fileChange, target string, current fingerprint) (err er
 		}
 	}()
 	hash := sha256.New()
-	if _, err = io.Copy(io.MultiWriter(out, hash), in); err != nil {
-		return err
+	var reader io.Reader = in
+	if c.source != "" && p.source != nil {
+		reader = io.LimitReader(in, c.size+1)
+	}
+	size, copyErr := io.Copy(io.MultiWriter(out, hash), reader)
+	closeErr := in.Close()
+	inputClosed = true
+	if copyErr != nil {
+		return copyErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	if c.source != "" && p.source != nil && size != c.size {
+		return fmt.Errorf("source asset size changed while writing: %s", c.path)
 	}
 	if err = out.Close(); err != nil {
 		return err
 	}
-	if hex.EncodeToString(hash.Sum(nil)) != c.hash {
-		return fmt.Errorf("package asset changed while writing: %s", c.path)
+	actual := hex.EncodeToString(hash.Sum(nil))
+	if strings.HasPrefix(c.hash, "deferred:") {
+		c.hash = actual
+	} else if actual != c.hash {
+		return fmt.Errorf("source asset changed while writing: %s", c.path)
 	}
 	if current.exists {
 		proof, e := digest(target)

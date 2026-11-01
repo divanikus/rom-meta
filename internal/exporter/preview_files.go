@@ -3,13 +3,16 @@ package exporter
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 )
 
 // PreviewFile is generated metadata or an asset proof, without copying asset bytes.
 type PreviewFile struct {
-	Data   []byte
-	SHA256 string
-	Size   int64
+	SourcePath string
+	Open       func() (io.ReadCloser, error)
+	Data       []byte
+	SHA256     string
+	Size       int64
 }
 
 func PreviewFiles(plans []*Plan, single bool) (map[string]PreviewFile, error) {
@@ -58,7 +61,12 @@ func PreviewFiles(plans []*Plan, single bool) (map[string]PreviewFile, error) {
 		}
 		for _, record := range plan.Records {
 			for _, media := range record.Media {
-				files[media.OutputPath] = PreviewFile{SHA256: media.SHA256, Size: media.Size}
+				file := PreviewFile{SourcePath: media.SourcePath, SHA256: media.SHA256, Size: media.Size}
+				if plan.SourceAPI == "" {
+					selected := media
+					file.Open = func() (io.ReadCloser, error) { return openMedia(plan, selected) }
+				}
+				files[media.OutputPath] = file
 			}
 		}
 	}

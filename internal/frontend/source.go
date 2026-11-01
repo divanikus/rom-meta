@@ -2,6 +2,7 @@ package frontend
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -9,9 +10,13 @@ import (
 )
 
 // Source describes generated metadata and asset proofs without copying or
-// downloading media during a direct-export preview. Apply uses a validated disk package.
-type Source struct{ Files map[string]SourceFile }
+// downloading media during preview. Direct apply reads only needed assets.
+type Source struct {
+	Files map[string]SourceFile
+	Check func() error
+}
 type SourceFile struct {
+	Open   func() (io.ReadCloser, error)
 	Data   []byte
 	SHA256 string
 	Size   int64
@@ -63,26 +68,34 @@ func (p *Plan) packageProof(name string) (fingerprint, error) {
 	if p.source == nil {
 		return digest(name)
 	}
-	relative, err := filepath.Rel(p.Package, name)
+	file, err := p.sourceFile(name)
 	if err != nil {
 		return fingerprint{}, err
-	}
-	relative = filepath.ToSlash(relative)
-	if _, err = safeJoin(p.Package, relative); err != nil {
-		return fingerprint{}, err
-	}
-	file, ok := p.source.Files[relative]
-	if !ok {
-		return fingerprint{}, fmt.Errorf("missing generated package asset: %s", relative)
 	}
 	hash := file.SHA256
 	if file.Data != nil {
 		hash = hashBytes(file.Data)
 	}
 	if hash == "" {
-		hash = "deferred:" + relative
+		hash = "deferred:" + name
 	}
 	return fingerprint{true, hash}, nil
+}
+
+func (p *Plan) sourceFile(name string) (SourceFile, error) {
+	relative, err := filepath.Rel(p.Package, name)
+	if err != nil {
+		return SourceFile{}, err
+	}
+	relative = filepath.ToSlash(relative)
+	if _, err = safeJoin(p.Package, relative); err != nil {
+		return SourceFile{}, err
+	}
+	file, ok := p.source.Files[relative]
+	if !ok {
+		return SourceFile{}, fmt.Errorf("missing generated asset: %s", relative)
+	}
+	return file, nil
 }
 
 func prospectiveRoot(name string) (string, error) {
