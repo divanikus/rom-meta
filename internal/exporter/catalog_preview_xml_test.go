@@ -106,7 +106,7 @@ func TestLaunchBoxHumanVariantNamesKeepNativeIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	version := projection.Groups[0].Versions[0]
-	if version.ID != id || !strings.Contains(version.Name, "Translated title [en] / Test team / v1.2") || strings.Contains(version.Name, "012345") {
+	if version.ID != id || version.Name != "variant" || strings.Contains(version.Name, "012345") {
 		t.Fatal(version)
 	}
 }

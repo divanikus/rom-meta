@@ -111,15 +111,16 @@ Conflicts refuse application before downloads or library writes.
 Preview prints `add`, `enrich`, `unchanged` and `conflict` with fields, versions,
 media, playlists and file counts. It creates no staging directory, copies no media
 and downloads no API assets. `--report` explicitly writes only the requested new
-JSON report; it contains private paths. Apply prepares validated files internally,
-rechecks the destination, then installs them. No manual package/export/import step
-is required. An unchanged apply skips preparation and asset downloads, writes no
-files and creates no backup.
+JSON report; it contains private paths. Direct apply rechecks source observations
+and the destination, then streams needed local/archive/API assets straight to
+final paths, followed by native XML. It does not create an intermediate package
+or download cache. One write counter covers final files. An unchanged apply
+opens/downloads no assets, writes no files and creates no backup.
 
 Replaced files are backed up under `<destination>/Backups/RomMeta/<run>/`.
 `changes.json` lists roots, relative paths, new files and expected checksums.
-Assets are prepared before XML publication. This is not a multi-file transaction;
-a partial I/O failure may require reviewed manual recovery. No automatic restore
+Assets are written and validated before XML publication. This is not a multi-file
+transaction; a partial I/O failure may require reviewed manual recovery. No automatic restore
 overwrites later edits. Do not interrupt an active frontend save.
 
 See [platform selection](platform-selection.md) for the unified code/name/alias list,

@@ -248,7 +248,7 @@ media remain in VersionMedia for review, outside LaunchBox's automatic image sca
 
 Install with rom-meta export --target launchbox --package <this package>
 --destination <installation>. Preview first; repeat with --apply after closing LaunchBox/Big Box.
-The command matches native IDs, recorded bindings, launch paths and ordered M3U
+The command matches current native IDs, launch paths and ordered M3U
 member paths. It keeps existing card IDs, nonempty fields, launch settings,
 favorites, history and unknown XML; adds versions and missing media; and backs up
 replaced files. Conflicting existing cards require reviewed native consolidation.

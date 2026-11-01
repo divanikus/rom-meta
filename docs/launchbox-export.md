@@ -29,8 +29,13 @@ launchbox:
 
 Put `translation` first to prefer translations. Unlisted values follow listed
 ones. These lists rank available inputs; they do not acquire, filter or replace
-ROMs. Other prepared variant kinds remain selectable. Variant names retain kind,
-language and available group/version credits. Equal labels gain the source path.
+ROMs. Other prepared variant kinds remain selectable. Visible version labels use
+the literal tag tail of the input filename, for example `(Japan) (2M)` or
+`(Japan) [T-En by Example v1.1] [Ultimate] [n]`. Tag contents are not decoded,
+translated or rebuilt from catalog fields. The repeated game title and file path
+are omitted. Files without a separable tag tail use their basename. Equal labels
+gain short stable numbers. Disc sets append their disc count; source sets retain
+the source-set marker. These labels do not affect matching or primary selection.
 
 The card keeps its catalog title; fields and native artwork come from the primary
 input. Its ApplicationPath points to the same launch as the primary version.
@@ -185,6 +190,9 @@ Default year-0001 dates and zero player counts count as empty. Changing export
 primary preferences does not replace an installed card's working primary launch.
 New versions inherit an assigned main-card emulator; new cards remain unassigned.
 Review emulator/core/BIOS settings before playing.
+
+Existing nonempty native Name/Version labels remain owner data and are preserved,
+including labels from earlier exports. New versions use the literal filename tags.
 
 Missing primary artwork is installed under the retained card ID. Existing native
 GUID/title/database-ID artwork in the same category is kept, including region

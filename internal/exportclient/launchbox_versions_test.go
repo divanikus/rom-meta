@@ -54,7 +54,11 @@ func TestLaunchBoxGroupedVersionNetworkParityAndLegacyProfile(t *testing.T) {
 	fingerprints.WriteString("items:\n")
 	for _, entry := range []struct{ name, key, kind string }{{"us", "Game (USA)", "release"}, {"jp", "Game (Japan)", "release"}, {"ru", "Russian", "variant"}, {"hack", "Hard", "variant"}} {
 		data := []byte("unique synthetic " + entry.name)
-		put(t, filepath.Join(roms, entry.name+".z64"), data)
+		inputName := entry.name + ".z64"
+		if entry.name == "ru" {
+			inputName = "Game (Japan) [T-Ru by Literal team v9].z64"
+		}
+		put(t, filepath.Join(roms, inputName), data)
 		fmt.Fprintf(&fingerprints, "  - %s: %q\n    file: {size: %d, sha256: '%x'}\n", entry.kind, entry.key, len(data), sha256.Sum256(data))
 	}
 	put(t, filepath.Join(path, "fingerprints.yaml"), []byte(fingerprints.String()))
@@ -100,7 +104,7 @@ func TestLaunchBoxGroupedVersionNetworkParityAndLegacyProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := remote.Batch.Plans[0]
-	if requests != 1 || len(got.LaunchBox.Groups) != 1 || got.LaunchBox.VersionCount != 4 || !strings.Contains(got.LaunchBox.Groups[0].Versions[0].Name, "translation: Russian") {
+	if requests != 1 || len(got.LaunchBox.Groups) != 1 || got.LaunchBox.VersionCount != 4 || got.LaunchBox.Groups[0].Versions[0].Name != "(Japan) [T-Ru by Literal team v9]" {
 		t.Fatal(got.LaunchBox, requests)
 	}
 	if !reflect.DeepEqual(local.LaunchBox, got.LaunchBox) || !reflect.DeepEqual(nativeLaunchBoxFiles(t, local.Out), nativeLaunchBoxFiles(t, remote.Batch.Out)) {

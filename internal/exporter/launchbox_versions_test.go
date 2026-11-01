@@ -55,7 +55,7 @@ func TestLaunchBoxGameVersionsAndConfiguredPrimary(t *testing.T) {
 	if err := xml.Unmarshal(body, &native); err != nil {
 		t.Fatal(err)
 	}
-	if len(native.Games) != 1 || len(native.Versions) != 6 || !strings.Contains(native.Versions[0].Name, "translation: Russian translation [ru]") {
+	if len(native.Games) != 1 || len(native.Versions) != 6 || native.Versions[0].Name != "ru" {
 		t.Fatal(native)
 	}
 	for _, v := range native.Versions {

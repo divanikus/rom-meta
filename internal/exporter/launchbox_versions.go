@@ -362,14 +362,34 @@ func buildLaunchBoxProjection(plan *Plan) (*LaunchBoxProjection, error) {
 		if g.Title == "" {
 			g.Title = main.Fields["title"].Value
 		}
+		// Selection uses the full edition descriptors above. The visible label is
+		// only the literal filename tags; it does not influence the primary.
 		counts := map[string]int{}
-		for _, v := range g.Versions {
-			counts[strings.ToLower(v.Name)]++
-		}
 		for i := range g.Versions {
 			v := &g.Versions[i]
-			if counts[strings.ToLower(v.Name)] > 1 {
-				v.Name += " / " + plan.Records[v.Records[0]].ROM
+			discCount := len(plan.Records[v.Records[0]].Playlist)
+			if v.GeneratedPlaylist {
+				discCount = len(v.Records)
+			}
+			if plan.Records[v.Records[0]].Status == "matched" {
+				v.Name = launchBoxFileLabel(plan.Records[v.Records[0]], discCount)
+			}
+			counts[strings.ToLower(v.Name)]++
+		}
+		ordinals := map[string]int{}
+		for i := range g.Versions {
+			v := &g.Versions[i]
+			key := strings.ToLower(v.Name)
+			if counts[key] > 1 {
+				for {
+					ordinals[key]++
+					label := v.Name + fmt.Sprintf(" (%d)", ordinals[key])
+					if counts[strings.ToLower(label)] == 0 {
+						v.Name = label
+						counts[strings.ToLower(label)] = 1
+						break
+					}
+				}
 			}
 		}
 		// Duplicate launches would produce duplicate native version IDs.
