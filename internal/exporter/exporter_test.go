@@ -514,3 +514,40 @@ func TestGameGearSMSModePayloadUsesOnlyItsOwnExactCatalog(t *testing.T) {
 		}
 	}
 }
+
+func TestMediaSelectionParentsKeepBoundsAndEmptyFallback(t *testing.T) {
+	for _, outside := range []bool{false, true} {
+		t.Run(fmt.Sprintf("outside=%t", outside), func(t *testing.T) {
+			root := t.TempDir()
+			target := filepath.Join(root, "actual")
+			if outside {
+				target = t.TempDir()
+			}
+			put(t, filepath.Join(target, "game.yaml"), []byte("title: Example\nreleases:\n  Example (USA): {regions: [USA]}\n"))
+			put(t, filepath.Join(target, "media", "box-front-01.usa.launchbox.png"), nil)
+			put(t, filepath.Join(target, "media", "box-front-02.usa.launchbox.png"), []byte("cover"))
+			put(t, filepath.Join(target, "media", "logo.usa.launchbox.png"), []byte("logo"))
+			doc, err := readDocument(filepath.Join(target, "game.yaml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			profile, err := loadProfile(root, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			selected, _, err := resolveMedia(root, &game{path: target, root: doc}, "Example (USA)", "example.z64", profile, true, "n64")
+			if outside {
+				if err == nil || !strings.Contains(err.Error(), "escapes catalog root") {
+					t.Fatal("outside parent accepted", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(selected) != 2 || selected["cover"].SourcePath != "actual/media/box-front-02.usa.launchbox.png" || selected["logo"].SourcePath != "actual/media/logo.usa.launchbox.png" {
+				t.Fatal("canonical source paths or empty fallback changed", selected)
+			}
+		})
+	}
+}

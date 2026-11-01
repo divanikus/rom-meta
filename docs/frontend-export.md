@@ -33,8 +33,9 @@ XML and native-change calculation finish the read-only scan. Preview stops there
 Write streams needed assets directly to their destination and publishes native
 XML after them, with ordinary backups.
 There is no separate plan, media or prepare/install step in the progress display.
-Counts refer to the current operation, not the complete command. Scan appears
-before source access and input counting; totals stay unknown until enumeration.
+Counts refer to the current operation, not the complete command: catalog counts
+are game cards, while ROM counts are launch inputs. Scan appears before source
+access and input counting; totals stay unknown until enumeration.
 
 Direct export uses its in-memory native plan once. Local catalog/archive assets
 and API responses are copied straight to final files. Size and any declared hash

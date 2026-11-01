@@ -239,6 +239,11 @@ func resolveMedia(root string, g *game, release, rom string, profile Profile, re
 	if len(regionHints) > 0 && len(regionHints[0]) > 0 {
 		regions = regionHints[0]
 	}
+	// All candidates in a directory share its canonical parent. Resolve that
+	// parent once for this selection, then check each selected file with Lstat.
+	// This preserves the boundary/symlink checks without traversing the same
+	// ancestors again for every artwork role over a network filesystem.
+	parents := map[string]string{}
 	roleNames := make([]string, 0, len(profile.Selection.Media))
 	for role := range profile.Selection.Media {
 		roleNames = append(roleNames, role)
@@ -396,19 +401,31 @@ func resolveMedia(root string, g *game, release, rom string, profile Profile, re
 			return candidates[i].path < candidates[j].path
 		})
 		for candidateIndex, candidate := range candidates {
-			real, err := realPath(candidate.path)
+			parent := filepath.Dir(candidate.path)
+			realParent, ok := parents[parent]
+			if !ok {
+				realParent, err = realPath(parent)
+				if err != nil {
+					if os.IsNotExist(err) {
+						continue
+					}
+					return nil, nil, err
+				}
+				if !within(root, realParent) {
+					return nil, nil, fmt.Errorf("media path escapes catalog root")
+				}
+				parents[parent] = realParent
+			}
+			real := filepath.Join(realParent, filepath.Base(candidate.path))
+			info, err := catalogfs.Lstat(real)
 			if err != nil {
 				if os.IsNotExist(err) {
 					continue
 				}
 				return nil, nil, err
 			}
-			if !within(root, real) {
-				return nil, nil, fmt.Errorf("media path escapes catalog root")
-			}
-			info, err := catalogfs.Stat(real)
-			if err != nil {
-				return nil, nil, err
+			if info.Mode()&os.ModeSymlink != 0 {
+				return nil, nil, fmt.Errorf("media file changed to a symlink")
 			}
 			if !info.Mode().IsRegular() || info.Size() == 0 {
 				continue
