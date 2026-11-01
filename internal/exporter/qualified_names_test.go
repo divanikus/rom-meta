@@ -59,11 +59,8 @@ func TestQualifiedCHDExportsKeepObservedEditionsAndDiscSets(t *testing.T) {
 					}
 				}
 				for _, v := range plan.LaunchBox.Groups[0].Versions {
-					if !v.GeneratedPlaylist || len(v.Records) != 2 || !strings.Contains(v.Name, "[2 discs]") {
+					if !v.GeneratedPlaylist || len(v.Records) != 2 || v.Name != filepath.Base(plan.Records[v.Records[0]].ROM) {
 						t.Fatalf("lost disc set: %+v", v)
-					}
-					if strings.Contains(v.Name, "Disc ") {
-						t.Fatal("disc token in set title", v.Name)
 					}
 					first := plan.Records[v.Records[0]]
 					second := plan.Records[v.Records[1]]

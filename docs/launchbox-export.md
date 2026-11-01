@@ -17,7 +17,7 @@ rom-meta export --target launchbox --platform n64 --data-root "D:\Catalog" --rom
 
 Copy [the example profile](../examples/export-launchbox.yaml) to set preferences.
 Omit `--profile` for default metadata/media policy and an original-first default.
-Ties use the complete version label and original path, so selection is repeatable.
+Ties use full edition descriptors and the original path, so selection is repeatable.
 The optional `launchbox` section ranks versions in this order:
 
 ```yaml
@@ -29,13 +29,14 @@ launchbox:
 
 Put `translation` first to prefer translations. Unlisted values follow listed
 ones. These lists rank available inputs; they do not acquire, filter or replace
-ROMs. Other prepared variant kinds remain selectable. Visible version labels use
-the literal tag tail of the input filename, for example `(Japan) (2M)` or
-`(Japan) [T-En by Example v1.1] [Ultimate] [n]`. Tag contents are not decoded,
-translated or rebuilt from catalog fields. The repeated game title and file path
-are omitted. Files without a separable tag tail use their basename. Equal labels
-gain short stable numbers. Disc sets append their disc count; source sets retain
-the source-set marker. These labels do not affect matching or primary selection.
+ROMs. Other prepared variant kinds remain selectable. A version label is the full
+input filename, including its extension and original text, without directory paths.
+For example: `Example (Japan) [T-En by Example v1.1] [Ultimate] [n].chd`.
+No translation/hack prefix or interpreted tag description is added. Identical
+filenames in different directories gain short stable numbers. Grouped disc sets
+show the first member's filename and still launch their edition-specific M3U;
+supplied M3Us show their own filename. Labels do not change matching, primary
+selection or source-set readiness.
 
 The card keeps its catalog title; fields and native artwork come from the primary
 input. Its ApplicationPath points to the same launch as the primary version.
@@ -192,7 +193,7 @@ New versions inherit an assigned main-card emulator; new cards remain unassigned
 Review emulator/core/BIOS settings before playing.
 
 Existing nonempty native Name/Version labels remain owner data and are preserved,
-including labels from earlier exports. New versions use the literal filename tags.
+including labels from earlier exports. New versions use the full input filename.
 
 Missing primary artwork is installed under the retained card ID. Existing native
 GUID/title/database-ID artwork in the same category is kept, including region

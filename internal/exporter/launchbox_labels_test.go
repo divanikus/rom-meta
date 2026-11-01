@@ -7,32 +7,35 @@ import (
 	"testing"
 )
 
-func TestLaunchBoxLiteralFileTags(t *testing.T) {
-	for _, tc := range []struct {
-		file, want string
-		discs      int
-	}{
-		{"retail/Example (Japan) (2M).chd", "(Japan) (2M)", 0},
-		{"translations/en/Example (Japan) [T-En by Paul_met v1.1] [Ultimate] [Bugfix by Another] [n].chd", "(Japan) [T-En by Paul_met v1.1] [Ultimate] [Bugfix by Another] [n]", 0},
-		{"Example [opaque, With + Punctuation]  (Special).chd", "[opaque, With + Punctuation]  (Special)", 0},
-		{"Example (USA) (Disc I) (Beta).chd", "(USA) (Beta) [2 discs]", 2},
-		{"Example (USA) (Disc I) (Beta).chd", "(USA) (Disc I) (Beta)", 0},
-		{"folder/Unlabelled.chd", "Unlabelled", 0},
-		{"Example [unclosed.chd", "Example [unclosed", 0},
-		{"Example [翻訳版 by 著者 v1.0].chd", "[翻訳版 by 著者 v1.0]", 0},
+func TestLaunchBoxFilenameLabelsIgnoreVariantDescriptors(t *testing.T) {
+	for _, tc := range []struct{ file, want string }{
+		{"retail/Example (Japan) (2M).chd", "Example (Japan) (2M).chd"},
+		{"translations/en/Example (Japan) [T-En by Example v1.1] [Ultimate] [n].chd", "Example (Japan) [T-En by Example v1.1] [Ultimate] [n].chd"},
+		{"Example [opaque, With + Punctuation]  (Special).chd", "Example [opaque, With + Punctuation]  (Special).chd"},
+		{"folder/Unlabelled.chd", "Unlabelled.chd"},
+		{"Example [unclosed.chd", "Example [unclosed.chd"},
+		{"Example [翻訳版 by 著者 v1.0].chd", "Example [翻訳版 by 著者 v1.0].chd"},
 	} {
 		t.Run(tc.file, func(t *testing.T) {
-			r := Record{ROM: tc.file, Variant: "ignored-identity", VariantInfo: &VariantInfo{Kind: "translation", Languages: []string{"ru"}, Group: "Ignored group", Version: "99"}}
-			if got := launchBoxFileLabel(r, tc.discs); got != tc.want {
-				t.Fatalf("%q, want literal %q", got, tc.want)
+			for _, status := range []string{"matched", "unmatched", "ambiguous"} {
+				r := versionRecord(tc.file, "platforms/saturn/Example", "Different catalog title", "Japan", "ru", "translation")
+				r.Status = status
+				plan := &Plan{System: "saturn", ROMRoot: t.TempDir(), Records: []Record{r}}
+				if err := ProjectTarget(plan, "launchbox"); err != nil {
+					t.Fatal(err)
+				}
+				v := plan.LaunchBox.Groups[0].Versions[0]
+				if v.Name != tc.want {
+					t.Fatalf("%s: %q, want %q", status, v.Name, tc.want)
+				}
 			}
 		})
 	}
 }
 
-func TestLaunchBoxLiteralTagsKeepIdentityPrimaryAndStableCollisions(t *testing.T) {
+func TestLaunchBoxFilenamesKeepIdentityPrimaryAndStableCollisions(t *testing.T) {
 	plan := &Plan{System: "saturn", ROMRoot: t.TempDir()}
-	for _, file := range []string{"a/Example (Japan) [opaque].chd", "b/Example (Japan) [opaque].chd", "c/Example (Japan) [opaque] (1).chd", "Example (USA) (Rev 1).chd"} {
+	for _, file := range []string{"a/Example (Japan) [opaque].chd", "b/Example (Japan) [opaque].chd", "c/Different title (Japan) [opaque].chd", "Example (USA) (Rev 1).chd"} {
 		plan.Records = append(plan.Records, versionRecord(file, "platforms/saturn/Example", "Example (Japan)", "Japan", "ja", "original"))
 	}
 	projection, err := buildLaunchBoxProjection(plan)
@@ -48,8 +51,8 @@ func TestLaunchBoxLiteralTagsKeepIdentityPrimaryAndStableCollisions(t *testing.T
 	seen := map[string]bool{}
 	for _, v := range group.Versions {
 		r := plan.Records[v.Records[0]]
-		if seen[v.Name] || strings.Contains(v.Name, "Example") || strings.Contains(v.Name, ".chd") {
-			t.Fatal("duplicate or filename label", v)
+		if seen[v.Name] || strings.ContainsAny(v.Name, "/\\") || !strings.HasSuffix(v.Name, ".chd") && !strings.Contains(v.Name, ".chd (") {
+			t.Fatal("duplicate label or missing filename", v)
 		}
 		if v.ID != launchBoxVersionID(plan, r) || v.Path != filepath.Join(plan.ROMRoot, filepath.FromSlash(r.ROM)) {
 			t.Fatal("display changed identity", v)

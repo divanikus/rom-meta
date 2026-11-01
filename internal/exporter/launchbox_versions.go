@@ -362,18 +362,12 @@ func buildLaunchBoxProjection(plan *Plan) (*LaunchBoxProjection, error) {
 		if g.Title == "" {
 			g.Title = main.Fields["title"].Value
 		}
-		// Selection uses the full edition descriptors above. The visible label is
-		// only the literal filename tags; it does not influence the primary.
+		// Keep preference ties independent of display. Labels are the source
+		// filename as-is, including its extension, without directory paths.
 		counts := map[string]int{}
 		for i := range g.Versions {
 			v := &g.Versions[i]
-			discCount := len(plan.Records[v.Records[0]].Playlist)
-			if v.GeneratedPlaylist {
-				discCount = len(v.Records)
-			}
-			if plan.Records[v.Records[0]].Status == "matched" {
-				v.Name = launchBoxFileLabel(plan.Records[v.Records[0]], discCount)
-			}
+			v.Name = filepath.Base(filepath.FromSlash(plan.Records[v.Records[0]].ROM))
 			counts[strings.ToLower(v.Name)]++
 		}
 		ordinals := map[string]int{}

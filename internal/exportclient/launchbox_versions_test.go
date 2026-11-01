@@ -104,7 +104,7 @@ func TestLaunchBoxGroupedVersionNetworkParityAndLegacyProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := remote.Batch.Plans[0]
-	if requests != 1 || len(got.LaunchBox.Groups) != 1 || got.LaunchBox.VersionCount != 4 || got.LaunchBox.Groups[0].Versions[0].Name != "(Japan) [T-Ru by Literal team v9]" {
+	if requests != 1 || len(got.LaunchBox.Groups) != 1 || got.LaunchBox.VersionCount != 4 || got.LaunchBox.Groups[0].Versions[0].Name != "Game (Japan) [T-Ru by Literal team v9].z64" {
 		t.Fatal(got.LaunchBox, requests)
 	}
 	if !reflect.DeepEqual(local.LaunchBox, got.LaunchBox) || !reflect.DeepEqual(nativeLaunchBoxFiles(t, local.Out), nativeLaunchBoxFiles(t, remote.Batch.Out)) {

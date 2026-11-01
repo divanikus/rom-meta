@@ -83,7 +83,7 @@ func TestGenericContainersAndInstalledFolderKeepStatIdentity(t *testing.T) {
 	}
 	for _, app := range list.Versions {
 		if strings.HasSuffix(app.ApplicationPath, ".zip") || app.ApplicationPath == folder {
-			if app.UseEmulator || app.Installed || !strings.Contains(app.Name, "source set") {
+			if app.UseEmulator || app.Installed || app.Name != filepath.Base(app.ApplicationPath) {
 				t.Fatal("source package advertised as installed emulator launch", app)
 			}
 		}

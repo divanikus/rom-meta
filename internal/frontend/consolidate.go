@@ -112,6 +112,9 @@ func untouchedPlaceholder(n native, platformName, launch, sourceName string, app
 		if (k == "Title" || k == "Name" || k == "Version") && v == strings.TrimSuffix(sourceName, path.Ext(sourceName)) {
 			continue
 		}
+		if (app && k == "Name" || k == "Version") && v == path.Base(strings.ReplaceAll(sourceName, "\\", "/")) {
+			continue
+		}
 		if v != want {
 			return false
 		}

@@ -55,7 +55,7 @@ func TestLaunchBoxGameVersionsAndConfiguredPrimary(t *testing.T) {
 	if err := xml.Unmarshal(body, &native); err != nil {
 		t.Fatal(err)
 	}
-	if len(native.Games) != 1 || len(native.Versions) != 6 || native.Versions[0].Name != "ru" {
+	if len(native.Games) != 1 || len(native.Versions) != 6 || native.Versions[0].Name != "ru.z64" {
 		t.Fatal(native)
 	}
 	for _, v := range native.Versions {
@@ -207,7 +207,7 @@ func TestLaunchBoxSuppliedRegionalAndModifiedPlaylists(t *testing.T) {
 		t.Fatal(plan.LaunchBox)
 	}
 	for _, v := range plan.LaunchBox.Groups[0].Versions {
-		if v.GeneratedPlaylist || len(v.Records) != 1 || !strings.HasSuffix(v.Path, ".m3u") || (!strings.Contains(v.Name, "[2 discs]") || strings.Contains(v.Name, "(Disc 1)")) {
+		if v.GeneratedPlaylist || len(v.Records) != 1 || !strings.HasSuffix(v.Path, ".m3u") || v.Name != plan.Records[v.Records[0]].ROM {
 			t.Fatal(v)
 		}
 	}
