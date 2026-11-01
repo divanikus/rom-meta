@@ -288,6 +288,9 @@ func ObserveExport(options Options) ([]ExportInput, error) {
 	if err != nil {
 		return nil, err
 	}
+	if options.Progress != nil {
+		options.Progress("ROMs", "Counting input files", 0, 0)
+	}
 	total, err := countInputs(options, root)
 	if err != nil {
 		return nil, err

@@ -56,6 +56,9 @@ func Build(options Options) (*Plan, error) {
 	if options.Limit < 0 {
 		return nil, fmt.Errorf("--limit must be non-negative")
 	}
+	if options.Progress != nil {
+		options.Progress("catalog", "Opening catalog and ROM folders", 0, 0)
+	}
 	root, err := realPath(options.DataRoot)
 	if err != nil {
 		return nil, err

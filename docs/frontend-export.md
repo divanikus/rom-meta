@@ -29,7 +29,9 @@ The CLI groups work into scan, plan, media and write. Plan covers metadata/media
 selection and the native changes; media prepares selected assets; write checks
 inputs, keeps ordinary backups and publishes the library in one file pass. It
 has no separate prepare/install pass. Counts belong to the current phase, not
-the complete command. Planning stays read-only until --apply.
+the complete command. Local scan is reported before opening source folders and
+finding catalog platforms, and again before counting ROM inputs; its total is
+unknown until enumeration completes. Planning stays read-only until --apply.
 
 Direct export reuses already-prepared temporary media on the same filesystem;
 other destinations use one verified copy. User-supplied --package assets are

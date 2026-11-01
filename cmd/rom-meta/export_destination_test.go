@@ -274,3 +274,35 @@ func TestExportShowsProgressAfterROMObservation(t *testing.T) {
 		}
 	}
 }
+
+func TestLocalExportReportsScanBeforeCatalogAccess(t *testing.T) {
+	for _, target := range []string{"es-de", "launchbox"} {
+		for _, batch := range []bool{false, true} {
+			for _, destination := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/batch=%t/destination=%t", target, batch, destination), func(t *testing.T) {
+					missingCatalog := filepath.Join(t.TempDir(), "missing-catalog")
+					args := []string{"export", "--target", target, "--data-root", missingCatalog, "--rom-root", t.TempDir()}
+					if batch {
+						args = append(args, "--platforms", "n64")
+					} else {
+						args = append(args, "--platform", "n64")
+					}
+					if destination {
+						args = append(args, "--destination", exportDestination(t, target))
+					} else {
+						args = append(args, "--out", filepath.Join(t.TempDir(), "package"))
+					}
+					code, output := commandOutput(t, args...)
+					if code == 0 {
+						t.Fatal("accepted nonexistent catalog")
+					}
+					scan := strings.Index(output, "export scan 0/0 | Opening catalog and ROM folders")
+					failure := strings.Index(output, "missing-catalog")
+					if scan < 0 || failure < scan {
+						t.Fatalf("catalog access failed before visible startup progress:\n%s", output)
+					}
+				})
+			}
+		}
+	}
+}
