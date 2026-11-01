@@ -102,9 +102,6 @@ func Build(options Options) (*Plan, error) {
 		return nil, err
 	}
 	rank := func(name string) int {
-		if name == statePath {
-			return 2
-		}
 		if strings.HasPrefix(name, "Data/") || strings.HasPrefix(name, "gamelists/") {
 			return 1
 		}

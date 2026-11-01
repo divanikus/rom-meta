@@ -2,8 +2,8 @@ package frontend
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -34,15 +34,6 @@ func consolidationFixture(t *testing.T, ownerExtra string, hasMain bool) (Option
 	put(t, o.PackageRoot, playlist, strings.Join(sources, "\n")+"\n")
 	manifest := fmt.Sprintf(`{"schema_version":1,"target":"launchbox","rom_root":"X:/games","records":[{"rom":"retail/Game (USA) (Disc I).chd","status":"matched","game":"platforms/Test/Game"},{"rom":"retail/Game (USA) (Disc II).chd","status":"matched","game":"platforms/Test/Game"}],"launchbox":{"groups":[{"id":%q,"game":"platforms/Test/Game","versions":[{"records":[0,1]}]}]}}`, incomingID)
 	put(t, o.PackageRoot, "manifest.json", manifest)
-	state := identityMap{Schema: 1, Cards: map[string]string{}}
-	for _, oldID := range oldIDs {
-		state.Cards[platform+"/"+oldID] = oldID
-	}
-	if hasMain {
-		state.Cards[platform+"/"+incomingID] = a
-	}
-	body, _ := json.Marshal(state)
-	put(t, o.Destination, statePath, string(body))
 	return o, incomingID, oldIDs
 }
 func TestConsolidateGeneratedPlaceholdersPreservesNativeCardAndPlaylists(t *testing.T) {
@@ -80,12 +71,8 @@ func TestConsolidateGeneratedPlaceholdersPreservesNativeCardAndPlaylists(t *test
 			if !strings.Contains(playlist, "<GameId>"+target+"</GameId>") || !strings.Contains(playlist, "<!-- owner comment -->") || !strings.Contains(playlist, "<Future>keep</Future>") {
 				t.Fatal("playlist membership/raw data lost")
 			}
-			var state identityMap
-			json.Unmarshal(get(t, o.Destination, statePath), &state)
-			for _, oldID := range oldIDs {
-				if state.Cards[platform+"/"+oldID] != target {
-					t.Fatal("dangling ownership link")
-				}
+			if _, err := os.Stat(filepath.Join(o.Destination, legacyStatePath)); !os.IsNotExist(err) {
+				t.Fatal("repair created a binding file")
 			}
 			if repeat := mustBuild(t, o); len(repeat.Files) != 0 || repeat.Changes[0].Consolidated != 0 {
 				t.Fatalf("repeat changed repaired library: %+v", repeat)
@@ -112,19 +99,42 @@ func TestConsolidationHoldsOwnerChangesAndUnknownData(t *testing.T) {
 		})
 	}
 }
-func TestConsolidationRequiresOwnershipAndManifest(t *testing.T) {
-	for _, mode := range []string{"no-state", "no-manifest-association"} {
-		t.Run(mode, func(t *testing.T) {
+func TestConsolidationRequiresCurrentManifestAndIgnoresLegacyState(t *testing.T) {
+	for _, manifest := range []bool{false, true} {
+		t.Run(fmt.Sprint(manifest), func(t *testing.T) {
 			o, _, _ := consolidationFixture(t, "", false)
-			if mode == "no-state" {
-				put(t, o.Destination, statePath, `{"schema_version":1,"cards":{}}`)
-			} else {
+			put(t, o.Destination, legacyStatePath, "not JSON")
+			if !manifest {
 				put(t, o.PackageRoot, "manifest.json", `{"schema_version":1,"target":"launchbox"}`)
 			}
 			p := mustBuild(t, o)
-			if p.Changes[0].Consolidated != 0 {
-				t.Fatal("unowned/title-only card retired")
+			if (p.Changes[0].Consolidated == 2) != manifest {
+				t.Fatal("consolidation ignored current evidence", p.Changes)
+			}
+			if _, err := p.Apply(); err != nil {
+				t.Fatal(err)
+			}
+			if string(get(t, o.Destination, legacyStatePath)) != "not JSON" {
+				t.Fatal("legacy state was read/written")
 			}
 		})
+	}
+}
+
+func TestSingleCuratedLegacyCardIsAdoptedWithoutStoredLinks(t *testing.T) {
+	o, _, oldIDs := consolidationFixture(t, "<Favorite>true</Favorite><Future>owner</Future>", false)
+	p := mustBuild(t, o)
+	if len(p.Conflicts) != 0 || p.Changes[0].ID != oldIDs[0] || p.Changes[0].Consolidated != 1 {
+		t.Fatalf("current-path adoption failed: %+v", p)
+	}
+	if _, err := p.Apply(); err != nil {
+		t.Fatal(err)
+	}
+	games, _ := nativeData(t, o.Destination)
+	if len(games) != 1 || games[oldIDs[0]].fields["Favorite"] != "true" || !bytes.Contains(get(t, o.Destination, platformFile), []byte("<Future>owner</Future>")) {
+		t.Fatal("curated native data lost")
+	}
+	if repeat := mustBuild(t, o); len(repeat.Files) != 0 {
+		t.Fatal("stateless adopted repeat changed", repeat.Files)
 	}
 }

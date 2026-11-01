@@ -130,24 +130,35 @@ func Build(options Options) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
-	inputs, err := ObserveExport(options)
-	if err != nil {
-		return nil, err
-	}
 	resolver := &ExportResolver{Context: options.Context, Progress: options.Progress, Root: root, Platform: platform, PlatformName: selection.Name, System: system, index: index, arcade: arcade}
-	plan, err := resolver.Resolve(inputs, profile)
-	if err != nil {
-		return nil, err
-	}
-	upgraded, changed, err := HashRequiredInputs(options, inputs, plan.Records)
-	if err != nil {
-		return nil, err
-	}
-	if changed {
-		plan, err = resolver.Resolve(upgraded, profile)
+	plan := resolver.newPlan(profile)
+	err = walkExportInputs(options, func(input ExportInput) error {
+		record, err := resolver.resolve(input, profile)
 		if err != nil {
-			return nil, err
+			return err
 		}
+		// Resolve a provisional header in place, not by rerunning the collection.
+		if len(record.HashRequired) > 0 {
+			upgraded, _, err := HashRequiredInputs(options, []ExportInput{input}, []Record{record})
+			if err != nil {
+				return err
+			}
+			record, err = resolver.resolve(upgraded[0], profile)
+			if err != nil {
+				return err
+			}
+		}
+		plan.Records = append(plan.Records, record)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if options.Progress != nil {
+		options.Progress("display names", system, 0, 0)
+	}
+	if err = finishExportPlan(plan); err != nil {
+		return nil, err
 	}
 	plan.ROMRoot, plan.Out, plan.Context = romRoot, out, options.Context
 	plan.PlatformSelection = selection

@@ -2,7 +2,6 @@ package frontend
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,6 +15,7 @@ const c = "10000000-0000-0000-0000-000000000003"
 const v1 = "20000000-0000-0000-0000-000000000001"
 const v2 = "20000000-0000-0000-0000-000000000002"
 const emulator = "30000000-0000-0000-0000-000000000001"
+const legacyStatePath = "Data/RomMeta.launchbox.json"
 const platform = "Test Console"
 const platformFile = "Data/Platforms/Test Console.xml"
 
@@ -204,33 +204,42 @@ func TestConflictsBlockAllMutations(t *testing.T) {
 			if !bytes.Equal(before, get(t, o.Destination, platformFile)) {
 				t.Fatal("conflict changed library")
 			}
-			if _, err := os.Stat(filepath.Join(o.Destination, statePath)); !os.IsNotExist(err) {
+			if _, err := os.Stat(filepath.Join(o.Destination, legacyStatePath)); !os.IsNotExist(err) {
 				t.Fatal("conflict wrote state")
 			}
 		})
 	}
 }
-func TestAdoptedIdentitySurvivesMovedPathsAndDeletedCard(t *testing.T) {
-	o := setup(t, game(a, "Owner", "ROMs/old.zip", ""), game(c, "Catalog", "ROMs/old.zip", "")+version(v1, c, "ROMs/old.zip", ""))
-	p := mustBuild(t, o)
-	if _, err := p.Apply(); err != nil {
-		t.Fatal(err)
-	}
-	put(t, o.PackageRoot, platformFile, wrap(game(c, "Catalog", "ROMs/moved.zip", "")+version(v2, c, "ROMs/moved.zip", "")))
-	p = mustBuild(t, o)
-	if p.Changes[0].ID != a || p.Changes[0].Action != "enrich" {
-		t.Fatal(p.Changes)
-	}
-	if _, err := p.Apply(); err != nil {
-		t.Fatal(err)
-	}
-	games, apps := nativeData(t, o.Destination)
-	if len(games) != 1 || len(apps) != 2 || games[a].fields["ApplicationPath"] != "ROMs/old.zip" {
-		t.Fatal("changed primary or duplicated card")
-	}
-	put(t, o.Destination, platformFile, wrap(""))
-	if len(mustBuild(t, o).Conflicts) == 0 {
-		t.Fatal("silently recreated a deleted adopted card")
+func TestDeletedPlatformCanBeExportedAgainWithoutState(t *testing.T) {
+	for _, removeFile := range []bool{false, true} {
+		t.Run(fmt.Sprint(removeFile), func(t *testing.T) {
+			o := setup(t, "", game(c, "Catalog", "ROMs/one.zip", "")+version(v1, c, "ROMs/one.zip", ""))
+			p := mustBuild(t, o)
+			if _, err := p.Apply(); err != nil {
+				t.Fatal(err)
+			}
+			if removeFile {
+				if err := os.Remove(filepath.Join(o.Destination, filepath.FromSlash(platformFile))); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				put(t, o.Destination, platformFile, wrap(""))
+			}
+			put(t, o.Destination, legacyStatePath, "malformed obsolete links")
+			p = mustBuild(t, o)
+			if len(p.Conflicts) != 0 || p.Changes[0].Action != "add" {
+				t.Fatalf("deleted platform blocked reimport: %+v", p)
+			}
+			if _, err := p.Apply(); err != nil {
+				t.Fatal(err)
+			}
+			if string(get(t, o.Destination, legacyStatePath)) != "malformed obsolete links" {
+				t.Fatal("legacy file was used or rewritten")
+			}
+			if repeat := mustBuild(t, o); len(repeat.Files) != 0 {
+				t.Fatal("repeat changed reimported platform", repeat.Files)
+			}
+		})
 	}
 }
 func TestDriftAndExistingPlaylistRejectBeforeMutation(t *testing.T) {
@@ -319,13 +328,13 @@ func TestExistingMediaAndNativeVersionsArePreserved(t *testing.T) {
 	if !bytes.Contains(get(t, o.Destination, platformFile), []byte(oldVersion)) {
 		t.Fatal("existing version bytes changed")
 	}
-	state := identityMap{}
-	if err := json.Unmarshal(get(t, o.Destination, statePath), &state); err != nil {
-		t.Fatal(err)
+	if games[a].fields["Title"] != "Owner" {
+		t.Fatal("native identity or title changed")
 	}
-	if state.Cards[platform+"/"+c] != a {
-		t.Fatal(fmt.Sprint(state))
+	if _, err := os.Stat(filepath.Join(o.Destination, legacyStatePath)); !os.IsNotExist(err) {
+		t.Fatal("export created a binding file")
 	}
+
 }
 
 func TestEmptyNativePlatformRoot(t *testing.T) {

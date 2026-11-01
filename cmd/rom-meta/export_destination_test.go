@@ -261,7 +261,7 @@ func TestExportShowsProgressAfterROMObservation(t *testing.T) {
 				if code != 0 {
 					t.Fatalf("export failed: %s", output)
 				}
-				stages := []string{"export scan", "export plan 0/1", "export plan 1/1", "files to write"}
+				stages := []string{"export scan", "export scan 0/1", "export scan 1/1", "files to write"}
 				offset := 0
 				for _, stage := range stages {
 					at := strings.Index(output[offset:], stage)
@@ -304,5 +304,31 @@ func TestLocalExportReportsScanBeforeCatalogAccess(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+func TestDirectExportShowsOnlyScanAndWritePhases(t *testing.T) {
+	for _, target := range []string{"es-de", "launchbox"} {
+		t.Run(target, func(t *testing.T) {
+			root, roms := exportFixture(t)
+			destination := exportDestination(t, target)
+			code, output := commandOutput(t, "export", "--target", target, "--platform", "n64", "--data-root", root, "--rom-root", roms, "--destination", destination, "--apply")
+			if code != 0 {
+				t.Fatal(output)
+			}
+			for _, stage := range []string{"export scan", "export write"} {
+				if !strings.Contains(output, stage) {
+					t.Fatalf("missing %s: %s", stage, output)
+				}
+			}
+			if at := strings.Index(output, "export write"); at >= 0 && strings.Contains(output[at:], "export scan") {
+				t.Fatalf("write returned to scan: %s", output)
+			}
+			for _, stage := range []string{"export plan", "export media", "export hash ROMs"} {
+				if strings.Contains(output, stage) {
+					t.Fatalf("separate phase %s remains: %s", stage, output)
+				}
+			}
+		})
 	}
 }

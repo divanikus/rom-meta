@@ -160,7 +160,7 @@ func validExportInput(input ExportInput, system string, part bool) bool {
 
 // Resolve uses the same binding and output naming rules as local Build.
 func (r *ExportResolver) Resolve(inputs []ExportInput, profile Profile) (*Plan, error) {
-	plan := &Plan{PlatformName: r.PlatformName, SchemaVersion: 1, Target: "es-de", Platform: r.Platform, System: r.System, DataRoot: r.Root, Profile: profile, Records: []Record{}}
+	plan := r.newPlan(profile)
 	seen := map[string]bool{}
 	for i, input := range inputs {
 		if r.Context != nil {
@@ -189,6 +189,10 @@ func (r *ExportResolver) Resolve(inputs []ExportInput, profile Profile) (*Plan, 
 		return nil, err
 	}
 	return plan, nil
+}
+
+func (r *ExportResolver) newPlan(profile Profile) *Plan {
+	return &Plan{PlatformName: r.PlatformName, SchemaVersion: 1, Target: "es-de", Platform: r.Platform, System: r.System, DataRoot: r.Root, Profile: profile, Records: []Record{}}
 }
 
 func (r *ExportResolver) resolve(input ExportInput, profile Profile) (Record, error) {
@@ -281,21 +285,32 @@ func finishExportPlan(plan *Plan) error {
 
 // ObserveExport enumerates existing files without any catalog or frontend access.
 func ObserveExport(options Options) ([]ExportInput, error) {
+	inputs := []ExportInput{}
+	err := walkExportInputs(options, func(input ExportInput) error { inputs = append(inputs, input); return nil })
+	if err != nil {
+		return nil, err
+	}
+	return inputs, nil
+}
+
+// Local export consumes a complete observation before advancing to the next
+// file. Collecting callers retain ObserveExport's existing API batch contract.
+func walkExportInputs(options Options, consume func(ExportInput) error) error {
 	if !validSystemID(options.System) || options.Limit < 0 {
-		return nil, fmt.Errorf("invalid export reader or limit")
+		return fmt.Errorf("invalid export reader or limit")
 	}
 	root, err := realPath(options.ROMRoot)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if options.Progress != nil {
 		options.Progress("ROMs", "Counting input files", 0, 0)
 	}
 	total, err := countInputs(options, root)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	inputs := []ExportInput{}
+	completed, lastName := 0, ""
 	err = catalogfs.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if options.Context != nil {
 			if err := options.Context.Err(); err != nil {
@@ -326,11 +341,11 @@ func ObserveExport(options Options) ([]ExportInput, error) {
 			}
 			return nil
 		}
-		if options.Limit > 0 && len(inputs) >= options.Limit {
+		if options.Limit > 0 && completed >= options.Limit {
 			return fs.SkipAll
 		}
 		if options.Progress != nil {
-			options.Progress("ROMs", rel, len(inputs)+1, total)
+			options.Progress("ROMs", rel, completed, total)
 		}
 		input := ExportInput{ROM: rel, Kind: "unsupported"}
 		switch {
@@ -372,19 +387,26 @@ func ObserveExport(options Options) ([]ExportInput, error) {
 		if !validExportInput(input, options.System, false) {
 			input = ExportInput{ROM: rel, Kind: "unsupported", Reason: "invalid or unsafe launch observation"}
 		}
-		inputs = append(inputs, input)
+		if err := consume(input); err != nil {
+			return err
+		}
+		completed++
+		lastName = input.ROM
 		if playlist || group {
 			return fs.SkipDir
 		}
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if len(inputs) == 0 {
-		return nil, errNoInputs
+	if completed == 0 {
+		return errNoInputs
 	}
-	return inputs, nil
+	if options.Progress != nil {
+		options.Progress("ROMs", lastName, completed, total)
+	}
+	return nil
 }
 
 // ExportOutputPath derives destinations locally rather than trusting API paths.

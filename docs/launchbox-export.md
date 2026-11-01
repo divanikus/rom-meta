@@ -167,13 +167,15 @@ version, media and changed-file counts. Optional `--report "D:\Exports\merge.jso
 writes that plan to a new JSON file, including private paths. Close LaunchBox and
 Big Box before applying; on Windows the command checks their processes.
 
-Matching uses native card IDs, previously recorded bindings, main/version launch
-paths, or identical ordered absolute disc paths in available M3Us. Windows path
-case and slash differences are normalized. Titles are never matching evidence.
-An adopted card retains its existing native ID, including playlist references,
-favorites and history. A small `Data/RomMeta.launchbox.json` map remembers that
-binding when later exports contain moved ROM paths. A missing previously bound
-card is a conflict rather than an instruction to recreate it.
+Matching uses current native card IDs, main/version launch paths, source member
+paths from the current export, or identical ordered absolute disc paths in M3Us.
+Windows path case and slash differences are normalized. Titles are not matching
+evidence. An adopted card retains its native ID, including favorites, history and
+playlist references. No RomMeta binding/state file is read or written. Repeating
+an export inspects the current native XML; deleting a platform or its cards allows
+a fresh import without resetting separate state. Old RomMeta.launchbox.json files
+are ignored. If an adopted card has a custom ID and all its paths move, update its
+paths in LaunchBox so the next export can identify it.
 
 The destination adapter fills empty title, description, release date, developer, publisher,
 genre and player-count fields. It adds missing playable versions and fills their
@@ -202,13 +204,13 @@ one native card, or version IDs/paths conflict, apply refuses the entire merge.
 Ordinary existing cards retain their history, memberships and curation and need
 a deliberate native consolidation first. There is one automatic repair: obsolete,
 unchanged RomMeta input placeholders can be folded into their now-recognized
-catalog card. This requires the exact saved ownership/UUID, source launch path
+catalog card. This requires the exact generated input UUID, source launch path
 and current manifest game association. The exporter removes only those empty
-cards and their default versions, redirects saved bindings and playlist GameId
+cards and their default versions, redirects playlist GameId
 references, and installs the newly grouped versions. LaunchBox-generated default
-fields are accepted; owner changes or nonempty unknown fields block the repair.
-Preview/report shows `consolidated_cards`; backups cover every replaced XML/state
-file. Repeating the same export then writes nothing.
+fields are accepted. Curated cards keep their data through ordinary path
+adoption; ambiguous multiple-card matches remain conflicts. Preview/report shows
+`consolidated_cards`; backups cover every replaced XML file. Repeating the same export then writes nothing.
 See LaunchBox's [bulk-editing and combining guidance](https://launchbox.featurebase.app/help/articles/8922784-bulk-editing-and-auditing-a-large-launchbox-library).
 The first ungrouped exporter used per-launch card IDs; exact launch/M3U evidence
 allows adoption when it identifies one existing card unambiguously.
@@ -219,8 +221,7 @@ assets and compared M3Us. It backs up every replaced file under
 are staged before publishing platform XML. This is not a multi-file transaction:
 an I/O failure can require reviewed manual recovery using that backup. No automatic
 restoration overwrites later edits. An unchanged repeat writes nothing and creates
-no backup. The first merge can write only the identity map even when all native
-records are already complete. Do not manually replace an existing platform XML with the package XML.
+no backup. Do not manually replace an existing platform XML with the package XML.
 
 Use the Platform sidebar if category grouping hides a newly added platform.
 After package installation the package can be archived; native launch/media paths

@@ -217,6 +217,15 @@ func runDirectDestination(options exporter.Options, api string, systems []string
 		fmt.Println("Destination already up to date; no files or backups created.")
 		return nil
 	}
+	// Revalidation of the prepared files belongs to the write operation too.
+	writeProgress := func(stage, name string, current, total int) {
+		if name == "" {
+			name = stage
+		}
+		progress.UpdateTask("export", "write", current, total, name)
+	}
+	plan.Progress = writeProgress
+	nativeOptions.Progress = writeProgress
 	if err = materialize(); err != nil {
 		return err
 	}
@@ -237,17 +246,12 @@ func runDirectDestination(options exporter.Options, api string, systems []string
 
 func updateExportProgress(progress *terminalProgress, stage, name string, current, total int) {
 	original := stage
-	switch {
-	case stage == "catalog" || stage == "ROMs" || strings.HasSuffix(stage, " / catalog") || strings.HasSuffix(stage, " / ROMs"):
+	if stage == "write" || strings.HasSuffix(stage, " / write") || stage == "download" || strings.Contains(stage, " / download") {
+		stage = "write"
+	} else {
 		stage = "scan"
-	case stage == "write" || strings.HasSuffix(stage, " / write") || stage == "download" || strings.Contains(stage, " / download"):
-		stage = "media"
-	case stage == "hash ROMs" || strings.HasSuffix(stage, " / hash ROMs"):
-		stage = "hash ROMs"
-	default:
-		stage = "plan"
 	}
-	if stage == "plan" && name == "" {
+	if name == "" {
 		name = original
 	}
 	progress.UpdateTask("export", stage, current, total, name)

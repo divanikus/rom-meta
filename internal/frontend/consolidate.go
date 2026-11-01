@@ -119,14 +119,14 @@ func untouchedPlaceholder(n native, platformName, launch, sourceName string, app
 	return true
 }
 
-func (p *Plan) consolidatePlaceholders(platformName string, games map[string]native, library *document, state identityMap) (*document, map[string]string, map[string]string, error) {
+func (p *Plan) sourceLaunchPaths(platformName string, games map[string]native) (map[string]string, map[string]string, error) {
 	body, err := p.read(p.Package, "manifest.json", false)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	var manifest consolidationManifest
 	if err = json.Unmarshal(body, &manifest); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	// Exact source launch paths must belong to exactly one current catalog card.
 	byPath := map[string]string{}
@@ -175,20 +175,23 @@ func (p *Plan) consolidatePlaceholders(platformName string, games map[string]nat
 		}
 	}
 	visit(manifest)
+	return byPath, sourceNames, nil
+}
+
+func (p *Plan) consolidatePlaceholders(platformName string, library *document, byPath, sourceNames map[string]string) (*document, map[string]string, error) {
 	existing, apps, err := records(library)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	retired := map[string]string{}
-	problems := map[string]string{}
 	for key, n := range existing {
 		launch := n.fields["ApplicationPath"]
 		incoming := byPath[keyPath(p.Root, launch)]
-		if incoming == "" || key == incoming || id(state.Cards[platformName+"/"+incoming]) == key {
+		if incoming == "" || key == incoming {
 			continue
 		}
-		// Both the saved ownership and the original generated input ID are needed.
-		if id(state.Cards[platformName+"/"+key]) != key || key != generatedLaunchBoxID(platformName+"\ninput:"+keyPath(p.Root, launch)) {
+		// Exact generated input identity is checked against the current XML/path.
+		if key != generatedLaunchBoxID(platformName+"\ninput:"+keyPath(p.Root, launch)) {
 			continue
 		}
 		safe := untouchedPlaceholder(n, platformName, launch, sourceNames[keyPath(p.Root, launch)], false)
@@ -200,17 +203,12 @@ func (p *Plan) consolidatePlaceholders(platformName string, games map[string]nat
 			}
 		}
 		if !safe {
-			problems[incoming] = "previous RomMeta placeholder has owner changes; automatic consolidation would discard them"
 			continue
 		}
 		retired[key] = incoming
 	}
 	remove := map[int][]byte{}
-	for key, incoming := range retired {
-		if problems[incoming] != "" {
-			delete(retired, key)
-			continue
-		}
+	for key := range retired {
 		remove[existing[key].index] = nil
 		for _, v := range apps {
 			if id(v.fields["GameID"]) == key {
@@ -219,10 +217,10 @@ func (p *Plan) consolidatePlaceholders(platformName string, games map[string]nat
 		}
 	}
 	if len(remove) == 0 {
-		return library, retired, problems, nil
+		return library, retired, nil
 	}
 	result, err := parse(library.edit(remove, nil), "LaunchBox")
-	return result, retired, problems, err
+	return result, retired, err
 }
 
 // Playlist memberships follow the surviving native IDs; unrelated XML is kept.

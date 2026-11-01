@@ -350,7 +350,7 @@ func (p *Plan) Apply() (backup string, err error) {
 	if err = p.validate(); err != nil {
 		return backup, err
 	}
-	// Assets first; platform XML and identity map are published afterwards.
+	// Assets first; native XML is published afterwards.
 	for i, c := range p.files {
 		if p.Progress != nil {
 			p.Progress("write", c.path, i, len(p.files))

@@ -237,3 +237,38 @@ func BenchmarkCHDExportProof(b *testing.B) {
 		})
 	}
 }
+
+func TestLocalScanHashesProvisionalCHDBeforeAdvancing(t *testing.T) {
+	options, game, data := chdExportFixture(t)
+	put(t, filepath.Join(game, "fingerprints.yaml"), []byte(fmt.Sprintf("items:\n  - release: Game (USA)\n    file: {name: 'Game (USA).chd', size: %d, sha1: '%x'}\n", len(data), sha1.Sum(data))))
+	if err := os.Remove(filepath.Join(options.ROMRoot, "Game (USA).chd")); err != nil {
+		t.Fatal(err)
+	}
+	put(t, filepath.Join(options.ROMRoot, "a.chd"), data)
+	put(t, filepath.Join(options.ROMRoot, "b.chd"), data)
+	order := []string{}
+	options.Progress = func(stage, name string, current, total int) {
+		if stage == "ROMs" && current < total || stage == "hash ROMs" {
+			order = append(order, stage+":"+name)
+		}
+	}
+	plan, err := Build(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.HashMatches != 2 {
+		t.Fatalf("selective proof lost: %+v", plan)
+	}
+	firstHash, nextInput := -1, -1
+	for i, event := range order {
+		if event == "hash ROMs:a.chd" {
+			firstHash = i
+		}
+		if event == "ROMs:b.chd" {
+			nextInput = i
+		}
+	}
+	if firstHash < 0 || nextInput <= firstHash {
+		t.Fatalf("hash fallback ran after collecting all inputs: %v", order)
+	}
+}

@@ -25,19 +25,21 @@ coverage and native emulator readiness are reported separately. Preview counts
 source sets that still need extraction/installation and launch setup; matching
 a package does not make it ready to play.
 
-The CLI groups work into scan, plan, media and write. Plan covers metadata/media
-selection and the native changes; media prepares selected assets; write checks
-inputs, keeps ordinary backups and publishes the library in one file pass. It
-has no separate prepare/install pass. Counts belong to the current phase, not
-the complete command. Local scan is reported before opening source folders and
-finding catalog platforms, and again before counting ROM inputs; its total is
-unknown until enumeration completes. Planning stays read-only until --apply.
+The CLI shows two phases: scan and write. After loading the catalog index, local
+scan observes each ROM and immediately matches it and selects metadata/media
+before advancing to the next file. Selective CHD hash retries stay with that input;
+the collection is not resolved a second time. Whole-selection title/disc grouping,
+XML and native-change calculation finish the read-only scan. Preview stops there.
+Write downloads/prepares selected assets and applies changes with ordinary backups.
+There is no separate plan, media or prepare/install step in the progress display.
+Counts refer to the current operation, not the complete command. Scan appears
+before source access and input counting; totals stay unknown until enumeration.
 
 Direct export reuses already-prepared temporary media on the same filesystem;
 other destinations use one verified copy. User-supplied --package assets are
 always copied, keeping that package independent.
 
-Assets are written before XML and identity state, with ordinary backups for
+Assets are written before native XML, with ordinary backups for
 replaced metadata. A failed write removes its partial file and reports the backup/
 changes receipt. Already-added assets may remain; later metadata is not published
 after a failed asset write.
