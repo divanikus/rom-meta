@@ -115,6 +115,7 @@ type DiscVariant struct {
 }
 
 type Record struct {
+	InputGuard      *InputGuard         `json:"-"`
 	HashRequired    []string            `json:"hash_required,omitempty"`
 	SourceOnly      bool                `json:"source_only,omitempty"`
 	GameTitle       string              `json:"game_title,omitempty"`

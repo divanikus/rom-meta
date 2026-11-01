@@ -9,83 +9,16 @@ import (
 	"rommeta/internal/catalogfs"
 )
 
-// CheckInputs rechecks only ROM observations; it does not copy or open media.
+// CheckInputs checks saved filesystem stamps without reopening or hashing ROMs.
 func CheckInputs(plan *Plan) error {
 	for i := range plan.Records {
-		if plan.Context != nil {
-			if err := plan.Context.Err(); err != nil {
-				return err
-			}
-		}
 		if err := checkRecordInput(plan, &plan.Records[i]); err != nil {
 			return err
 		}
 	}
 	return nil
 }
-func checkRecordInput(plan *Plan, record *Record) error {
-	if record.Catalog != nil {
-		if err := CheckROMSetObservation(plan.ROMRoot, record.ROM, record.Catalog); err != nil {
-			return err
-		}
-	}
-	if len(record.HashRequired) > 0 {
-		return fmt.Errorf("unresolved ROM hash request: %s", record.ROM)
-	}
-	if record.Disc != nil && record.SHA1 == "" {
-		if err := CheckDiscObservation(plan.ROMRoot, plan.System, record.ROM, record.Disc); err != nil {
-			return err
-		}
-	}
-	if record.SHA1 != "" {
-		inputName := record.ROM
-		if record.LaunchFile != "" {
-			inputName = record.LaunchFile
-		}
-		input := filepath.Join(plan.ROMRoot, filepath.FromSlash(inputName))
-		real, err := realPath(input)
-		if err != nil {
-			return err
-		}
-		if !within(plan.ROMRoot, real) {
-			return fmt.Errorf("ROM path escaped input root")
-		}
-		reader := plan.System
-		if record.Representation == "romset-payload" {
-			reader = "romset"
-		}
-		hashes, member, err := hashROMContext(plan.Context, real, reader)
-		if err != nil {
-			return err
-		}
-		if hashes.sha1 != record.SHA1 || hashes.size != record.Size || member != record.Member {
-			return fmt.Errorf("ROM changed since planning: %s", record.ROM)
-		}
-	}
-	for _, part := range record.Playlist {
-		if part.Disc != nil && part.SHA1 == "" {
-			if err := CheckDiscObservation(plan.ROMRoot, plan.System, part.ROM, part.Disc); err != nil {
-				return err
-			}
-			continue
-		}
-		path, err := realPath(filepath.Join(plan.ROMRoot, filepath.FromSlash(part.ROM)))
-		if err != nil {
-			return err
-		}
-		if !within(plan.ROMRoot, path) {
-			return fmt.Errorf("playlist input escapes ROM root")
-		}
-		h, _, err := hashROMContext(plan.Context, path, plan.System)
-		if err != nil {
-			return err
-		}
-		if h.size != part.Size || h.sha1 != part.SHA1 {
-			return fmt.Errorf("playlist member changed since planning: %s", part.ROM)
-		}
-	}
-	return nil
-}
+func checkRecordInput(plan *Plan, record *Record) error { return record.InputGuard.Check(plan.Context) }
 
 type mediaReader struct {
 	input  *catalogfs.File

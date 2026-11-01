@@ -224,7 +224,12 @@ See LaunchBox's [bulk-editing and combining guidance](https://launchbox.featureb
 The first ungrouped exporter used per-launch card IDs; exact launch/M3U evidence
 allows adoption when it identifies one existing card unambiguously.
 
-Before writing, the command rechecks its inputs and affected native files.
+Direct export passes structured card/version fields to the native adapter; it
+does not serialize and reparse an intermediate platform XML. Incoming media and
+existing artwork directories are indexed once per command. Native records and
+versions are looked up by ID/parent rather than scanning every version per card.
+Before writing, ROM validation checks saved filesystem stamps without reading
+ROM contents again. The command also rechecks affected native files.
 It writes only the planned metadata, playlists and missing selected assets,
 without automatic backups, change receipts or binding state. Existing backups
 remain untouched. Assets are written before platform XML; XML replacements use

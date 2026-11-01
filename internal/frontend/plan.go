@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"rommeta/internal/frontenddata"
 	"sort"
 	"strings"
 )
@@ -25,20 +26,26 @@ type Change struct {
 	Playlists    int      `json:"added_playlists"`
 }
 type Plan struct {
-	Progress   func(stage, name string, current, total int) `json:"-"`
-	Target     string                                       `json:"target"`
-	MediaRoot  string                                       `json:"media_root,omitempty"`
-	source     *Source
-	Package    string   `json:"package,omitempty"`
-	Root       string   `json:"destination"`
-	Changes    []Change `json:"games"`
-	Conflicts  []string `json:"conflicts"`
-	Warnings   []string `json:"warnings"`
-	Files      []string `json:"changed_files"`
-	files      []fileChange
-	guards     map[string]fingerprint
-	external   map[string]fingerprint
-	identities map[string]string
+	outputFiles map[string]int
+	selection   frontenddata.Selection
+	packageDirs map[string][]packageEntry
+	sourceMedia map[string]map[string][]packageEntry
+	artDirs     map[string]map[string]bool
+	mediaDirs   map[string]map[string]bool
+	Progress    func(stage, name string, current, total int) `json:"-"`
+	Target      string                                       `json:"target"`
+	MediaRoot   string                                       `json:"media_root,omitempty"`
+	source      *Source
+	Package     string   `json:"package,omitempty"`
+	Root        string   `json:"destination"`
+	Changes     []Change `json:"games"`
+	Conflicts   []string `json:"conflicts"`
+	Warnings    []string `json:"warnings"`
+	Files       []string `json:"changed_files"`
+	files       []fileChange
+	guards      map[string]fingerprint
+	external    map[string]fingerprint
+	identities  map[string]string
 }
 
 // Build uses the same additive plan and apply contract for each native adapter.
@@ -73,29 +80,29 @@ func Build(options Options) (*Plan, error) {
 			return nil, err
 		}
 	}
-	body, err := p.read(pkg, "manifest.json", false)
-	if err != nil {
-		return nil, err
+	if p.source != nil && p.source.Library != nil {
+		p.selection = p.source.Library.Selection
+	} else {
+		body, e := p.read(pkg, "manifest.json", false)
+		if e != nil {
+			return nil, e
+		}
+		if e = json.Unmarshal(body, &p.selection); e != nil {
+			return nil, e
+		}
 	}
-	var header struct {
-		Schema int    `json:"schema_version"`
-		Target string `json:"target"`
-	}
-	if err = json.Unmarshal(body, &header); err != nil {
-		return nil, err
-	}
-	if header.Schema != 1 || header.Target != p.Target {
+	if p.selection.Schema != 1 || p.selection.Target != p.Target {
 		return nil, fmt.Errorf("expected a version-1 %s export package", p.Target)
 	}
 	if p.Target == "launchbox" {
 		err = buildLaunchBox(p)
 	} else {
-		err = buildESDE(p, body)
+		err = buildESDE(p, p.selection)
 	}
 	if err != nil {
 		return nil, err
 	}
-	if err = p.protectSourceTrees(body); err != nil {
+	if err = p.protectSourceTrees(p.selection); err != nil {
 		return nil, err
 	}
 	rank := func(name string) int {
@@ -109,18 +116,9 @@ func Build(options Options) (*Plan, error) {
 }
 
 func (p *Plan) Generated() bool { return p.source != nil }
-func (p *Plan) protectSourceTrees(body []byte) error {
-	type inputTrees struct {
-		DataRoot string            `json:"data_root"`
-		ROMRoot  string            `json:"rom_root"`
-		Systems  []json.RawMessage `json:"systems"`
-	}
-	var visit func([]byte) error
-	visit = func(body []byte) error {
-		var trees inputTrees
-		if err := json.Unmarshal(body, &trees); err != nil {
-			return err
-		}
+func (p *Plan) protectSourceTrees(selection frontenddata.Selection) error {
+	var visit func(frontenddata.Selection) error
+	visit = func(trees frontenddata.Selection) error {
 		for _, name := range []string{trees.DataRoot, trees.ROMRoot} {
 			if name == "" {
 				continue
@@ -143,7 +141,7 @@ func (p *Plan) protectSourceTrees(body []byte) error {
 		}
 		return nil
 	}
-	return visit(body)
+	return visit(selection)
 }
 
 func (p *Plan) reportProgress(stage, name string, current, total int) {

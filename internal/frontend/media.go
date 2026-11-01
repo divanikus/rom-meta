@@ -21,32 +21,44 @@ func imageName(s string) string {
 		return r
 	}, s))
 }
-func hasArt(dir string, aliases []string) (bool, error) {
-	found := false
-	err := filepath.WalkDir(dir, func(name string, entry fs.DirEntry, err error) error {
-		if os.IsNotExist(err) {
-			return fs.SkipDir
-		}
-		if err != nil {
-			return err
-		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return fmt.Errorf("linked media path is unsupported: %s", name)
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		base := strings.ToLower(strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name())))
-		base = imageNumber.ReplaceAllString(base, "")
-		for _, alias := range aliases {
-			if alias != "" && base == imageName(alias) {
-				found = true
+func (p *Plan) hasArt(dir string, aliases []string) (bool, error) {
+	if p.artDirs == nil {
+		p.artDirs = map[string]map[string]bool{}
+	}
+	stems, loaded := p.artDirs[dir]
+	if !loaded {
+		stems = map[string]bool{}
+		err := filepath.WalkDir(dir, func(name string, entry fs.DirEntry, err error) error {
+			if os.IsNotExist(err) {
+				return fs.SkipDir
 			}
+			if err != nil {
+				return err
+			}
+			if entry.Type()&os.ModeSymlink != 0 {
+				return fmt.Errorf("linked media path is unsupported: %s", name)
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			base := strings.ToLower(strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name())))
+			base = imageNumber.ReplaceAllString(base, "")
+			stems[base] = true
+			return nil
+		})
+		if err != nil {
+			return false, err
 		}
-		return nil
-	})
-	return found, err
+		p.artDirs[dir] = stems
+	}
+	for _, alias := range aliases {
+		if alias != "" && stems[imageName(alias)] {
+			return true, nil
+		}
+	}
+	return false, nil
 }
+
 func (p *Plan) media(platform, sourceID, targetID string, existing, incoming map[string]string) (int, map[string]string, error) {
 	added := 0
 	fields := map[string]string{}
@@ -57,7 +69,7 @@ func (p *Plan) media(platform, sourceID, targetID string, existing, incoming map
 	sort.Strings(kinds)
 	for _, kind := range kinds {
 		relative := "Images/" + platform + "/" + kind
-		entries, err := p.packageEntries(relative)
+		entries, err := p.packageMedia(relative, sourceID)
 		if os.IsNotExist(err) {
 			continue
 		}
@@ -68,7 +80,7 @@ func (p *Plan) media(platform, sourceID, targetID string, existing, incoming map
 		if err != nil {
 			return 0, nil, err
 		}
-		present, err := hasArt(targetDir, []string{targetID, existing["Title"], existing["LaunchBoxDbId"]})
+		present, err := p.hasArt(targetDir, []string{targetID, existing["Title"], existing["LaunchBoxDbId"]})
 		if err != nil {
 			return 0, nil, err
 		}

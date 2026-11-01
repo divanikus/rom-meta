@@ -12,6 +12,7 @@ import (
 
 // Keep raw element spans so unrelated native fields, comments and records survive.
 type element struct {
+	values     map[string]string
 	name       string
 	start, end int
 	raw        []byte
@@ -53,7 +54,7 @@ func parse(data []byte, root string) (*document, error) {
 					return nil, err
 				}
 				end := int(d.InputOffset())
-				doc.children = append(doc.children, element{t.Name.Local, start, end, data[start:end]})
+				doc.children = append(doc.children, element{name: t.Name.Local, start: start, end: end, raw: data[start:end]})
 			}
 		case xml.EndElement:
 			doc.close = start
@@ -73,6 +74,9 @@ func parse(data []byte, root string) (*document, error) {
 	return doc, nil
 }
 func (e element) fields() (map[string]string, error) {
+	if e.values != nil {
+		return e.values, nil
+	}
 	doc, err := parse(e.raw, e.name)
 	if err != nil {
 		return nil, err
@@ -132,6 +136,28 @@ func (doc *document) edit(replacements map[int][]byte, additions [][]byte) []byt
 	return b.Bytes()
 }
 func setFields(e element, values map[string]string) ([]byte, error) {
+	if e.values != nil {
+		fields := map[string]string{}
+		for k, v := range e.values {
+			fields[k] = v
+		}
+		for k, v := range values {
+			fields[k] = v
+		}
+		keys := make([]string, 0, len(fields))
+		for k := range fields {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		var b bytes.Buffer
+		b.WriteString("<" + e.name + ">")
+		for _, k := range keys {
+			b.Write(leaf(k, fields[k]))
+		}
+		b.WriteString("</" + e.name + ">")
+		return b.Bytes(), nil
+	}
+
 	doc, err := parse(e.raw, e.name)
 	if err != nil {
 		return nil, err

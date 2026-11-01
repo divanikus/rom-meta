@@ -168,14 +168,17 @@ func (p *Plan) writeTo(root, relative string, data []byte, source string) (bool,
 	if old.exists && source != "" {
 		return false, fmt.Errorf("existing asset differs; refusing overwrite: %s", name)
 	}
-	for _, change := range p.files {
-		if change.root == root && strings.EqualFold(change.path, relative) {
-			if change.hash != want {
-				return false, fmt.Errorf("conflicting planned output: %s", relative)
-			}
-			return false, nil
-		}
+	if p.outputFiles == nil {
+		p.outputFiles = map[string]int{}
 	}
+	key := root + "\x00" + strings.ToLower(relative)
+	if i, ok := p.outputFiles[key]; ok {
+		if p.files[i].hash != want {
+			return false, fmt.Errorf("conflicting planned output: %s", relative)
+		}
+		return false, nil
+	}
+	p.outputFiles[key] = len(p.files)
 	p.files = append(p.files, fileChange{root: root, path: relative, source: source, hash: want, data: data, size: sourceSize})
 	display := relative
 	if root != p.Root {

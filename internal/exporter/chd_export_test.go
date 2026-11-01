@@ -107,11 +107,6 @@ func TestCHDHeaderFreshnessBeforeApply(t *testing.T) {
 				data[len(data)-1] = 5
 			}
 			put(t, path, data)
-			if change == "header" || change == "full-body" {
-				if err = os.Chtimes(path, stat.ModTime(), stat.ModTime()); err != nil {
-					t.Fatal(err)
-				}
-			}
 			if change == "mtime" {
 				if err = os.Chtimes(path, stat.ModTime().Add(2000000000), stat.ModTime().Add(2000000000)); err != nil {
 					t.Fatal(err)
@@ -181,7 +176,7 @@ func TestCHDPlaylistOnlyHashesMemberWithContainerFingerprint(t *testing.T) {
 	changed := append(append([]byte(nil), data...), make([]byte, 512)...)
 	changed[84] = 22
 	put(t, path, changed)
-	os.Chtimes(path, stat.ModTime(), stat.ModTime())
+	os.Chtimes(path, stat.ModTime().Add(2000000000), stat.ModTime().Add(2000000000))
 	if err = Apply(plan, nil); err == nil {
 		t.Fatal("changed bounded playlist CHD accepted")
 	}

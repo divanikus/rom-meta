@@ -156,7 +156,6 @@ func runDirectDestination(options exporter.Options, api string, systems []string
 	options.Progress = func(stage, name string, current, total int) {
 		updateExportProgress(progress, stage, name, current, total)
 	}
-	single := options.Platform != ""
 	var plans []*exporter.Plan
 	var skipped []exporter.SkippedSystem
 	var checkInputs func() error
@@ -167,10 +166,9 @@ func runDirectDestination(options exporter.Options, api string, systems []string
 			return err
 		}
 		plans, skipped, stage = job.Batch.Plans, job.Batch.Skipped, job.Batch.Out
-		single = job.Single
 		checkInputs = func() error { return job.CheckInputs(ctx) }
 		remoteAsset = func(source string) (io.ReadCloser, error) { return job.OpenAsset(ctx, source) }
-	} else if single {
+	} else if options.Platform != "" {
 		plan, err := exporter.Build(options)
 		if err != nil {
 			return err
@@ -200,12 +198,12 @@ func runDirectDestination(options exporter.Options, api string, systems []string
 	for _, skip := range skipped {
 		fmt.Printf("Skipped %s: %s\n", skip.System, skip.Reason)
 	}
-	options.Progress("render XML", options.Target, 0, 0)
-	files, err := exporter.PreviewFiles(plans, single)
+	options.Progress("native fields", options.Target, 0, 0)
+	library, files, err := exporter.DestinationData(plans)
 	if err != nil {
 		return err
 	}
-	source := &frontend.Source{Check: checkInputs, Files: map[string]frontend.SourceFile{}}
+	source := &frontend.Source{Library: library, Check: checkInputs, Files: map[string]frontend.SourceFile{}}
 	for name, file := range files {
 		open := file.Open
 		if remoteAsset != nil && file.SourcePath != "" {

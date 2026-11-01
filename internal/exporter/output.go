@@ -66,6 +66,15 @@ type xmlList struct {
 }
 
 func RenderGamelist(plan *Plan) ([]byte, error) {
+	list := gamelistRecords(plan)
+	body, err := xml.MarshalIndent(list, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append([]byte(xml.Header), append(body, '\n')...), nil
+}
+
+func gamelistRecords(plan *Plan) xmlList {
 	list := xmlList{Games: []xmlGame{}}
 	for _, r := range plan.Records {
 		if !r.Hidden && (r.Status == "unsupported" || (systems[plan.System].Arcade || r.Catalog != nil || r.Representation == "romset-payload") && r.Status != "matched") {
@@ -83,11 +92,7 @@ func RenderGamelist(plan *Plan) ([]byte, error) {
 			list.Games = append(list.Games, entry)
 		}
 	}
-	body, err := xml.MarshalIndent(list, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-	return append([]byte(xml.Header), append(body, '\n')...), nil
+	return list
 }
 
 // Apply writes a new, complete local/personal package. Existing outputs are never

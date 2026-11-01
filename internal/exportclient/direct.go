@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"rommeta/internal/exporter"
 )
 
 // CheckInputs validates the current local ROMs before direct native writing.
@@ -12,14 +11,8 @@ func (j *Job) CheckInputs(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := j.fresh(); err != nil {
+	if err := j.fresh(ctx); err != nil {
 		return err
-	}
-	for _, plan := range j.Batch.Plans {
-		plan.Context = ctx
-		if err := exporter.CheckInputs(plan); err != nil {
-			return err
-		}
 	}
 	return nil
 }

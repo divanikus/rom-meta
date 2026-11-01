@@ -32,11 +32,11 @@ check source file stamps and parse full YAML only for selected cards. This
 optional disposable index may be maintained even during preview. Unwritable
 index storage falls back to source reads and reports that it could not be saved.
 
-After loading the index, local
-scan observes each ROM and immediately matches it and selects metadata/media
+After loading the index, a single directory enumeration supplies input names and
+the progress total. Local scan observes each ROM and immediately matches it and selects metadata/media
 before advancing to the next file. Selective CHD hash retries stay with that input;
 the collection is not resolved a second time. Whole-selection title/disc grouping,
-XML and native-change calculation finish the read-only scan. Preview stops there.
+native-field projection and change calculation finish the read-only scan. Preview stops there.
 Write streams needed assets directly to their destination and publishes native
 XML after them.
 There is no separate plan, media or prepare/install step in the progress display.
@@ -44,10 +44,17 @@ Counts refer to the current operation, not the complete command: catalog counts
 are game cards, while ROM counts are launch inputs. Scan appears before source
 access and input counting; totals stay unknown until enumeration.
 
+Direct export hands structured fields to the native adapter without first
+serializing and reparsing XML or a JSON manifest. The existing destination XML
+is parsed for preservation; new XML is emitted only as final output. Media
+directories and incoming artwork are indexed once per command, with per-card
+lookups in memory. Version and planned-file lookups also use in-memory indexes.
+
 Direct export uses its in-memory native plan once. Local catalog/archive assets
 and API responses are copied straight to final files. Size and any declared hash
 are checked during copying. It creates no temporary export package or download
-cache, and does not rebuild/install a second plan. One write counter tracks final destination files
+cache, and does not rebuild/install a second plan. One write counter tracks final
+destination files
 and reaches completion once. Existing media is kept and unused alternate-version
 media is not copied. User-supplied --package files retain independent-copy behavior.
 
@@ -65,9 +72,13 @@ observed version name is kept, `release`/`variant` stay empty, and
 `metadata_release` supplies only a metadata basis. Catalog names take precedence
 over broad provider aliases. Explicitly modified names can use an unambiguous
 shortened title; shared series names remain ambiguous. This export-only fallback
-does not relax consumer lookup or prove a translation version. Apply rechecks those
-facts without rereading the disc payload. This also applies to CHD members inside
-directory M3U playlists. Metadata selection is not a dump-integrity check.
+does not relax consumer lookup or prove a translation version. Before writing,
+apply checks saved size, modification time and file type using filesystem metadata;
+it does not reopen ROMs, reread headers or repeat full hashes. This also applies
+to hashed cartridges, ISO/CHD inputs and members of directory M3U playlists, in
+local and API mode. Ordinary membership changes are detected through directory
+stamps. Same-size byte changes with a restored modification time are not detected
+by this apply check. Metadata selection is not a dump-integrity check.
 
 When a stored CHD-container fingerprint has the same physical size, export
 selectively hashes that file before choosing a target. This retains renamed-file
@@ -78,8 +89,8 @@ headers retain the full-container reader. ISO/raw-cartridge behavior is unchange
 To inspect complete CHD-container hashes explicitly, repeat the usual preview
 command with `--hash-roms` and omit `--apply`. This reads full files and compares
 available container fingerprints; it does not decompress/verify CHD data or match
-compressed-container hashes to Redump track hashes. Applying that explicit mode
-also rechecks full hashes. Ordinary metadata export does not need that extra pass.
+compressed-container hashes to Redump track hashes. Full hashes are computed
+during the initial scan only; applying that result still uses filesystem stamps.
 
 Network mode negotiates `chd-header-v1` with the server. An older server keeps the
 previous full-hash behavior; update both client and API to use fast CHD export.

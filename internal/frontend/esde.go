@@ -2,28 +2,18 @@ package frontend
 
 import (
 	"bytes"
-	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
+	"rommeta/internal/frontenddata"
 	"runtime"
 	"sort"
 	"strings"
 )
 
-type esdeManifest struct {
-	System  string         `json:"system"`
-	ROMRoot string         `json:"rom_root"`
-	Systems []esdeManifest `json:"systems"`
-	Records []struct {
-		ROM   string `json:"rom"`
-		Media map[string]struct {
-			OutputPath string `json:"output_path"`
-		} `json:"media"`
-	} `json:"records"`
-}
+type esdeManifest = frontenddata.Selection
 
 // ES-DE can place alternativeEmulator beside gameList and uses XML fragments
 // for settings. Wrap only while parsing and retain every original outer byte.
@@ -244,11 +234,7 @@ func (p *Plan) validateESDEROMRoot(system, romRoot string, settings map[string]s
 	}
 	return nil
 }
-func buildESDE(p *Plan, body []byte) error {
-	var manifest esdeManifest
-	if err := json.Unmarshal(body, &manifest); err != nil {
-		return err
-	}
+func buildESDE(p *Plan, manifest frontenddata.Selection) error {
 	plans := manifest.Systems
 	if len(plans) == 0 {
 		plans = []esdeManifest{manifest}
@@ -273,11 +259,7 @@ func buildESDE(p *Plan, body []byte) error {
 			return err
 		}
 		relative := "gamelists/" + plan.System + "/gamelist.xml"
-		incoming, err := p.read(p.Package, relative, false)
-		if err != nil {
-			return err
-		}
-		_, newList, _, _, err := gamelist(incoming)
+		newList, err := p.incoming(relative, "gameList")
 		if err != nil {
 			return err
 		}
@@ -333,7 +315,11 @@ func buildESDE(p *Plan, body []byte) error {
 					}
 				}
 			} else {
-				additions = append(additions, e.raw)
+				raw, err := setFields(e, nil)
+				if err != nil {
+					return err
+				}
+				additions = append(additions, raw)
 			}
 			p.Changes = append(p.Changes, change)
 		}
@@ -364,7 +350,7 @@ func buildESDE(p *Plan, body []byte) error {
 				if err != nil {
 					return err
 				}
-				present, err := esdeMediaPresent(target)
+				present, err := p.esdeMediaPresent(target)
 				if err != nil {
 					return err
 				}
@@ -401,27 +387,33 @@ func buildESDE(p *Plan, body []byte) error {
 	}
 	return nil
 }
-func esdeMediaPresent(target string) (bool, error) {
-	entries, err := os.ReadDir(filepath.Dir(target))
-	if os.IsNotExist(err) {
-		return false, nil
+func (p *Plan) esdeMediaPresent(target string) (bool, error) {
+	if p.mediaDirs == nil {
+		p.mediaDirs = map[string]map[string]bool{}
 	}
-	if err != nil {
-		return false, err
+	dir := filepath.Dir(target)
+	stems, loaded := p.mediaDirs[dir]
+	if !loaded {
+		entries, err := os.ReadDir(dir)
+		if err != nil && !os.IsNotExist(err) {
+			return false, err
+		}
+		stems = map[string]bool{}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			stem := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
+			if runtime.GOOS == "windows" {
+				stem = strings.ToLower(stem)
+			}
+			stems[stem] = true
+		}
+		p.mediaDirs[dir] = stems
 	}
 	stem := strings.TrimSuffix(filepath.Base(target), filepath.Ext(target))
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		candidate := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
-		if runtime.GOOS == "windows" {
-			if strings.EqualFold(stem, candidate) {
-				return true, nil
-			}
-		} else if stem == candidate {
-			return true, nil
-		}
+	if runtime.GOOS == "windows" {
+		stem = strings.ToLower(stem)
 	}
-	return false, nil
+	return stems[stem], nil
 }

@@ -192,9 +192,25 @@ type launchBoxList struct {
 // RenderLaunchBox writes native library records; database IDs are deliberately
 // omitted because provider snapshot IDs are not verified local library bindings.
 func RenderLaunchBox(plan *Plan) ([]byte, error) {
-	projection, err := buildLaunchBoxProjection(plan)
+	list, err := launchBoxRecords(plan)
 	if err != nil {
 		return nil, err
+	}
+	body, err := xml.MarshalIndent(list, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append([]byte(xml.Header), append(body, '\n')...), nil
+}
+
+func launchBoxRecords(plan *Plan) (launchBoxList, error) {
+	projection := plan.LaunchBox
+	if projection == nil {
+		var err error
+		projection, err = buildLaunchBoxProjection(plan)
+		if err != nil {
+			return launchBoxList{}, err
+		}
 	}
 	list := launchBoxList{Games: []launchBoxGame{}, Versions: []launchBoxApplication{}}
 	for _, group := range projection.Groups {
@@ -229,11 +245,7 @@ func RenderLaunchBox(plan *Plan) ([]byte, error) {
 			})
 		}
 	}
-	body, err := xml.MarshalIndent(list, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-	return append([]byte(xml.Header), append(body, '\n')...), nil
+	return list, nil
 }
 
 func launchBoxInstructions() string {
@@ -250,8 +262,7 @@ Install with rom-meta export --target launchbox --package <this package>
 --destination <installation>. Preview first; repeat with --apply after closing LaunchBox/Big Box.
 The command matches current native IDs, launch paths and ordered M3U
 member paths. It keeps existing card IDs, nonempty fields, launch settings,
-favorites, history and unknown XML; adds versions and missing media; and backs up
-replaced files. Conflicting existing cards require reviewed native consolidation.
+favorites, history and unknown XML; and adds versions and missing media. Conflicting existing cards require reviewed native consolidation.
 Do not manually overwrite an existing platform XML. See docs/launchbox-export.md.
 Use the Platform sidebar filter if a category view does not show new platforms.
 Custom media-folder overrides are not supported by the merge command.

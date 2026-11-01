@@ -159,8 +159,8 @@ func TestNetworkCHDPlaylistParityAndHeaderDrift(t *testing.T) {
 	info, _ := os.Stat(path)
 	data[84] = 44
 	put(t, path, data)
-	os.Chtimes(path, info.ModTime(), info.ModTime())
-	if err = job.Apply(context.Background()); err == nil || !strings.Contains(err.Error(), "CHD changed") {
+	os.Chtimes(path, info.ModTime().Add(2000000000), info.ModTime().Add(2000000000))
+	if err = job.Apply(context.Background()); err == nil || !strings.Contains(err.Error(), "ROM changed") {
 		t.Fatal("header drift accepted", err)
 	}
 	if _, err = os.Stat(job.Batch.Out); !os.IsNotExist(err) {

@@ -9,14 +9,12 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
-	"io/fs"
 	"path/filepath"
 
 	"strings"
 
 	"gopkg.in/yaml.v3"
 	"rommeta/internal/catalogfs"
-	"rommeta/internal/catalogrules"
 	"rommeta/internal/catalogyaml"
 	"rommeta/internal/zipnames"
 )
@@ -149,6 +147,7 @@ func Build(options Options) (*Plan, error) {
 				return err
 			}
 		}
+		record.InputGuard = input.Guard
 		plan.Records = append(plan.Records, record)
 		return nil
 	})
@@ -252,43 +251,6 @@ func hashStream(input io.Reader, limit int64) (hashes, error) {
 		return hashes{}, fmt.Errorf("payload exceeds 512 MiB limit")
 	}
 	return hashes{size: size, sha1: fmt.Sprintf("%x", a.Sum(nil)), sha256: fmt.Sprintf("%x", b.Sum(nil)), md5: fmt.Sprintf("%x", c.Sum(nil)), crc: fmt.Sprintf("%08x", d.Sum32())}, nil
-}
-
-func countInputs(options Options, root string) (int, error) {
-	count := 0
-	err := catalogfs.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		ext := strings.ToLower(filepath.Ext(entry.Name()))
-		playlistDir := entry.IsDir() && playlistSystem(options.System) && ext == ".m3u"
-		group, e := romsetEntry(root, path, entry, options.LegacyOnly)
-		if e != nil {
-			return e
-		}
-		if entry.IsDir() && !playlistDir && !group {
-			return nil
-		}
-		if !playlistDir && !group && !inputExtension(options.System, ext) || catalogrules.IsBIOSName(entry.Name()) {
-			return nil
-		}
-		rel, _ := filepath.Rel(root, path)
-		if options.Match != "" && !strings.Contains(strings.ToLower(rel), strings.ToLower(options.Match)) {
-			if playlistDir || group {
-				return fs.SkipDir
-			}
-			return nil
-		}
-		count++
-		if options.Limit > 0 && count >= options.Limit {
-			return fs.SkipAll
-		}
-		if playlistDir || group {
-			return fs.SkipDir
-		}
-		return nil
-	})
-	return count, err
 }
 
 func indexFingerprints(index *catalogIndex, g *game, fingerprints *yaml.Node) error {

@@ -17,6 +17,7 @@ import (
 // ExportInput contains only observations of caller-owned files. No caller path
 // is opened by the catalog server. Parts are bounded playlist members.
 type ExportInput struct {
+	Guard          *InputGuard         `json:"-"`
 	Catalog        *CatalogObservation `json:"catalog,omitempty"`
 	Disc           *DiscObservation    `json:"disc,omitempty"`
 	Representation string              `json:"representation,omitempty"`
@@ -306,44 +307,25 @@ func walkExportInputs(options Options, consume func(ExportInput) error) error {
 	if options.Progress != nil {
 		options.Progress("ROMs", "Counting input files", 0, 0)
 	}
-	total, err := countInputs(options, root)
+	entries, err := listExportInputs(options, root)
 	if err != nil {
 		return err
 	}
+	total := len(entries)
 	completed, lastName := 0, ""
-	err = catalogfs.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+	for _, item := range entries {
 		if options.Context != nil {
 			if err := options.Context.Err(); err != nil {
 				return err
 			}
 		}
-		if walkErr != nil {
-			return walkErr
-		}
+		path, entry, playlist, group := item.path, item.entry, item.playlist, item.group
 		ext := strings.ToLower(filepath.Ext(entry.Name()))
-		playlist := entry.IsDir() && playlistSystem(options.System) && ext == ".m3u"
-		group, err := romsetEntry(root, path, entry, options.LegacyOnly)
-		group = group && !playlist
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() && !playlist && !group || !entry.IsDir() && !inputExtension(options.System, ext) || catalogrules.IsBIOSName(entry.Name()) {
-			return nil
-		}
 		rel, e := filepath.Rel(root, path)
 		if e != nil {
 			return e
 		}
 		rel = filepath.ToSlash(rel)
-		if options.Match != "" && !strings.Contains(strings.ToLower(rel), strings.ToLower(options.Match)) {
-			if playlist || group {
-				return fs.SkipDir
-			}
-			return nil
-		}
-		if options.Limit > 0 && completed >= options.Limit {
-			return fs.SkipAll
-		}
 		if options.Progress != nil {
 			options.Progress("ROMs", rel, completed, total)
 		}
@@ -387,18 +369,15 @@ func walkExportInputs(options Options, consume func(ExportInput) error) error {
 		if !validExportInput(input, options.System, false) {
 			input = ExportInput{ROM: rel, Kind: "unsupported", Reason: "invalid or unsafe launch observation"}
 		}
+		input.Guard, e = CaptureInputGuard(root, input)
+		if e != nil {
+			return e
+		}
 		if err := consume(input); err != nil {
 			return err
 		}
 		completed++
 		lastName = input.ROM
-		if playlist || group {
-			return fs.SkipDir
-		}
-		return nil
-	})
-	if err != nil {
-		return err
 	}
 	if completed == 0 {
 		return errNoInputs
@@ -407,6 +386,57 @@ func walkExportInputs(options Options, consume func(ExportInput) error) error {
 		options.Progress("ROMs", lastName, completed, total)
 	}
 	return nil
+}
+
+type exportFile struct {
+	path            string
+	entry           fs.DirEntry
+	playlist, group bool
+}
+
+// Enumerate once; keep directory entries for observation and the progress total.
+func listExportInputs(options Options, root string) ([]exportFile, error) {
+	result := []exportFile{}
+	err := catalogfs.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if options.Context != nil {
+			if err := options.Context.Err(); err != nil {
+				return err
+			}
+		}
+		if walkErr != nil {
+			return walkErr
+		}
+		ext := strings.ToLower(filepath.Ext(entry.Name()))
+		playlist := entry.IsDir() && playlistSystem(options.System) && ext == ".m3u"
+		group, err := romsetEntry(root, path, entry, options.LegacyOnly)
+		group = group && !playlist
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() && !playlist && !group || !entry.IsDir() && !inputExtension(options.System, ext) || catalogrules.IsBIOSName(entry.Name()) {
+			return nil
+		}
+		rel, e := filepath.Rel(root, path)
+		if e != nil {
+			return e
+		}
+		rel = filepath.ToSlash(rel)
+		if options.Match != "" && !strings.Contains(strings.ToLower(rel), strings.ToLower(options.Match)) {
+			if playlist || group {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if options.Limit > 0 && len(result) >= options.Limit {
+			return fs.SkipAll
+		}
+		result = append(result, exportFile{path, entry, playlist, group})
+		if playlist || group {
+			return fs.SkipDir
+		}
+		return nil
+	})
+	return result, err
 }
 
 // ExportOutputPath derives destinations locally rather than trusting API paths.

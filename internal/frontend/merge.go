@@ -105,11 +105,10 @@ func orderedGames(games map[string]native) []string {
 
 // buildLaunchBox preserves native card identity and owner curation.
 func buildLaunchBox(p *Plan) error {
-	root, pkg := p.Root, p.Package
+	root := p.Root
 	if info, err := os.Stat(filepath.Join(root, "Data", "Platforms")); err != nil || !info.IsDir() {
 		return fmt.Errorf("LaunchBox destination must contain Data/Platforms")
 	}
-	var body []byte
 	var err error
 	folders, err := p.read(root, "Data/Platforms.xml", true)
 	if err != nil {
@@ -126,11 +125,7 @@ func buildLaunchBox(p *Plan) error {
 			continue
 		}
 		relative := "Data/Platforms/" + entry.Name()
-		body, err = p.read(pkg, relative, false)
-		if err != nil {
-			return err
-		}
-		incoming, err := parse(body, "LaunchBox")
+		incoming, err := p.incoming(relative, "LaunchBox")
 		if err != nil {
 			return fmt.Errorf("%s: %w", relative, err)
 		}
@@ -180,6 +175,18 @@ func buildLaunchBox(p *Plan) error {
 		if err != nil {
 			return err
 		}
+		appsByGame := map[string][]native{}
+		versionsByGame := map[string][]native{}
+		versionsByID := map[string]native{}
+		for _, v := range apps {
+			key := id(v.fields["GameID"])
+			appsByGame[key] = append(appsByGame[key], v)
+		}
+		for _, v := range versions {
+			key := id(v.fields["GameID"])
+			versionsByGame[key] = append(versionsByGame[key], v)
+			versionsByID[id(v.fields["Id"])] = v
+		}
 		replacements := map[int][]byte{}
 		var additions [][]byte
 		paths := map[string]map[string]bool{}
@@ -222,7 +229,7 @@ func buildLaunchBox(p *Plan) error {
 			for _, launch := range pathsByGame[game] {
 				observe(launch)
 			}
-			for _, v := range apps {
+			for _, v := range appsByGame[game] {
 				if id(v.fields["GameID"]) == game {
 					observe(v.fields["ApplicationPath"])
 				}
@@ -249,7 +256,7 @@ func buildLaunchBox(p *Plan) error {
 		}
 		// Check all version IDs/paths before planning any part of a card.
 		for game, target := range targets {
-			for _, v := range apps {
+			for _, v := range appsByGame[game] {
 				if id(v.fields["GameID"]) != game {
 					continue
 				}
@@ -257,13 +264,14 @@ func buildLaunchBox(p *Plan) error {
 					return fmt.Errorf("package contains a non-version additional app")
 				}
 				matches := 0
-				for _, oldVersion := range versions {
+				for _, oldVersion := range versionsByGame[target] {
 					if id(oldVersion.fields["GameID"]) == target && oldVersion.fields["Section"] == "Version" && p.sameLaunch(oldVersion.fields["ApplicationPath"], v.fields["ApplicationPath"]) {
 						matches++
 					}
-					if id(v.fields["Id"]) == id(oldVersion.fields["Id"]) && (id(oldVersion.fields["GameID"]) != target || oldVersion.fields["Section"] != "Version" || !p.sameLaunch(oldVersion.fields["ApplicationPath"], v.fields["ApplicationPath"])) {
-						problems[game] = "an existing additional app/version has a conflicting ID or launch path"
-					}
+
+				}
+				if oldVersion, ok := versionsByID[id(v.fields["Id"])]; ok && (id(oldVersion.fields["GameID"]) != target || oldVersion.fields["Section"] != "Version" || !p.sameLaunch(oldVersion.fields["ApplicationPath"], v.fields["ApplicationPath"])) {
+					problems[game] = "an existing additional app/version has a conflicting ID or launch path"
 				}
 				if matches > 1 {
 					problems[game] = "multiple existing versions have the same launch path"
@@ -288,7 +296,7 @@ func buildLaunchBox(p *Plan) error {
 			}
 			firstFile := len(p.files)
 			oldGame, found := existing[target]
-			for _, oldVersion := range versions {
+			for _, oldVersion := range versionsByGame[target] {
 				if id(oldVersion.fields["GameID"]) == target && strings.TrimSpace(oldVersion.fields["Disc"]) != "" && oldVersion.fields["Disc"] != "0" {
 					p.Warnings = append(p.Warnings, platform+" / "+change.Title+": preserved existing Disc values; review LaunchBox automatic M3U generation before using mixed editions")
 					break
@@ -344,13 +352,13 @@ func buildLaunchBox(p *Plan) error {
 				}
 				additions = append(additions, raw)
 			}
-			for _, v := range apps {
+			for _, v := range appsByGame[game] {
 				if id(v.fields["GameID"]) != game {
 					continue
 				}
 				var matching *native
-				for i := range versions {
-					oldVersion := &versions[i]
+				for i := range versionsByGame[target] {
+					oldVersion := &versionsByGame[target][i]
 					if id(oldVersion.fields["GameID"]) == target && oldVersion.fields["Section"] == "Version" && p.sameLaunch(oldVersion.fields["ApplicationPath"], v.fields["ApplicationPath"]) {
 						matching = oldVersion
 						break

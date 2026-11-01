@@ -8,11 +8,6 @@ import (
 	"rommeta/internal/exporter"
 )
 
-type discStamp struct {
-	Root, System, ROM string
-	Disc              *exporter.DiscObservation
-}
-
 func discInputSize(input exporter.ExportInput) int64 {
 	var size int64
 	if input.Disc != nil {

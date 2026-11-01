@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"rommeta/internal/frontenddata"
 	"sort"
 	"strings"
 )
@@ -12,8 +13,9 @@ import (
 // Source describes generated metadata and asset proofs without copying or
 // downloading media during preview. Direct apply reads only needed assets.
 type Source struct {
-	Files map[string]SourceFile
-	Check func() error
+	Library *frontenddata.Library
+	Files   map[string]SourceFile
+	Check   func() error
 }
 type SourceFile struct {
 	Open   func() (io.ReadCloser, error)
@@ -32,38 +34,82 @@ func (p *Plan) packageEntries(relative string) ([]packageEntry, error) {
 	if _, err := safeJoin(p.Package, relative); err != nil {
 		return nil, err
 	}
-	var result []packageEntry
-	if p.source == nil {
-		entries, err := os.ReadDir(filepath.Join(p.Package, filepath.FromSlash(relative)))
-		if err != nil {
-			return nil, err
+	if p.packageDirs == nil {
+		p.packageDirs = map[string][]packageEntry{}
+		if p.source != nil {
+			tree := map[string]map[string]bool{}
+			add := func(name string) {
+				parts := strings.Split(name, "/")
+				for i, part := range parts {
+					dir := strings.Join(parts[:i], "/")
+					if tree[dir] == nil {
+						tree[dir] = map[string]bool{}
+					}
+					tree[dir][part] = i < len(parts)-1
+				}
+			}
+			for name := range p.source.Files {
+				add(name)
+			}
+			if p.source.Library != nil {
+				for name := range p.source.Library.Native {
+					add(name)
+				}
+			}
+			for dir, children := range tree {
+				entries := []packageEntry{}
+				for name, directory := range children {
+					entries = append(entries, packageEntry{name, directory})
+				}
+				sort.Slice(entries, func(i, j int) bool { return entries[i].name < entries[j].name })
+				p.packageDirs[dir] = entries
+			}
 		}
-		for _, e := range entries {
-			result = append(result, packageEntry{e.Name(), e.IsDir()})
-		}
-		return result, nil
 	}
-	prefix := relative + "/"
-	seen := map[string]bool{}
-	for name := range p.source.Files {
-		if !strings.HasPrefix(name, prefix) {
-			continue
-		}
-		tail := strings.TrimPrefix(name, prefix)
-		first, _, directory := strings.Cut(tail, "/")
-		if first != "" {
-			seen[first] = seen[first] || directory
-		}
+	if entries, ok := p.packageDirs[relative]; ok {
+		return entries, nil
 	}
-	if len(seen) == 0 {
+	if p.source != nil {
 		return nil, os.ErrNotExist
 	}
-	for name, directory := range seen {
-		result = append(result, packageEntry{name, directory})
+	entries, err := os.ReadDir(filepath.Join(p.Package, filepath.FromSlash(relative)))
+	if os.IsNotExist(err) {
+		p.packageDirs[relative] = nil
+		return nil, nil
 	}
-	sort.Slice(result, func(i, j int) bool { return result[i].name < result[j].name })
+	if err != nil {
+		return nil, err
+	}
+	result := make([]packageEntry, 0, len(entries))
+	for _, e := range entries {
+		result = append(result, packageEntry{e.Name(), e.IsDir()})
+	}
+	p.packageDirs[relative] = result
 	return result, nil
 }
+
+func (p *Plan) packageMedia(relative, game string) ([]packageEntry, error) {
+	if p.sourceMedia == nil {
+		p.sourceMedia = map[string]map[string][]packageEntry{}
+	}
+	if groups, ok := p.sourceMedia[relative]; ok {
+		return groups[strings.ToLower(game)], nil
+	}
+	entries, err := p.packageEntries(relative)
+	if err != nil {
+		return nil, err
+	}
+	groups := map[string][]packageEntry{}
+	for _, e := range entries {
+		if !e.IsDir() && len(e.name) > 37 && e.name[36] == '-' {
+			key := strings.ToLower(e.name[:36])
+			groups[key] = append(groups[key], e)
+		}
+	}
+	p.sourceMedia[relative] = groups
+	return groups[strings.ToLower(game)], nil
+}
+
 func (p *Plan) packageProof(name string) (fingerprint, error) {
 	if p.source == nil {
 		return digest(name)
@@ -125,4 +171,27 @@ func prospectiveRoot(name string) (string, error) {
 		suffix = append(suffix, filepath.Base(current))
 		current = parent
 	}
+}
+
+func (p *Plan) incoming(relative, root string) (*document, error) {
+	if p.source != nil && p.source.Library != nil {
+		entries, ok := p.source.Library.Native[relative]
+		if !ok {
+			return nil, fmt.Errorf("missing native input: %s", relative)
+		}
+		doc := &document{root: root}
+		for _, e := range entries {
+			doc.children = append(doc.children, element{name: e.Name, values: e.Fields})
+		}
+		return doc, nil
+	}
+	body, err := p.read(p.Package, relative, false)
+	if err != nil {
+		return nil, err
+	}
+	if root == "gameList" {
+		_, list, _, _, err := gamelist(body)
+		return list, err
+	}
+	return parse(body, root)
 }

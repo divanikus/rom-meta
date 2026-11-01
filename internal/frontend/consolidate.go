@@ -5,30 +5,16 @@ package frontend
 import (
 	"bytes"
 	"crypto/sha1"
-	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
+	"rommeta/internal/frontenddata"
 	"strings"
 )
 
-type consolidationManifest struct {
-	ROMRoot string `json:"rom_root"`
-	Records []struct {
-		ROM, Game, Status string
-		LaunchFile        string `json:"launch_file"`
-		Hidden            bool
-	} `json:"records"`
-	LaunchBox *struct {
-		Groups []struct {
-			ID, Game string
-			Versions []struct{ Records []int }
-		}
-	} `json:"launchbox"`
-	Systems []consolidationManifest `json:"systems"`
-}
+type consolidationManifest = frontenddata.Selection
 
 func generatedLaunchBoxID(identity string) string {
 	h := sha1.New()
@@ -123,14 +109,7 @@ func untouchedPlaceholder(n native, platformName, launch, sourceName string, app
 }
 
 func (p *Plan) sourceLaunchPaths(platformName string, games map[string]native) (map[string]string, map[string]string, error) {
-	body, err := p.read(p.Package, "manifest.json", false)
-	if err != nil {
-		return nil, nil, err
-	}
-	var manifest consolidationManifest
-	if err = json.Unmarshal(body, &manifest); err != nil {
-		return nil, nil, err
-	}
+	manifest := p.selection
 	// Exact source launch paths must belong to exactly one current catalog card.
 	byPath := map[string]string{}
 	sourceNames := map[string]string{}

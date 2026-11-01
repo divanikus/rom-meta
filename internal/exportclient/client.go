@@ -30,14 +30,12 @@ type Options struct {
 }
 
 type Job struct {
-	discInputs    map[string]discStamp
-	catalogInputs map[string]catalogStamp
-	Batch         *exporter.BatchPlan
-	Single        bool
-	client        *client
-	assets        map[string]catalogapi.ExportAsset
-	stamps        map[string]os.FileInfo
-	progress      func(string, string, int, int)
+	guards   []*exporter.InputGuard
+	Batch    *exporter.BatchPlan
+	Single   bool
+	client   *client
+	assets   map[string]catalogapi.ExportAsset
+	progress func(string, string, int, int)
 }
 
 type client struct {
@@ -259,7 +257,7 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 		return nil, err
 	}
 	batch := &exporter.BatchPlan{SchemaVersion: 1, Target: target, ROMRoot: root, Out: out, Plans: []*exporter.Plan{}, Skipped: []exporter.SkippedSystem{}}
-	job := &Job{discInputs: map[string]discStamp{}, catalogInputs: map[string]catalogStamp{}, Batch: batch, Single: options.Platform != "", client: c, assets: map[string]catalogapi.ExportAsset{}, stamps: map[string]os.FileInfo{}, progress: options.Progress}
+	job := &Job{Batch: batch, Single: options.Platform != "", client: c, assets: map[string]catalogapi.ExportAsset{}, progress: options.Progress}
 	var selectedFolders []exporter.FolderSelection
 	if job.Single {
 		selection, catalog, err := selector.Single(options.Platform, root)
@@ -361,6 +359,7 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 }
 
 func validateRecord(input exporter.ExportInput, record *exporter.Record, system string, assets map[string]catalogapi.ExportAsset) error {
+	record.InputGuard = input.Guard
 	if record.ROM != input.ROM || !exporter.ValidInputPath(record.ROM) {
 		return fmt.Errorf("API changed ROM identity")
 	}
@@ -447,75 +446,21 @@ func validateRecord(input exporter.ExportInput, record *exporter.Record, system 
 }
 
 func (j *Job) remember(root, system string, input exporter.ExportInput) error {
-	rememberDisc := func(part exporter.ExportInput) error {
-		if part.Kind != "disc" {
-			return nil
-		}
-		if err := exporter.CheckDiscObservation(root, system, part.ROM, part.Disc); err != nil {
-			return err
-		}
-		if j.discInputs == nil {
-			j.discInputs = map[string]discStamp{}
-		}
-		j.discInputs[filepath.Join(root, filepath.FromSlash(part.ROM))] = discStamp{Root: root, System: system, ROM: part.ROM, Disc: part.Disc}
-		return nil
-	}
-	if err := rememberDisc(input); err != nil {
-		return err
-	}
-	for _, part := range input.Parts {
-		if err := rememberDisc(part); err != nil {
-			return err
-		}
-	}
-	if input.Kind == "catalog" {
-		if err := exporter.CheckROMSetObservation(root, input.ROM, input.Catalog); err != nil {
-			return err
-		}
-		j.catalogInputs[filepath.Join(root, filepath.FromSlash(input.ROM))] = catalogStamp{Root: root, Input: input}
-		return nil
-	}
-	if input.Kind == "unsupported" {
-		return nil
-	}
-	paths := []string{input.ROM}
-	if input.Kind == "playlist" {
-		paths[0] = filepath.ToSlash(filepath.Join(input.ROM, filepath.Base(input.ROM)))
-		for _, part := range input.Parts {
-			paths = append(paths, part.ROM)
-		}
-	}
-	for _, relative := range paths {
-		path := filepath.Join(root, filepath.FromSlash(relative))
-		info, err := os.Lstat(path)
+	guard := input.Guard
+	if guard == nil {
+		var err error
+		guard, err = exporter.CaptureInputGuard(root, input)
 		if err != nil {
 			return err
 		}
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("ROM input changed during observation")
-		}
-		j.stamps[path] = info
 	}
+	j.guards = append(j.guards, guard)
 	return nil
 }
-func (j *Job) fresh() error {
-	for _, input := range j.discInputs {
-		if err := exporter.CheckDiscObservation(input.Root, input.System, input.ROM, input.Disc); err != nil {
+func (j *Job) fresh(ctx context.Context) error {
+	for _, guard := range j.guards {
+		if err := guard.Check(ctx); err != nil {
 			return err
-		}
-	}
-	for _, input := range j.catalogInputs {
-		if err := exporter.CheckROMSetObservation(input.Root, input.Input.ROM, input.Input.Catalog); err != nil {
-			return err
-		}
-	}
-	for path, before := range j.stamps {
-		now, err := os.Lstat(path)
-		if err != nil {
-			return err
-		}
-		if !now.Mode().IsRegular() || !os.SameFile(before, now) || before.Size() != now.Size() || !before.ModTime().Equal(now.ModTime()) {
-			return fmt.Errorf("ROM changed since planning: %s", filepath.Base(path))
 		}
 	}
 	return nil
@@ -532,7 +477,7 @@ func (j *Job) Apply(ctx context.Context) error {
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	if err := j.fresh(); err != nil {
+	if err := j.fresh(ctx); err != nil {
 		return err
 	}
 	cache, err := os.MkdirTemp("", "rommeta-export-media-")
@@ -586,7 +531,7 @@ func (j *Job) Apply(ctx context.Context) error {
 		}
 		mediaPaths[path] = asset.SHA256
 	}
-	if err = j.fresh(); err != nil {
+	if err = j.fresh(ctx); err != nil {
 		return err
 	}
 	if err = ctx.Err(); err != nil {
@@ -607,9 +552,4 @@ func catalogInputSize(input exporter.ExportInput) int64 {
 		size += file.Size
 	}
 	return size
-}
-
-type catalogStamp struct {
-	Root  string
-	Input exporter.ExportInput
 }

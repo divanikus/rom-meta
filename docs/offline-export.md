@@ -112,10 +112,12 @@ Remote readers match local ones, including PS3 descriptors, directory playlists
 and MAME ZIP/7z. `--arcade-snapshot` selects saved server bindings; unresolved
 snapshot selection skips a batch system or fails a single-system export.
 
-For `--destination`, apply validates the native plan and ROM observations, then
+For `--destination`, apply validates the native plan and saved ROM filesystem
+stamps without reopening ROMs or hashing them again, then
 streams selected assets directly into their final paths, checking size/SHA-256
 while writing. Native XML is published afterwards. It creates no intermediate
-package, download cache, automatic backup or change receipt. An unchanged apply
+package, download cache, automatic backup or change receipt. Structured fields
+reach the adapter directly, and each media directory is indexed once. An unchanged apply
 skips asset transfers. `--out` explicitly requests a separate portable package
 and still requires a new output path. A failed asset write removes its partial
 file and leaves later metadata unpublished; earlier completed files may remain.
@@ -231,8 +233,8 @@ with media paths based on original ROM names/subdirectories. Batch root
 sidecars and installation notes live in `reports/<system>/`. Single-system exports
 keep sidecars at the root. Preview media links are relative.
 
-Launch paths use `./`; ROMs are not copied/renamed. Source launches are rehashed
-before publication and copied assets carry SHA-256. Install through the
+Launch paths use `./`; ROMs are not copied/renamed. Source launches are checked
+using saved filesystem stamps before publication; copied assets carry SHA-256. Install through the
 [apply through the shared destination adapter](frontend-export.md) in ES-DE's configured locations.
 Keep private reports/paths and licensed media outside Git. See ES-DE's
 [gamelist reference](https://gitlab.com/es-de/emulationstation-de/-/blob/master/INSTALL.md#gamelistxml)
