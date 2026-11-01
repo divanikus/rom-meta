@@ -2,7 +2,6 @@ package frontend
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -79,7 +78,7 @@ func TestDirectNativeStreamsNeededAssetOnceWithoutPackage(t *testing.T) {
 					}
 				}
 			}
-			backup, err := p.Apply()
+			err := p.Apply()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -92,22 +91,6 @@ func TestDirectNativeStreamsNeededAssetOnceWithoutPackage(t *testing.T) {
 			installed := "Images/" + platform + "/Box - Front/" + a + "-01.png"
 			if !bytes.Equal(get(t, o.Destination, installed), payload) {
 				t.Fatal("wrong asset")
-			}
-			var receipt []struct{ Path, SHA256 string }
-			if err = json.Unmarshal(get(t, backup, "changes.json"), &receipt); err != nil {
-				t.Fatal(err)
-			}
-			found := false
-			for _, entry := range receipt {
-				if entry.Path == installed {
-					found = true
-					if entry.SHA256 != hashBytes(payload) {
-						t.Fatal("receipt has a deferred hash")
-					}
-				}
-			}
-			if !found {
-				t.Fatal("missing asset receipt")
 			}
 			if repeat := mustBuild(t, o); len(repeat.Files) != 0 {
 				t.Fatal("direct repeat changed files", repeat.Files)
@@ -153,7 +136,7 @@ func TestDirectStreamFailurePreservesMetadataAndRemovesPartialAsset(t *testing.T
 			}
 			before := get(t, o.Destination, platformFile)
 			p := mustBuild(t, o)
-			if _, err := p.Apply(); err == nil {
+			if err := p.Apply(); err == nil {
 				t.Fatal("failed source was accepted")
 			}
 			if !bytes.Equal(before, get(t, o.Destination, platformFile)) {

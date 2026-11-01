@@ -46,7 +46,7 @@ Current native records use `AdditionalApplication` with `Section=Version`.
 The command uses the [shared ES-DE/LaunchBox interface](frontend-export.md).
 Preview shows recognition and native changes without creating temporary output,
 copying media or downloading assets. Close LaunchBox/Big Box and add `--apply` to
-add cards and enrich existing ones with backups. Nonempty native metadata/main
+add cards and enrich existing ones. Nonempty native metadata/main
 launches remain even when the profile ranks another primary. Use `--report` for
 an optional new JSON destination plan. An unchanged apply writes nothing.
 
@@ -219,18 +219,18 @@ cards and their default versions, redirects playlist GameId
 references, and installs the newly grouped versions. LaunchBox-generated default
 fields are accepted. Curated cards keep their data through ordinary path
 adoption; ambiguous multiple-card matches remain conflicts. Preview/report shows
-`consolidated_cards`; backups cover every replaced XML file. Repeating the same export then writes nothing.
+`consolidated_cards`. Repeating the same export then writes nothing.
 See LaunchBox's [bulk-editing and combining guidance](https://launchbox.featurebase.app/help/articles/8922784-bulk-editing-and-auditing-a-large-launchbox-library).
 The first ungrouped exporter used per-launch card IDs; exact launch/M3U evidence
 allows adoption when it identifies one existing card unambiguously.
 
-Before writing, the command rechecks the package, affected native files, selected
-assets and compared M3Us. It backs up every replaced file under
-`Backups/RomMeta/<run>/` and records changed/new paths in `changes.json`. Assets
-are staged before publishing platform XML. This is not a multi-file transaction:
-an I/O failure can require reviewed manual recovery using that backup. No automatic
-restoration overwrites later edits. An unchanged repeat writes nothing and creates
-no backup. Do not manually replace an existing platform XML with the package XML.
+Before writing, the command rechecks its inputs and affected native files.
+It writes only the planned metadata, playlists and missing selected assets,
+without automatic backups, change receipts or binding state. Existing backups
+remain untouched. Assets are written before platform XML; XML replacements use
+an adjacent temporary file. A failed write removes its partial file, but already
+completed files may remain. An unchanged repeat writes nothing. Do not manually
+replace an existing platform XML with the package XML.
 
 Use the Platform sidebar if category grouping hides a newly added platform.
 After package installation the package can be archived; native launch/media paths

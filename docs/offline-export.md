@@ -22,8 +22,9 @@ Preview creates no output and copies/downloads no media. Close ES-DE before appl
 New entries are added; empty metadata and missing media are filled. Existing
 nonempty fields, favorites, play counts, hidden flags, emulator overrides,
 folder entries, unknown fields and unrelated entries remain. The native
-`alternativeEmulator` sibling beside `gameList` is retained. Replaced files are
-backed up under `<destination>/Backups/RomMeta`; unchanged repeats write nothing.
+`alternativeEmulator` sibling beside `gameList` is retained. Apply writes only
+planned files, without automatic backups or change receipts; unchanged repeats
+write nothing.
 ROMs and catalog files stay unchanged.
 
 `--destination` identifies ES-DE's data directory, normally containing `settings`,
@@ -111,13 +112,13 @@ Remote readers match local ones, including PS3 descriptors, directory playlists
 and MAME ZIP/7z. `--arcade-snapshot` selects saved server bindings; unresolved
 snapshot selection skips a batch system or fails a single-system export.
 
-For `--destination`, apply validates the native plan before transfers, downloads
-selected assets, verifies size/SHA-256 and ROM freshness, then merges validated
-output into the frontend with backups. Preparation is internal and temporary.
-An unchanged destination apply skips asset transfers. `--out` remains available
-for a separate portable package and still requires a new output path. Temporary
-downloads are not a persistent resume cache; failed preparation leaves the
-installed metadata unchanged.
+For `--destination`, apply validates the native plan and ROM observations, then
+streams selected assets directly into their final paths, checking size/SHA-256
+while writing. Native XML is published afterwards. It creates no intermediate
+package, download cache, automatic backup or change receipt. An unchanged apply
+skips asset transfers. `--out` explicitly requests a separate portable package
+and still requires a new output path. A failed asset write removes its partial
+file and leaves later metadata unpublished; earlier completed files may remain.
 
 ## Export an ES-DE ROM root
 

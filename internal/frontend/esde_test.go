@@ -41,12 +41,9 @@ func TestESDEAdditivePreservationExternalMediaAndRepeat(t *testing.T) {
 	if string(get(t, o.Destination, "gamelists/nes/gamelist.xml")) != existing {
 		t.Fatal("preview changed native XML")
 	}
-	backup, err := p.Apply()
+	err := p.Apply()
 	if err != nil {
 		t.Fatal(err)
-	}
-	if string(get(t, backup, "gamelists/nes/gamelist.xml")) != existing {
-		t.Fatal("backup changed XML")
 	}
 	after := get(t, o.Destination, "gamelists/nes/gamelist.xml")
 	for _, fragment := range []string{"<alternativeEmulator><label>My emulator</label></alternativeEmulator>", "<!-- owner comment -->", "<name>Owner title</name>", "<favorite>true</favorite>", "<playcount>23</playcount>", "<hidden>true</hidden>", "<altemulator>Owner core</altemulator>", "<custom attr=\"keep\"><nested /></custom>", "<desc>Prepared description</desc>", "<name>Unrelated</name>"} {
@@ -65,8 +62,8 @@ func TestESDEAdditivePreservationExternalMediaAndRepeat(t *testing.T) {
 	if len(repeat.Files) != 0 {
 		t.Fatal("repeat changed library", repeat.Files)
 	}
-	if backup, err = repeat.Apply(); err != nil || backup != "" {
-		t.Fatal(backup, err)
+	if err = repeat.Apply(); err != nil {
+		t.Fatal(err)
 	}
 }
 func virtualSource(t *testing.T, pkg string) *Source {
@@ -117,7 +114,7 @@ func TestBothTargetsVirtualAndDiskPlanParity(t *testing.T) {
 			if _, err := os.Stat(virtual.PackageRoot); !os.IsNotExist(err) {
 				t.Fatal("preview created staging directory")
 			}
-			if _, err := preview.Apply(); err == nil {
+			if err := preview.Apply(); err == nil {
 				t.Fatal("applied virtual asset sources")
 			}
 		})
@@ -152,7 +149,7 @@ func TestESDEConflictsDriftAndSourceProtection(t *testing.T) {
 		if len(p.Conflicts) == 0 {
 			t.Fatal("missing conflict")
 		}
-		if _, err := p.Apply(); err == nil {
+		if err := p.Apply(); err == nil {
 			t.Fatal("applied path conflict")
 		}
 	})
@@ -167,7 +164,7 @@ func TestESDEConflictsDriftAndSourceProtection(t *testing.T) {
 		o.MediaRoot = filepath.Join(t.TempDir(), "new-media")
 		p := mustBuild(t, o)
 		put(t, o.MediaRoot, "nes/covers/one.png", "owner new cover")
-		if _, err := p.Apply(); err == nil || !strings.Contains(err.Error(), "changed") {
+		if err := p.Apply(); err == nil || !strings.Contains(err.Error(), "changed") {
 			t.Fatal(err)
 		}
 	})
@@ -241,7 +238,7 @@ func TestESDEMultipleSystemsUseSeparateROMAndMediaBindings(t *testing.T) {
 	if len(p.Changes) != 4 {
 		t.Fatal(p.Changes)
 	}
-	if _, err := p.Apply(); err != nil {
+	if err := p.Apply(); err != nil {
 		t.Fatal(err)
 	}
 	if string(get(t, p.MediaRoot, "nes/covers/one.png")) != "catalog cover" || string(get(t, p.MediaRoot, "snes/covers/one.png")) != "SNES cover" {

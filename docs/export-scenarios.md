@@ -7,7 +7,7 @@ from generating frontend output. This matrix describes supported inputs, generat
 
 | Scenario | Entry point | Output / evidence | Status |
 | --- | --- | --- | --- |
-| One existing ROM system directory | `export --target es-de --platform gamegear --destination <ES-DE-data>` | Add games and fill empty native metadata/media with backups; optional `--out` package | Implemented, experimental frontend projection |
+| One existing ROM system directory | `export --target es-de --platform gamegear --destination <ES-DE-data>` | Add games and fill empty native metadata/media; optional `--out` package | Implemented, experimental frontend projection |
 | Several ES-DE system folders | `export --all` or `--platforms n64,snes,psx,arcade` | One shared destination plan for selected systems; optional portable package; skipped systems reported | Implemented |
 | ES-DE files with a remote catalog | `export --api <origin>` with `--platform`, `--platforms` or `--all` | Same readers, evidence and package as local mode; client hashes ROMs, server supplies selected metadata/media | Implemented; no ROM upload/catalog share |
 | LaunchBox with a local or remote catalog | [export --target launchbox](launchbox-export.md), single or batch | One card per catalog game, native Additional Versions, primary preferences and edition-specific M3Us | Implemented through the same `export --destination` interface; optional portable package; configure emulators separately |

@@ -49,12 +49,9 @@ func TestConsolidateGeneratedPlaceholdersPreservesNativeCardAndPlaylists(t *test
 			if !bytes.Equal(before, get(t, o.Destination, platformFile)) {
 				t.Fatal("preview mutated library")
 			}
-			backup, err := p.Apply()
+			err := p.Apply()
 			if err != nil {
 				t.Fatal(err)
-			}
-			if !bytes.Equal(before, get(t, backup, platformFile)) {
-				t.Fatal("repair backup lost")
 			}
 			games, apps := nativeData(t, o.Destination)
 			target := incoming
@@ -90,7 +87,7 @@ func TestConsolidationHoldsOwnerChangesAndUnknownData(t *testing.T) {
 			if len(p.Conflicts) != 1 || p.Changes[0].Consolidated != 0 {
 				t.Fatalf("owner data retirement allowed: %+v", p)
 			}
-			if _, err := p.Apply(); err == nil {
+			if err := p.Apply(); err == nil {
 				t.Fatal("conflicting repair applied")
 			}
 			if !bytes.Equal(before, get(t, o.Destination, platformFile)) {
@@ -111,7 +108,7 @@ func TestConsolidationRequiresCurrentManifestAndIgnoresLegacyState(t *testing.T)
 			if (p.Changes[0].Consolidated == 2) != manifest {
 				t.Fatal("consolidation ignored current evidence", p.Changes)
 			}
-			if _, err := p.Apply(); err != nil {
+			if err := p.Apply(); err != nil {
 				t.Fatal(err)
 			}
 			if string(get(t, o.Destination, legacyStatePath)) != "not JSON" {
@@ -127,7 +124,7 @@ func TestSingleCuratedLegacyCardIsAdoptedWithoutStoredLinks(t *testing.T) {
 	if len(p.Conflicts) != 0 || p.Changes[0].ID != oldIDs[0] || p.Changes[0].Consolidated != 1 {
 		t.Fatalf("current-path adoption failed: %+v", p)
 	}
-	if _, err := p.Apply(); err != nil {
+	if err := p.Apply(); err != nil {
 		t.Fatal(err)
 	}
 	games, _ := nativeData(t, o.Destination)

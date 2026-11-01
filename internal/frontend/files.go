@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/csv"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -13,7 +12,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 )
 
 type fingerprint struct {
@@ -269,131 +267,56 @@ func checkProcesses(target string) error {
 	return nil
 }
 
-// Check validates a reviewed native plan before expensive staging/downloads.
-func (p *Plan) Check() error {
+func (p *Plan) checkReady() error {
 	if len(p.Conflicts) > 0 {
 		return fmt.Errorf("export has %d conflicts; no destination changes applied", len(p.Conflicts))
 	}
 	if len(p.files) == 0 {
 		return nil
 	}
-	if err := checkProcesses(p.Target); err != nil {
+	return checkProcesses(p.Target)
+}
+
+// Check validates a reviewed native plan before destination writes.
+func (p *Plan) Check() error {
+	if err := p.checkReady(); err != nil {
 		return err
+	}
+	if len(p.files) == 0 {
+		return nil
 	}
 	return p.validate()
 }
 
-func exclusiveCopy(source, target string) error {
-	in, err := os.Open(source)
-	if err != nil {
+// Apply validates the reviewed inputs and writes only planned destination files.
+func (p *Plan) Apply() error {
+	if err := p.checkReady(); err != nil {
 		return err
-	}
-	defer in.Close()
-	out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
-	if err != nil {
-		return err
-	}
-	_, copyErr := io.Copy(out, in)
-	closeErr := out.Close()
-	if copyErr != nil {
-		_ = os.Remove(target)
-		return copyErr
-	}
-	if closeErr != nil {
-		_ = os.Remove(target)
-		return closeErr
-	}
-	return nil
-}
-
-// Apply checks the reviewed inputs again and backs up every file it replaces.
-// Failures report the backup; automatic rollback never overwrites newer data.
-func (p *Plan) Apply() (backup string, err error) {
-	if err = p.Check(); err != nil {
-		return "", err
 	}
 	if len(p.files) == 0 {
-		return "", nil
+		return nil
 	}
 	if p.source != nil {
 		if p.source.Check == nil {
-			return "", fmt.Errorf("generated preview has no input validation")
+			return fmt.Errorf("generated preview has no input validation")
 		}
 		for _, c := range p.files {
 			if c.source != "" {
 				file, e := p.sourceFile(c.source)
 				if e != nil {
-					return "", e
+					return e
 				}
 				if file.Data == nil && (file.Open == nil || file.Size <= 0) {
-					return "", fmt.Errorf("generated preview has no asset reader: %s", c.path)
+					return fmt.Errorf("generated preview has no asset reader: %s", c.path)
 				}
 			}
 		}
-		if err = p.source.Check(); err != nil {
-			return "", err
+		if err := p.source.Check(); err != nil {
+			return err
 		}
 	}
-	parent, err := safeJoin(p.Root, "Backups/RomMeta")
-	if err != nil {
-		return "", err
-	}
-	if err = os.MkdirAll(parent, 0o755); err != nil {
-		return "", err
-	}
-	backup, err = os.MkdirTemp(parent, time.Now().Format("20060102-150405")+"-")
-	if err != nil {
-		return "", err
-	}
-	defer func() {
-		if err != nil {
-			err = fmt.Errorf("%w; recovery files and planned changes: %s", err, backup)
-		}
-	}()
-	type receiptFile struct {
-		Root   string `json:"root"`
-		Path   string `json:"path"`
-		New    bool   `json:"new"`
-		SHA256 string `json:"sha256"`
-	}
-	var receipt []receiptFile
-	for _, c := range p.files {
-		name, _ := safeJoin(c.root, c.path)
-		old := p.guards[name]
-		receipt = append(receipt, receiptFile{c.root, c.path, !old.exists, c.hash})
-		if old.exists {
-			target := filepath.Join(backup, filepath.FromSlash(c.path))
-			if err = os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				return backup, err
-			}
-			if err = exclusiveCopy(name, target); err != nil {
-				return backup, err
-			}
-		}
-	}
-	writeReceipt := func() error {
-		for i := range receipt {
-			receipt[i].SHA256 = p.files[i].hash
-			if strings.HasPrefix(receipt[i].SHA256, "deferred:") {
-				receipt[i].SHA256 = ""
-			}
-		}
-		data, e := json.MarshalIndent(receipt, "", "  ")
-		if e != nil {
-			return e
-		}
-		return os.WriteFile(filepath.Join(backup, "changes.json"), append(data, '\n'), 0600)
-	}
-	if err = writeReceipt(); err != nil {
-		return backup, err
-	}
-	defer func() {
-		if e := writeReceipt(); e != nil && err == nil {
-			err = e
-		}
-	}()
-	if err = p.validate(); err != nil {
-		return backup, err
+	if err := p.validate(); err != nil {
+		return err
 	}
 	// Assets first; native XML is published afterwards.
 	for i, c := range p.files {
@@ -402,27 +325,26 @@ func (p *Plan) Apply() (backup string, err error) {
 		}
 		target, e := safeJoin(c.root, c.path)
 		if e != nil {
-			return backup, e
+			return e
 		}
 		if e = os.MkdirAll(filepath.Dir(target), 0o755); e != nil {
-			return backup, e
+			return e
 		}
 		current, e := digest(target)
 		if e != nil {
-			return backup, e
+			return e
 		}
 		if current != p.guards[target] {
-			return backup, fmt.Errorf("library changed during merge: %s", target)
+			return fmt.Errorf("library changed during merge: %s", target)
 		}
-		err = p.publish(&p.files[i], target, current)
-		if err != nil {
-			return backup, err
+		if err := p.publish(&p.files[i], target, current); err != nil {
+			return err
 		}
 	}
 	if p.Progress != nil {
 		p.Progress("write", "", len(p.files), len(p.files))
 	}
-	return backup, nil
+	return nil
 }
 
 // publish writes a new asset once or replaces metadata through one adjacent temp

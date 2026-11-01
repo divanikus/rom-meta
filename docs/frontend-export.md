@@ -3,7 +3,7 @@
 Use one command for both built-in targets, ES-DE and LaunchBox. It adds missing
 games and enriches existing entries using a prepared local catalog or the same
 catalog API. ROMs and catalog payloads remain unchanged. Choose the destination and
-inspect the plan; add `--apply` to write it with backups.
+inspect the plan; add `--apply` to write the planned destination files.
 
 ```powershell
 rom-meta export --target launchbox --platform nes --data-root "D:\Catalog" --rom-root "D:\ROMs\nes" --destination "D:\LaunchBox"
@@ -38,7 +38,7 @@ before advancing to the next file. Selective CHD hash retries stay with that inp
 the collection is not resolved a second time. Whole-selection title/disc grouping,
 XML and native-change calculation finish the read-only scan. Preview stops there.
 Write streams needed assets directly to their destination and publishes native
-XML after them, with ordinary backups.
+XML after them.
 There is no separate plan, media or prepare/install step in the progress display.
 Counts refer to the current operation, not the complete command: catalog counts
 are game cards, while ROM counts are launch inputs. Scan appears before source
@@ -46,15 +46,14 @@ access and input counting; totals stay unknown until enumeration.
 
 Direct export uses its in-memory native plan once. Local catalog/archive assets
 and API responses are copied straight to final files. Size and any declared hash
-are checked during copying; the resulting SHA256 is recorded in the recovery receipt. It creates no temporary export package or download cache, and does not
-rebuild/install a second plan. One write counter tracks final destination files
+are checked during copying. It creates no temporary export package or download
+cache, and does not rebuild/install a second plan. One write counter tracks final destination files
 and reaches completion once. Existing media is kept and unused alternate-version
 media is not copied. User-supplied --package files retain independent-copy behavior.
 
-Assets are written before native XML, with ordinary backups for
-replaced metadata. A failed write removes its partial file and reports the backup/
-changes receipt. Already-added assets may remain; later metadata is not published
-after a failed asset write.
+Assets are written before native XML. A failed write removes its partial file.
+Already-added assets may remain; later metadata is not published after a failed
+asset write.
 
 ## CHD recognition and full-file checks
 
@@ -123,13 +122,15 @@ JSON report; it contains private paths. Direct apply rechecks source observation
 and the destination, then streams needed local/archive/API assets straight to
 final paths, followed by native XML. It does not create an intermediate package
 or download cache. One write counter covers final files. An unchanged apply
-opens/downloads no assets, writes no files and creates no backup.
+opens/downloads no assets and writes no files.
 
-Replaced files are backed up under `<destination>/Backups/RomMeta/<run>/`.
-`changes.json` lists roots, relative paths, new files and expected checksums.
-Assets are written and validated before XML publication. This is not a multi-file
-transaction; a partial I/O failure may require reviewed manual recovery. No automatic restore
-overwrites later edits. Do not interrupt an active frontend save.
+Apply writes only planned metadata, playlists and missing selected media. It
+creates no backup directories, change receipts or auxiliary frontend state. Old
+backups are left untouched. `--report` is the explicit way to request a report.
+Assets are written and validated before XML publication; XML replacements use an
+adjacent temporary file that is removed on failure. This is not a multi-file
+transaction: completed files may remain after an I/O failure. Do not interrupt an
+active frontend save.
 
 See [platform selection](platform-selection.md) for the unified code/name/alias list,
 folder discovery and the distinction between name recognition and ROM evidence.

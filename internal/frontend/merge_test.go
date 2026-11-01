@@ -92,12 +92,9 @@ func TestAdditiveMergePreservesNativeDataAndRepeats(t *testing.T) {
 	if !bytes.Equal(before, get(t, o.Destination, platformFile)) {
 		t.Fatal("preview changed library")
 	}
-	backup, err := p.Apply()
+	err := p.Apply()
 	if err != nil {
 		t.Fatal(err)
-	}
-	if !bytes.Equal(before, get(t, backup, platformFile)) {
-		t.Fatal("backup did not preserve original XML")
 	}
 	after := get(t, o.Destination, platformFile)
 	for _, raw := range []string{unrelated, "<!-- owner comment -->", "<Favorite>true</Favorite>", "<PlayCount>42</PlayCount>", "<CommandLine>--custom</CommandLine>", "<Future attr=\"keep\"><Nested>owner &amp; value</Nested></Future>"} {
@@ -127,9 +124,9 @@ func TestAdditiveMergePreservesNativeDataAndRepeats(t *testing.T) {
 	if len(repeat.Files) != 0 || repeat.Changes[0].Action != "unchanged" {
 		t.Fatalf("repeat changes: %+v", repeat)
 	}
-	second, err := repeat.Apply()
-	if err != nil || second != "" {
-		t.Fatalf("no-op wrote backup: %s / %v", second, err)
+	err = repeat.Apply()
+	if err != nil {
+		t.Fatal(err)
 	}
 	if !bytes.Equal(after, get(t, o.Destination, platformFile)) {
 		t.Fatal("repeat rewrote native XML")
@@ -146,7 +143,7 @@ func TestNewCardAndGeneratedPlaylist(t *testing.T) {
 	if p.Changes[0].Action != "add" || p.Changes[0].Media != 2 {
 		t.Fatalf("%+v", p)
 	}
-	if _, err := p.Apply(); err != nil {
+	if err := p.Apply(); err != nil {
 		t.Fatal(err)
 	}
 	games, apps := nativeData(t, o.Destination)
@@ -175,7 +172,7 @@ func TestNoTitleGuessAndVersionPathAdoption(t *testing.T) {
 		if p.Changes[0].ID != a || p.Changes[0].Versions != 0 {
 			t.Fatal(p.Changes)
 		}
-		if _, err := p.Apply(); err != nil {
+		if err := p.Apply(); err != nil {
 			t.Fatal(err)
 		}
 		_, apps := nativeData(t, o.Destination)
@@ -198,7 +195,7 @@ func TestConflictsBlockAllMutations(t *testing.T) {
 			if len(p.Conflicts) == 0 {
 				t.Fatal("missing conflict")
 			}
-			if _, err := p.Apply(); err == nil {
+			if err := p.Apply(); err == nil {
 				t.Fatal("applied conflict")
 			}
 			if !bytes.Equal(before, get(t, o.Destination, platformFile)) {
@@ -215,7 +212,7 @@ func TestDeletedPlatformCanBeExportedAgainWithoutState(t *testing.T) {
 		t.Run(fmt.Sprint(removeFile), func(t *testing.T) {
 			o := setup(t, "", game(c, "Catalog", "ROMs/one.zip", "")+version(v1, c, "ROMs/one.zip", ""))
 			p := mustBuild(t, o)
-			if _, err := p.Apply(); err != nil {
+			if err := p.Apply(); err != nil {
 				t.Fatal(err)
 			}
 			if removeFile {
@@ -230,7 +227,7 @@ func TestDeletedPlatformCanBeExportedAgainWithoutState(t *testing.T) {
 			if len(p.Conflicts) != 0 || p.Changes[0].Action != "add" {
 				t.Fatalf("deleted platform blocked reimport: %+v", p)
 			}
-			if _, err := p.Apply(); err != nil {
+			if err := p.Apply(); err != nil {
 				t.Fatal(err)
 			}
 			if string(get(t, o.Destination, legacyStatePath)) != "malformed obsolete links" {
@@ -260,7 +257,7 @@ func TestDriftAndExistingPlaylistRejectBeforeMutation(t *testing.T) {
 				put(t, o.Destination, asset, "owner")
 			}
 			before := get(t, o.Destination, platformFile)
-			if _, err := p.Apply(); err == nil || !strings.Contains(err.Error(), "changed") {
+			if err := p.Apply(); err == nil || !strings.Contains(err.Error(), "changed") {
 				t.Fatal(err)
 			}
 			if !bytes.Equal(before, get(t, o.Destination, platformFile)) {
@@ -318,7 +315,7 @@ func TestExistingMediaAndNativeVersionsArePreserved(t *testing.T) {
 	oldVersion := version(v1, a, "ROMs/one.zip", "<Region>Owner region</Region><Priority>7</Priority><Disc>9</Disc>")
 	o := setup(t, game(a, "Owner", "ROMs/one.zip", "<VideoPath>MyVideo.mp4</VideoPath><ManualPath>MyManual.pdf</ManualPath>")+oldVersion, incoming)
 	p := mustBuild(t, o)
-	if _, err := p.Apply(); err != nil {
+	if err := p.Apply(); err != nil {
 		t.Fatal(err)
 	}
 	games, apps := nativeData(t, o.Destination)
@@ -341,7 +338,7 @@ func TestEmptyNativePlatformRoot(t *testing.T) {
 	o := setup(t, "", game(c, "New", "ROMs/new.zip", "")+version(v1, c, "ROMs/new.zip", ""))
 	put(t, o.Destination, platformFile, "<?xml version=\"1.0\"?>\n<LaunchBox />\n")
 	p := mustBuild(t, o)
-	if _, err := p.Apply(); err != nil {
+	if err := p.Apply(); err != nil {
 		t.Fatal(err)
 	}
 	games, apps := nativeData(t, o.Destination)
@@ -361,7 +358,7 @@ func TestOrderedDiscPathsAdoptExistingM3UAndPreserveLaunch(t *testing.T) {
 	if p.Changes[0].ID != a || p.Changes[0].Versions != 1 {
 		t.Fatal(p.Changes)
 	}
-	if _, err := p.Apply(); err != nil {
+	if err := p.Apply(); err != nil {
 		t.Fatal(err)
 	}
 	games, apps := nativeData(t, o.Destination)
@@ -388,7 +385,7 @@ func TestPlaylistMemberOrderAndDrift(t *testing.T) {
 	put(t, o.PackageRoot, playlist, "C:/ROMs/Disc1.chd\nC:/ROMs/Disc2.chd\n")
 	p := mustBuild(t, o)
 	put(t, filepath.Dir(old), filepath.Base(old), "C:/changed.chd\nC:/other.chd\n")
-	if _, err := p.Apply(); err == nil || !strings.Contains(err.Error(), "playlist changed") {
+	if err := p.Apply(); err == nil || !strings.Contains(err.Error(), "playlist changed") {
 		t.Fatal(err)
 	}
 }
@@ -402,7 +399,7 @@ func TestMissingGeneratedPlaylistIsRestoredWithoutDuplicateVersion(t *testing.T)
 	if len(p.Conflicts) != 0 || p.Changes[0].Versions != 0 {
 		t.Fatal(p.Changes, p.Conflicts)
 	}
-	if _, err := p.Apply(); err != nil {
+	if err := p.Apply(); err != nil {
 		t.Fatal(err)
 	}
 	_, apps := nativeData(t, o.Destination)
@@ -423,7 +420,7 @@ func TestUNCAndDrivePathsRemainDistinct(t *testing.T) {
 func TestSelfClosingUnrelatedNodeRemainsValid(t *testing.T) {
 	o := setup(t, "<FutureSetting attr=\"keep\" />", game(c, "New", "ROMs/new.zip", "")+version(v1, c, "ROMs/new.zip", ""))
 	p := mustBuild(t, o)
-	if _, err := p.Apply(); err != nil {
+	if err := p.Apply(); err != nil {
 		t.Fatal(err)
 	}
 	games, _ := nativeData(t, o.Destination)
@@ -440,7 +437,7 @@ func TestSourceSetVersionDoesNotInheritParentEmulator(t *testing.T) {
 	if len(plan.Conflicts) != 0 {
 		t.Fatal(plan.Conflicts)
 	}
-	if _, err := plan.Apply(); err != nil {
+	if err := plan.Apply(); err != nil {
 		t.Fatal(err)
 	}
 	games, apps := nativeData(t, options.Destination)

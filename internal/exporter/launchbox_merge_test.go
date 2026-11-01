@@ -30,7 +30,7 @@ func TestLaunchBoxExportPackageMergesIntoLibrary(t *testing.T) {
 	if len(merged.Changes) != 1 || merged.Changes[0].Action != "add" || merged.Changes[0].Media != 4 {
 		t.Fatalf("%+v", merged.Changes)
 	}
-	if _, err = merged.Apply(); err != nil {
+	if err = merged.Apply(); err != nil {
 		t.Fatal(err)
 	}
 	copied := *plan
@@ -88,7 +88,7 @@ func TestLaunchBoxReexportRepairsFormerUnmatchedDiscs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = legacy.Apply(); err != nil {
+	if err = legacy.Apply(); err != nil {
 		t.Fatal(err)
 	}
 	o.Out = filepath.Join(t.TempDir(), "corrected")
@@ -107,7 +107,7 @@ func TestLaunchBoxReexportRepairsFormerUnmatchedDiscs(t *testing.T) {
 	if len(repaired.Conflicts) != 0 || len(repaired.Changes) != 1 || repaired.Changes[0].Consolidated != 2 {
 		t.Fatalf("real manifest repair failed: %+v", repaired)
 	}
-	if _, err = repaired.Apply(); err != nil {
+	if err = repaired.Apply(); err != nil {
 		t.Fatal(err)
 	}
 	copy := *current

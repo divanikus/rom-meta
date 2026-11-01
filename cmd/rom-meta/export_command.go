@@ -41,7 +41,7 @@ func runExport(args []string) error {
 	flags.BoolVar(&options.HashROMs, "hash-roms", false, "Hash complete CHD containers instead of using headers/catalog metadata")
 	flags.BoolVar(&options.Apply, "apply", false, "Apply the previewed destination update or create the requested package")
 	flags.Usage = func() {
-		fmt.Fprint(os.Stdout, "rom-meta export adds games and enriches an existing frontend using one shared workflow.\n\nUse --destination <frontend data directory> for direct export/enrichment.\nUse --out <new directory> only when you want a portable package.\nUse --platform, --platforms or --all with --rom-root and --data-root or --api.\nAlternatively use --package <existing export> with --destination.\nPreview by default; --apply writes changes with backups. ROMs/catalogs stay unchanged.\nProfiles share selection policy; --target selects layout, not the optional profile target.\nListing cannot be combined with export selection/write flags.\n")
+		fmt.Fprint(os.Stdout, "rom-meta export adds games and enriches an existing frontend using one shared workflow.\n\nUse --destination <frontend data directory> for direct export/enrichment.\nUse --out <new directory> only when you want a portable package.\nUse --platform, --platforms or --all with --rom-root and --data-root or --api.\nAlternatively use --package <existing export> with --destination.\nPreview by default; --apply writes the planned destination files. ROMs/catalogs stay unchanged.\nProfiles share selection policy; --target selects layout, not the optional profile target.\nListing cannot be combined with export selection/write flags.\n")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {

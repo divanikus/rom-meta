@@ -64,20 +64,23 @@ func applyDestination(plan *frontend.Plan) error {
 	defer progress.Done()
 	plan.Progress = func(stage, name string, current, total int) {
 		if stage == "check files" {
+			if name != "" {
+				progress.UpdateTask("export", "write", 0, len(plan.Files), "checking "+name)
+			}
 			return
 		}
 		progress.UpdateTask("export", "write", current, total, name)
 	}
-	progress.UpdateTask("export", "write", 0, len(plan.Files), "checking inputs and backups")
-	backup, err := plan.Apply()
+	progress.UpdateTask("export", "write", 0, len(plan.Files), "checking inputs")
+	err := plan.Apply()
 	if err != nil {
 		return err
 	}
 	progress.Done()
-	if backup == "" {
-		fmt.Println("Destination already up to date; no files or backups created.")
+	if len(plan.Files) == 0 {
+		fmt.Println("Destination already up to date; no files written.")
 	} else {
-		fmt.Println("Updated. Backup and changed-file list:", backup)
+		fmt.Println("Updated.")
 	}
 	return nil
 }
@@ -226,7 +229,7 @@ func runDirectDestination(options exporter.Options, api string, systems []string
 		return nil
 	}
 	if len(plan.Files) == 0 {
-		fmt.Println("Destination already up to date; no files or backups created.")
+		fmt.Println("Destination already up to date; no files written.")
 		return nil
 	}
 	return applyDestination(plan)

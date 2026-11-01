@@ -52,9 +52,6 @@ func exportTree(t *testing.T, root string) map[string]string {
 		}
 		relative, _ := filepath.Rel(root, name)
 		if e.IsDir() {
-			if e.Name() == "Backups" {
-				return filepath.SkipDir
-			}
 			return nil
 		}
 		data, err := os.ReadFile(name)
