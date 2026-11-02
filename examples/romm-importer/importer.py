@@ -161,8 +161,8 @@ class API:
         parsed = urlparse(origin)
         if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.username or parsed.password or parsed.path not in ("", "/") or parsed.query or parsed.fragment:
             raise ValueError("API must be an HTTP(S) origin; use HTTP only on a trusted private network")
-        if len(token) < 32:
-            raise ValueError("ROMMETA_API_TOKEN is required (32+ characters)")
+        if token and len(token) < 32:
+            raise ValueError("ROMMETA_API_TOKEN, when set, must contain at least 32 characters")
         self.origin = origin.rstrip("/")
         self.token = token
         self.opener = build_opener(NoRedirect())
@@ -170,7 +170,10 @@ class API:
     def open(self, uri, data=None):
         if not re.fullmatch(r"/v1/(selection|platforms|lookup|assets/[a-f0-9]{64})", uri):
             raise ValueError("unapproved API route")
-        return self.opener.open(Request(self.origin + uri, data=canonical(data) if data is not None else None, headers={"Authorization": "Bearer " + self.token, "Content-Type": "application/json"}), timeout=None if uri == "/v1/lookup" else 120)
+        headers = {"Content-Type": "application/json"}
+        if self.token:
+            headers["Authorization"] = "Bearer " + self.token
+        return self.opener.open(Request(self.origin + uri, data=canonical(data) if data is not None else None, headers=headers), timeout=None if uri == "/v1/lookup" else 120)
 
     def selection(self):
         with self.open("/v1/selection") as response:
@@ -199,7 +202,9 @@ class API:
             with self.open("/v1/lookup", query) as response:
                 value = json.load(response)
         except HTTPError as error:
-            detail = error.read(1500).decode("utf-8", errors="replace").strip().replace(self.token, "<redacted>")
+            detail = error.read(1500).decode("utf-8", errors="replace").strip()
+            if self.token:
+                detail = detail.replace(self.token, "<redacted>")
             raise ValueError(f"Catalog lookup failed (HTTP {error.code}): {detail}") from None
         if value.get("schema_version") != 1 or not isinstance(value.get("inputs"), list) or not re.fullmatch(r"[a-f0-9]{64}", value.get("digest", "")):
             raise ValueError("unsupported lookup snapshot")

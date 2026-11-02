@@ -767,6 +767,29 @@ class ImporterTest(unittest.TestCase):
         self.assertEqual(len(loaded["inputs"]), 1005)
         self.assertEqual(loaded["transport_test_padding"], value["transport_test_padding"])
 
+    def test_optional_api_token_controls_authorization_header(self):
+        for token in ("", "s" * 32):
+            with self.subTest(protected=bool(token)):
+                api = imp.API("http://catalog.test", token)
+                with patch.object(api.opener, "open", return_value=io.BytesIO(b"{}")) as opened:
+                    with api.open("/v1/platforms"):
+                        pass
+                request = opened.call_args.args[0]
+                self.assertEqual(request.get_header("Authorization"), "Bearer " + token if token else None)
+        with self.assertRaisesRegex(ValueError, "at least 32"):
+            imp.API("http://catalog.test", "short")
+
+    def test_lookup_errors_preserve_anonymous_text_and_redact_configured_token(self):
+        for token in ("", "s" * 32):
+            with self.subTest(protected=bool(token)):
+                api = imp.API("http://catalog.test", token)
+                detail = "missing platform" + (" " + token if token else "")
+                error = imp.HTTPError(api.origin + "/v1/lookup", 400, "Bad Request", {}, io.BytesIO(detail.encode()))
+                with patch.object(api, "open", side_effect=error):
+                    with self.assertRaises(ValueError) as raised:
+                        api.lookup({})
+                self.assertEqual(str(raised.exception), "Catalog lookup failed (HTTP 400): missing platform" + (" <redacted>" if token else ""))
+
     def test_url_path_and_expected_id_guards(self):
         for value in ("http://user:pass@test", "https://test/path", "file:///tmp", "https://test/?x=1"):
             with self.assertRaises(ValueError):

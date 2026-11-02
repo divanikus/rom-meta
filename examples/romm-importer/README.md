@@ -92,10 +92,12 @@ ROMM_SERVER_URL=http://romm:8080
 
 Use the native server origin reachable from the job for `ROMM_SERVER_URL`
 (default `http://romm:8080`); its heartbeat needs no catalog token. Use actual
-driver/ports; an absent Redis password may be empty. Put the service's
-shared `ROMMETA_API_TOKEN` (at least 32 characters) in `private/api.env`. This job
-requires a token even though local browsing does not. Keep env files restricted
-and server-side, with raw values and no shell quotes/comments. Compose needs
+driver/ports; an absent Redis password may be empty. If the RomMeta API is
+protected, put its shared `ROMMETA_API_TOKEN` (at least 32 characters) in
+`private/api.env`. For an API without authentication, create an empty
+`private/api.env`; the job sends no Authorization header. Native DB/Redis/RomM
+credentials are independent. Keep env files restricted and server-side, with raw
+values and no shell quotes/comments. Compose needs
 `env_file` `format: raw` to prevent password interpolation. Validate without
 printing expanded secrets:
 
@@ -105,7 +107,7 @@ docker compose --env-file deployment.env -f compose.yaml --profile tools config 
 
 ## 3. Start the catalog API
 
-Run matching `serve` separately with its private token environment. Containerized
+Run matching `serve` separately, with a token only when protection is enabled. Containerized
 catalog/profile mounts can be read-only:
 
 ```shell
