@@ -196,9 +196,11 @@ func writePlan(plan *Plan, staging, sidecarDir string, progress func(string, str
 	if err := writeLaunchBoxPlaylists(plan, staging); err != nil {
 		return err
 	}
-	xmlBytes, err := RenderGamelist(plan)
+	var xmlBytes []byte
 	if plan.Target == "launchbox" {
 		xmlBytes, err = RenderLaunchBox(plan)
+	} else {
+		xmlBytes, err = RenderGamelist(plan)
 	}
 	if err != nil {
 		return err

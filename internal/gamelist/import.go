@@ -250,6 +250,7 @@ func Import(o Options) (result Result, err error) {
 			return result, err
 		}
 	}
+	selectedCards := map[string]*card{}
 	seen := map[string]bool{}
 	for i, entry := range in.entries {
 		if o.Progress != nil {
@@ -284,6 +285,7 @@ func Import(o Options) (result Result, err error) {
 		}
 		t := candidates[0]
 		c := cards[t.game]
+		selectedCards[t.game] = c
 		result.Matched++
 		if strings.HasPrefix(method, "reported-md5") {
 			result.HashMatched++
@@ -445,7 +447,7 @@ func Import(o Options) (result Result, err error) {
 	}
 	// Compare syntax trees: a no-op leaves original formatting and packed bytes alone.
 	updates := map[string][]byte{}
-	for game, c := range cards {
+	for game, c := range selectedCards {
 		added, size, e := normalizeMedia(root, game, source, c)
 		if e != nil {
 			return result, e

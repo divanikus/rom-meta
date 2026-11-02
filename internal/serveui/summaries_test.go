@@ -105,3 +105,20 @@ func TestSummaryRequestsAreBoundedValidatedAndCancellable(t *testing.T) {
 		t.Fatalf("cancelled request kept reading: %#v, %v", items, err)
 	}
 }
+
+func TestNamesAndFullListsKeepTheirOwnOrdering(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "platforms", "Arcade", "a folder", "game.yaml"), "title: Z title\n")
+	writeTestFile(t, filepath.Join(root, "platforms", "Arcade", "B folder", "game.yaml"), "title: A title\n")
+	handler, err := Handler(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ query, first string }{{"&names=1", "a folder"}, {"", "B folder"}} {
+		var result gamesResponse
+		requestJSON(t, handler, "/api/games?platform=Arcade"+tc.query, &result)
+		if len(result.Games) != 2 || result.Games[0].Folder != tc.first {
+			t.Fatalf("%s: %+v", tc.query, result)
+		}
+	}
+}

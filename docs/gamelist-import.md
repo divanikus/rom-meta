@@ -61,7 +61,10 @@ Existing canonical fields, other provider stanzas and unrelated fields survive.
 Repeated observations use the same source-file/path identity; `--origin` supplies
 a stable relative identifier if inputs are moved or renamed. Imports from
 different gamelists in the same collection coexist. Repeating an unchanged import
-writes no catalog data.
+writes no catalog data. The platform's card metadata is read to build the matching
+index; media normalization and change comparison run only for cards matched by
+this input. Unmatched cards and their existing media are left untouched. Use the
+explicit `gamelist media-names` command for collection-wide filename migration.
 
 Media tags have explicit adapter defaults:
 

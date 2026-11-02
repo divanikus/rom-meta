@@ -106,9 +106,6 @@ func validExportInput(input ExportInput, system string, part bool) bool {
 	if input.Disc != nil && input.Kind != "payload" {
 		return false
 	}
-	if !ValidInputPath(input.ROM) || len(input.ROM) > 8192 || len(input.Reason) > 4096 || len(input.Parts) > 32 {
-		return false
-	}
 	if input.Kind == "unsupported" {
 		if input.Representation != "" && input.Representation != "playlist-directory" && input.Representation != "ps3-serial-file" {
 			return false

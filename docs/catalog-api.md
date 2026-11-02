@@ -102,8 +102,13 @@ the configured criteria. Reviewed exact-file overrides retain precedence.
 Checkboxes enable sources; up/down buttons set priority. Defaults come from the
 catalog. Names registered in root `source-policies.yaml`, discovered in already-read
 platform summaries or observed on the opened card are also offered, including
-`gamelist.<collection>` with a readable collection label. Discovery does not
-automatically enable a source. Reload after a new import to refresh the registry. Reset
+`gamelist.<collection>` with the label `Imported gamelist: <collection>`.
+The label format is built into the UI; collection names come from catalog data.
+`/api/export-options` reads the registry without walking games or media. Sources
+from summaries already loaded by browsing accumulate in memory. An opened card's
+media is enumerated for its gallery. A registered source need not have eligible
+media on the current card. Discovery does not automatically enable a source.
+Reload after a new import to refresh the registry. Reset
 restores catalog order. Disabling every source deliberately disables automatic
 provider selection; explicit saved catalog overrides still take priority.
 

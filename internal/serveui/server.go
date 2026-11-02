@@ -156,6 +156,7 @@ func (s *server) games(w http.ResponseWriter, r *http.Request) {
 		result, err = s.gameSummaries(r.Context(), platform, folders)
 	} else if r.URL.Query().Get("names") == "1" {
 		result, err = listGameNames(s.root, platform)
+		sortGameItems(result)
 	} else {
 		result, err = s.listGames(r.Context(), platform)
 	}
@@ -393,7 +394,6 @@ func listGameNames(root, platform string) ([]gameListItem, error) {
 		}
 		result = append(result, gameListItem{Folder: entry.Name()})
 	}
-	sortGameItems(result)
 	return result, nil
 }
 

@@ -1062,7 +1062,7 @@
       sourceOptionsLoading: false,
       sourceOptionsError: "",
       editionFeedback: "",
-      observedSources: [],
+      observedSources: new Set(),
       detailRaw: null,
       detailTab: "preview",
       fingerprints: null, fingerprintLoading: false, fingerprintError: "", fingerprintController: null, fingerprintRequestID: 0, fingerprintEdition: "", fingerprintQuery: ""
@@ -1514,7 +1514,9 @@
           const response = await fetchJSON("/api/games?" + params, signal);
           if (requestID !== state.platformRequestID || signal.aborted) return;
           for (const summary of response.games || []) {
-            state.observedSources = [...new Set([...state.observedSources, ...(summary.sources || []), ...(summary.source_stats || []).map((stat) => stat.source)].filter(Boolean))];
+            for (const source of [...(summary.sources || []), ...(summary.source_stats || []).map((stat) => stat.source)]) {
+              if (source) state.observedSources.add(source);
+            }
             const game = byFolder.get(summary.folder);
             if (game) Object.assign(game, summary);
           }
