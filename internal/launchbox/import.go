@@ -152,15 +152,6 @@ type releaseMetadata struct {
 	MediaURLs       map[string][]sourceyaml.MediaCandidate
 }
 
-type mediaURLCandidate struct {
-	URL           string
-	Region        string
-	SourceFile    string
-	SourceType    string
-	CRC32         string
-	OriginalOrder int
-}
-
 type snapshotIndex struct {
 	byPlatformTitle map[string]map[string][]releaseMetadata
 	alternateIDs    map[string]string
@@ -1565,9 +1556,9 @@ func readElementFields(decoder *xml.Decoder, start xml.StartElement) (map[string
 }
 
 func mediaCandidates(images []launchboxImage) map[string][]sourceyaml.MediaCandidate {
-	byKind := map[string][]mediaURLCandidate{}
+	media := map[string][]sourceyaml.MediaCandidate{}
 	seenByKind := map[string]map[string]bool{}
-	for index, image := range images {
+	for _, image := range images {
 		kind, _ := mapImageType(image.Type)
 		if kind == "" || image.FileName == "" {
 			continue
@@ -1580,31 +1571,15 @@ func mediaCandidates(images []launchboxImage) map[string][]sourceyaml.MediaCandi
 			continue
 		}
 		seenByKind[kind][url] = true
-		byKind[kind] = append(byKind[kind], mediaURLCandidate{
-			URL:           url,
-			Region:        image.Region,
-			SourceFile:    image.FileName,
-			SourceType:    image.Type,
-			CRC32:         image.CRC32,
-			OriginalOrder: index,
+		media[kind] = append(media[kind], sourceyaml.MediaCandidate{
+			URL:        url,
+			Region:     image.Region,
+			SourceFile: image.FileName,
+			SourceType: image.Type,
+			CRC32:      image.CRC32,
 		})
 	}
 
-	media := map[string][]sourceyaml.MediaCandidate{}
-	for kind, candidates := range byKind {
-		sort.SliceStable(candidates, func(i, j int) bool {
-			return candidates[i].OriginalOrder < candidates[j].OriginalOrder
-		})
-		for _, candidate := range candidates {
-			media[kind] = append(media[kind], sourceyaml.MediaCandidate{
-				URL:        candidate.URL,
-				Region:     candidate.Region,
-				SourceFile: candidate.SourceFile,
-				SourceType: candidate.SourceType,
-				CRC32:      candidate.CRC32,
-			})
-		}
-	}
 	return media
 }
 

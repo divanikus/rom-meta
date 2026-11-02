@@ -117,6 +117,7 @@ func Build(options Options) (*Plan, error) {
 
 func (p *Plan) Generated() bool { return p.source != nil }
 func (p *Plan) protectSourceTrees(selection frontenddata.Selection) error {
+	checkedRoots := map[string]bool{}
 	var visit func(frontenddata.Selection) error
 	visit = func(trees frontenddata.Selection) error {
 		for _, name := range []string{trees.DataRoot, trees.ROMRoot} {
@@ -127,6 +128,10 @@ func (p *Plan) protectSourceTrees(selection frontenddata.Selection) error {
 			if err != nil {
 				return err
 			}
+			if checkedRoots[root] {
+				continue
+			}
+			checkedRoots[root] = true
 			for _, file := range p.files {
 				target := filepath.Join(file.root, filepath.FromSlash(file.path))
 				if inside(root, target) {

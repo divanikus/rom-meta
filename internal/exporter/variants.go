@@ -3,7 +3,6 @@ package exporter
 import (
 	"fmt"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"rommeta/internal/catalogyaml"
@@ -95,9 +94,7 @@ func attachFingerprintRecord(root string, fp fingerprint, record *Record, profil
 				rule = profile.Selection.Description
 			}
 			values := fieldCandidates(variant, key, "local", rule)
-			sort.SliceStable(values, func(i, j int) bool { return lessRank(values[i].rank, values[j].rank) })
-			if len(values) > 0 {
-				value := values[0]
+			if value, ok := bestFieldCandidate(values); ok {
 				record.Fields[key] = Value{Value: value.text, Language: value.language, Source: "local", Selection: "variant", FromVariant: owner}
 			}
 		}

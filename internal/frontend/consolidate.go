@@ -165,7 +165,13 @@ func (p *Plan) consolidatePlaceholders(platformName string, library *document, b
 	if err != nil {
 		return nil, nil, err
 	}
+	appsByGame := map[string][]native{}
+	for _, app := range apps {
+		key := id(app.fields["GameID"])
+		appsByGame[key] = append(appsByGame[key], app)
+	}
 	retired := map[string]string{}
+	remove := map[int][]byte{}
 	for key, n := range existing {
 		launch := n.fields["ApplicationPath"]
 		incoming := byPath[keyPath(p.Root, launch)]
@@ -176,26 +182,23 @@ func (p *Plan) consolidatePlaceholders(platformName string, library *document, b
 		if key != generatedLaunchBoxID(platformName+"\ninput:"+keyPath(p.Root, launch)) {
 			continue
 		}
-		safe := untouchedPlaceholder(n, platformName, launch, sourceNames[keyPath(p.Root, launch)], false)
-		for _, v := range apps {
-			if id(v.fields["GameID"]) == key {
-				if id(v.fields["Id"]) != generatedLaunchBoxID(platformName+"\nversion:"+keyPath(p.Root, launch)) || !untouchedPlaceholder(v, platformName, launch, sourceNames[keyPath(p.Root, launch)], true) {
-					safe = false
-				}
+		if !untouchedPlaceholder(n, platformName, launch, sourceNames[keyPath(p.Root, launch)], false) {
+			continue
+		}
+		safe := true
+		for _, v := range appsByGame[key] {
+			if id(v.fields["Id"]) != generatedLaunchBoxID(platformName+"\nversion:"+keyPath(p.Root, launch)) || !untouchedPlaceholder(v, platformName, launch, sourceNames[keyPath(p.Root, launch)], true) {
+				safe = false
+				break
 			}
 		}
 		if !safe {
 			continue
 		}
 		retired[key] = incoming
-	}
-	remove := map[int][]byte{}
-	for key := range retired {
-		remove[existing[key].index] = nil
-		for _, v := range apps {
-			if id(v.fields["GameID"]) == key {
-				remove[v.index] = nil
-			}
+		remove[n.index] = nil
+		for _, v := range appsByGame[key] {
+			remove[v.index] = nil
 		}
 	}
 	if len(remove) == 0 {

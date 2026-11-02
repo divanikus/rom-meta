@@ -61,9 +61,7 @@ func resolveFields(g *game, release string, profile Profile) map[string]Value {
 				}
 			}
 		}
-		sort.SliceStable(values, func(i, j int) bool { return lessRank(values[i].rank, values[j].rank) })
-		if len(values) > 0 {
-			value := values[0]
+		if value, ok := bestFieldCandidate(values); ok {
 			// Provider prose can retain XML/HTML entities after acquisition.
 			// Decode one display layer; explicit local overrides stay literal.
 			if key == "description" && value.source != "local" {
@@ -73,6 +71,20 @@ func resolveFields(g *game, release string, profile Profile) map[string]Value {
 		}
 	}
 	return result
+}
+
+// Keep the first candidate on tied ranks, matching source/release precedence.
+func bestFieldCandidate(values []candidate) (candidate, bool) {
+	if len(values) == 0 {
+		return candidate{}, false
+	}
+	best := values[0]
+	for _, value := range values[1:] {
+		if lessRank(value.rank, best.rank) {
+			best = value
+		}
+	}
+	return best, true
 }
 
 func fieldCandidates(node *yaml.Node, key, source string, rule Rule) []candidate {

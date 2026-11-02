@@ -7,8 +7,6 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 // LaunchBoxPolicy ranks launchable versions. Unlisted values follow listed ones;
@@ -42,33 +40,15 @@ func normalizeLaunchBoxPolicy(p LaunchBoxPolicy) (LaunchBoxPolicy, error) {
 	return p, nil
 }
 
-// ClientExportProfile removes the client-only rendering section before calling
-// an older catalog API. Validation still covers the full caller profile.
+// ClientExportProfile validates the shared profile once and extracts the local
+// rendering policy. The current catalog API accepts the same profile unchanged.
 func ClientExportProfile(content string) (string, LaunchBoxPolicy, error) {
 	if content == "" {
 		p, err := normalizeLaunchBoxPolicy(LaunchBoxPolicy{})
 		return "", p, err
 	}
 	p, err := loadProfileReader("", strings.NewReader(content))
-	if err != nil {
-		return "", LaunchBoxPolicy{}, err
-	}
-	var fields map[string]any
-	if err = yaml.Unmarshal([]byte(content), &fields); err != nil {
-		return "", p.LaunchBox, err
-	}
-	// Expand root merges/aliases before removing client-only options. This also
-	// avoids leaving references to anchors owned by a removed rendering section.
-	_, changed := fields["launchbox"]
-	delete(fields, "launchbox")
-	if target, exists := fields["target"]; exists && target != "es-de" {
-		fields["target"], changed = "es-de", true
-	}
-	if !changed {
-		return content, p.LaunchBox, nil
-	}
-	data, err := yaml.Marshal(fields)
-	return string(data), p.LaunchBox, err
+	return content, p.LaunchBox, err
 }
 
 type LaunchBoxVersion struct {
@@ -260,6 +240,7 @@ func buildLaunchBoxProjection(plan *Plan) (*LaunchBoxProjection, error) {
 	}
 	result := &LaunchBoxProjection{Groups: []LaunchBoxGroup{}}
 	byGame := map[string][]int{}
+	ranks := make([][]int, len(plan.Records))
 	for i, r := range plan.Records {
 		if !launchBoxPlayable(plan, r) {
 			continue
@@ -267,7 +248,9 @@ func buildLaunchBoxProjection(plan *Plan) (*LaunchBoxProjection, error) {
 		if !ValidInputPath(launchBoxFile(r)) {
 			return nil, fmt.Errorf("invalid launch path")
 		}
-		byGame[launchBoxID(plan, r)] = append(byGame[launchBoxID(plan, r)], i)
+		id := launchBoxID(plan, r)
+		byGame[id] = append(byGame[id], i)
+		ranks[i] = versionRank(r, policy)
 	}
 	keys := make([]string, 0, len(byGame))
 	for key := range byGame {
@@ -284,11 +267,14 @@ func buildLaunchBoxProjection(plan *Plan) (*LaunchBoxProjection, error) {
 			g.Game = plan.Records[indices[0]].Game
 		}
 		used := map[int]bool{}
-		discs := map[string][]int{}
+		type disc struct{ index, number, total int }
+		discs := map[string][]disc{}
+		discKeys := map[int]string{}
 		for _, i := range indices {
-			key, _, _ := launchBoxDiscKey(plan.Records[i])
+			key, number, total := launchBoxDiscKey(plan.Records[i])
 			if key != "" {
-				discs[key] = append(discs[key], i)
+				discKeys[i] = key
+				discs[key] = append(discs[key], disc{i, number, total})
 			}
 		}
 		for _, i := range indices {
@@ -297,23 +283,22 @@ func buildLaunchBoxProjection(plan *Plan) (*LaunchBoxProjection, error) {
 			}
 			r := plan.Records[i]
 			v := LaunchBoxVersion{ID: launchBoxVersionID(plan, r), Name: launchBoxVersionName(r), Path: filepath.Join(plan.ROMRoot, filepath.FromSlash(launchBoxFile(r))), Records: []int{i}}
-			key, _, _ := launchBoxDiscKey(r)
-			members := append([]int(nil), discs[key]...)
+			key := discKeys[i]
+			members := discs[key]
+			// Assess each set once, including incomplete sets kept as individual versions.
+			delete(discs, key)
 			if key != "" && len(members) > 1 {
 				sort.Slice(members, func(a, b int) bool {
-					_, x, _ := launchBoxDiscKey(plan.Records[members[a]])
-					_, y, _ := launchBoxDiscKey(plan.Records[members[b]])
-					return x < y
+					return members[a].number < members[b].number
 				})
 				complete := len(members) <= 32
 				var identity strings.Builder
 				identity.WriteString(launchBoxPlatform(plan) + "\ndiscset:" + key)
-				for n, index := range members {
-					_, number, total := launchBoxDiscKey(plan.Records[index])
-					if number != n+1 || total > 0 && total != len(members) {
+				for n, member := range members {
+					if member.number != n+1 || member.total > 0 && member.total != len(members) {
 						complete = false
 					}
-					name := launchBoxAbsolute(plan, plan.Records[index])
+					name := launchBoxAbsolute(plan, plan.Records[member.index])
 					if strings.ContainsAny(name, "\r\n") {
 						return nil, fmt.Errorf("disc path cannot contain a newline")
 					}
@@ -321,8 +306,11 @@ func buildLaunchBoxProjection(plan *Plan) (*LaunchBoxProjection, error) {
 				}
 				if complete {
 					v.ID = launchBoxUUID(identity.String())
-					v.Records = members
-					v.Name = launchBoxDiscRE.ReplaceAllString(launchBoxVersionName(plan.Records[members[0]]), "")
+					v.Records = make([]int, len(members))
+					for n, member := range members {
+						v.Records[n] = member.index
+					}
+					v.Name = launchBoxDiscRE.ReplaceAllString(launchBoxVersionName(plan.Records[members[0].index]), "")
 					v.Name = strings.TrimSpace(v.Name) + fmt.Sprintf(" [%d discs]", len(members))
 					v.Path = filepath.ToSlash(filepath.Join("Playlists", launchBoxPlatform(plan), v.ID+".m3u"))
 					v.GeneratedPlaylist = true
@@ -339,7 +327,7 @@ func buildLaunchBoxProjection(plan *Plan) (*LaunchBoxProjection, error) {
 		}
 		sort.SliceStable(g.Versions, func(i, j int) bool {
 			a, b := g.Versions[i], g.Versions[j]
-			x, y := versionRank(plan.Records[a.Records[0]], policy), versionRank(plan.Records[b.Records[0]], policy)
+			x, y := ranks[a.Records[0]], ranks[b.Records[0]]
 			if lessRank(x, y) {
 				return true
 			}

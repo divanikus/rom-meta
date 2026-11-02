@@ -112,6 +112,9 @@ func (p *Plan) packageMedia(relative, game string) ([]packageEntry, error) {
 
 func (p *Plan) packageProof(name string) (fingerprint, error) {
 	if p.source == nil {
+		if previous, ok := p.guards[name]; ok {
+			return previous, nil
+		}
 		return digest(name)
 	}
 	file, err := p.sourceFile(name)

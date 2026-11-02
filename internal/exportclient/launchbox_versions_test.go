@@ -45,7 +45,7 @@ func nativeLaunchBoxFiles(t *testing.T, root string) map[string]string {
 	return result
 }
 
-func TestLaunchBoxGroupedVersionNetworkParityAndLegacyProfile(t *testing.T) {
+func TestLaunchBoxGroupedVersionNetworkParityAndSharedProfile(t *testing.T) {
 	root, roms := t.TempDir(), t.TempDir()
 	card(t, root, "n64", "Game", "Canonical card", "Game (USA)", "unused.z64", []byte("unused"))
 	path := filepath.Join(root, "platforms", "n64", "Game")
@@ -78,8 +78,9 @@ func TestLaunchBoxGroupedVersionNetworkParityAndLegacyProfile(t *testing.T) {
 					t.Error(err)
 					return
 				}
-				if strings.Contains(input.Profile, "launchbox:") || !strings.Contains(input.Profile, "target: es-de") {
-					t.Error("incompatible profile sent to legacy server:", input.Profile)
+				original, err := os.ReadFile(profile)
+				if err != nil || input.Profile != string(original) {
+					t.Error("shared profile was rewritten:", input.Profile, err)
 				}
 				r.Body = io.NopCloser(strings.NewReader(string(data)))
 				requests++

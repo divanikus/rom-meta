@@ -47,6 +47,18 @@ func digest(name string) (fingerprint, error) {
 	return fingerprint{true, hex.EncodeToString(h.Sum(nil))}, nil
 }
 func hashBytes(data []byte) string { h := sha256.Sum256(data); return hex.EncodeToString(h[:]) }
+
+// Reuse the first planning observation. Apply still checks fresh fingerprints.
+func (p *Plan) observe(name string) (fingerprint, error) {
+	if previous, ok := p.guards[name]; ok {
+		return previous, nil
+	}
+	value, err := digest(name)
+	if err == nil {
+		p.guards[name] = value
+	}
+	return value, err
+}
 func canonicalRoot(name string) (string, error) {
 	if strings.TrimSpace(name) == "" {
 		return "", fmt.Errorf("source and destination roots are required")
@@ -132,11 +144,10 @@ func (p *Plan) writeTo(root, relative string, data []byte, source string) (bool,
 	if err != nil {
 		return false, err
 	}
-	old, err := digest(name)
+	old, err := p.observe(name)
 	if err != nil {
 		return false, err
 	}
-	p.guards[name] = old
 	want := hashBytes(data)
 	var sourceSize int64
 	if source != "" {

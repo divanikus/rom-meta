@@ -65,11 +65,12 @@ include private paths. Input totals remain ROM counts rather than card counts.
 ## Network and batch export
 
 Use `--api "http://catalog-host:8787"` instead of `--data-root`. Recognition and
-asset validation remain shared. The client removes the `launchbox` rendering
-section and normalizes any optional target marker before sending profile bytes,
-allowing existing version-1 catalog APIs;
-it restores that policy locally before rendering. New API responses include the
-catalog title; older responses fall back to the primary regional display title.
+asset validation remain shared. The client validates the profile once and sends
+the original YAML, including `launchbox` preferences and any optional target
+marker. Use a current catalog API that accepts this shared profile; profiles are
+not rewritten for older servers. LaunchBox rendering still runs locally. Cards
+use the catalog title, falling back to the primary regional display title when
+that title is absent.
 
 ```powershell
 rom-meta export --target launchbox --api "http://catalog-host:8787" --platforms nes,snes,psx --rom-root "D:\Games" --profile "D:\Profiles\launchbox.yaml" --destination "D:\LaunchBox" --apply

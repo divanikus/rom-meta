@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -472,7 +473,7 @@ func checkFolders(body []byte, platform string) error {
 			continue
 		}
 		expected := ""
-		if imageTypes[f["MediaType"]] {
+		if slices.Contains(imageTypes, f["MediaType"]) {
 			expected = "Images/" + platform + "/" + f["MediaType"]
 		} else if f["MediaType"] == "Video" {
 			expected = "Videos/" + platform

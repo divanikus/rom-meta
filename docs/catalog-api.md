@@ -6,7 +6,8 @@ authoritative database. Consumers include the
 [RomM importer](romm-server-importer.md) and
 [ES-DE exporter](offline-export.md#export-from-a-remote-catalog) and
 [LaunchBox exporter](launchbox-export.md). LaunchBox rendering runs on the client
-after existing export API validation; the server contract remains unchanged.
+after export API validation. Clients send the shared YAML profile unchanged,
+including LaunchBox preferences; use a current server that accepts these fields.
 
 ## Serve a complete catalog for native-inventory lookups
 

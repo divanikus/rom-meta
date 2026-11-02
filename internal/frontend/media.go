@@ -6,11 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 )
 
-var imageTypes = map[string]bool{"Box - Front": true, "Box - Back": true, "Box - 3D": true, "Clear Logo": true, "Screenshot - Gameplay": true, "Screenshot - Game Title": true, "Fanart - Background": true}
+var imageTypes = []string{"Box - 3D", "Box - Back", "Box - Front", "Clear Logo", "Fanart - Background", "Screenshot - Game Title", "Screenshot - Gameplay"}
 var imageNumber = regexp.MustCompile(`-\d+$`)
 
 func imageName(s string) string {
@@ -62,12 +61,7 @@ func (p *Plan) hasArt(dir string, aliases []string) (bool, error) {
 func (p *Plan) media(platform, sourceID, targetID string, existing, incoming map[string]string) (int, map[string]string, error) {
 	added := 0
 	fields := map[string]string{}
-	kinds := make([]string, 0, len(imageTypes))
-	for kind := range imageTypes {
-		kinds = append(kinds, kind)
-	}
-	sort.Strings(kinds)
-	for _, kind := range kinds {
+	for _, kind := range imageTypes {
 		relative := "Images/" + platform + "/" + kind
 		entries, err := p.packageMedia(relative, sourceID)
 		if os.IsNotExist(err) {
@@ -75,6 +69,9 @@ func (p *Plan) media(platform, sourceID, targetID string, existing, incoming map
 		}
 		if err != nil {
 			return 0, nil, err
+		}
+		if len(entries) == 0 {
+			continue
 		}
 		targetDir, err := safeJoin(p.Root, relative)
 		if err != nil {
@@ -88,9 +85,6 @@ func (p *Plan) media(platform, sourceID, targetID string, existing, incoming map
 			continue
 		}
 		for _, e := range entries {
-			if e.IsDir() || !strings.HasPrefix(strings.ToLower(e.Name()), sourceID+"-") {
-				continue
-			}
 			source, err := safeJoin(p.Package, relative+"/"+e.Name())
 			if err != nil {
 				return 0, nil, err
@@ -127,17 +121,18 @@ func (p *Plan) media(platform, sourceID, targetID string, existing, incoming map
 		if err != nil {
 			return 0, nil, err
 		}
-		old, err := digest(name)
+		old, err := p.observe(name)
 		if err != nil {
 			return 0, nil, err
 		}
-		input, err := p.packageProof(source)
-		if err != nil {
-			return 0, nil, err
-		}
-		if old.exists && old != input {
-			p.Warnings = append(p.Warnings, "Preserved existing media: "+target)
-			p.guards[name] = old
+		if old.exists {
+			input, err := p.packageProof(source)
+			if err != nil {
+				return 0, nil, err
+			}
+			if old != input {
+				p.Warnings = append(p.Warnings, "Preserved existing media: "+target)
+			}
 			fields[key] = target
 			continue
 		}

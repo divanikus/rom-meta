@@ -213,13 +213,13 @@ func TestLaunchBoxSuppliedRegionalAndModifiedPlaylists(t *testing.T) {
 	}
 }
 
-func TestLaunchBoxClientOnlyPolicy(t *testing.T) {
+func TestLaunchBoxSharedClientPolicy(t *testing.T) {
 	input := "schema_version: 1\ntarget: es-de\nlaunchbox:\n  kinds: [translation, original]\n  regions: [USA, Europe]\n  languages: [ru, en]\ntitles: {mode: regional}\n"
 	wire, policy, err := ClientExportProfile(input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(wire, "launchbox:") || policy.Kinds[0] != "translation" || policy.Regions[0] != "usa" {
+	if wire != input || policy.Kinds[0] != "translation" || policy.Regions[0] != "usa" {
 		t.Fatal(wire, policy)
 	}
 	if err := ValidateExportProfile(wire); err != nil {

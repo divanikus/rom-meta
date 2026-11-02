@@ -244,13 +244,13 @@ func Build(ctx context.Context, options Options) (*Job, error) {
 		if err != nil {
 			return nil, err
 		}
+		if len(data) == 0 {
+			return nil, fmt.Errorf("export profile is empty")
+		}
 		if len(data) > 1<<20 {
 			return nil, fmt.Errorf("export profile exceeds 1 MiB")
 		}
 		profile = string(data)
-		if err = exporter.ValidateExportProfile(profile); err != nil {
-			return nil, err
-		}
 	}
 	profile, launchBoxPolicy, err := exporter.ClientExportProfile(profile)
 	if err != nil {

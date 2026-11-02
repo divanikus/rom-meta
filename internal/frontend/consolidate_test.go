@@ -135,3 +135,34 @@ func TestSingleCuratedLegacyCardIsAdoptedWithoutStoredLinks(t *testing.T) {
 		t.Fatal("stateless adopted repeat changed", repeat.Files)
 	}
 }
+
+func TestConsolidationKeepsEditedVersionWithItsParent(t *testing.T) {
+	o, incoming, oldIDs := consolidationFixture(t, "", false)
+	body := bytes.Replace(get(t, o.Destination, platformFile), []byte("<PlayCount>0</PlayCount>"), []byte("<PlayCount>3</PlayCount>"), 1)
+	library, err := parse(body, "LaunchBox")
+	if err != nil {
+		t.Fatal(err)
+	}
+	games, _, err := records(library)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &Plan{Root: o.Destination}
+	paths, names := map[string]string{}, map[string]string{}
+	for _, game := range games {
+		launch := game.fields["ApplicationPath"]
+		key := keyPath(p.Root, launch)
+		paths[key], names[key] = incoming, launch
+	}
+	result, retired, err := p.consolidatePlaceholders(platform, library, paths, names)
+	if err != nil {
+		t.Fatal(err)
+	}
+	remaining, apps, err := records(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(retired) != 1 || retired[oldIDs[1]] != incoming || len(remaining) != 1 || remaining[oldIDs[0]].fields["ID"] == "" || len(apps) != 1 || apps[0].fields["PlayCount"] != "3" || id(apps[0].fields["GameID"]) != oldIDs[0] {
+		t.Fatal("edited app or parent removed, or unrelated placeholder retained", retired, remaining, apps)
+	}
+}
