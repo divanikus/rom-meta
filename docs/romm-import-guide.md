@@ -1,7 +1,8 @@
 # Import offline metadata into RomM
 
 Use the prepared RomM 5.4.1 importer environment. An administrator configures
-native DB, library, Resources and token access once; see [setup](romm-server-importer.md).
+native DB, library, Resources and catalog API access once; see
+[setup](romm-server-importer.md).
 A website login is insufficient. Your computer needs no Resources share.
 
 ## 1. Scan games in RomM
@@ -15,7 +16,10 @@ python importer.py platforms
 
 ## 2. Start rom-meta once for the whole metadata catalog
 
-Supply the token via private environment, then run:
+For a protected API, set the same `ROMMETA_API_TOKEN` (at least 32 characters)
+in the private environment of both the server and importer. For an API without
+authentication, leave it unset or empty; the importer sends no Authorization
+header. Native DB/Redis/RomM credentials are configured separately. Then run:
 
 ```shell
 rom-meta serve --data-root "<metadata catalog>" --profile "<export-romm-api.yaml>" --addr 0.0.0.0:8787
