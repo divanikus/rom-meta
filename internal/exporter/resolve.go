@@ -3,7 +3,6 @@ package exporter
 import (
 	"fmt"
 	"html"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -209,42 +208,20 @@ func resolveMedia(root string, g *game, release, rom string, profile Profile, re
 	if err != nil {
 		return nil, nil, err
 	}
-	var paths []string
-	err = catalogfs.WalkDir(mediaRoot, func(path string, entry fs.DirEntry, walkErr error) error {
-		if g.context != nil {
-			if err := g.context.Err(); err != nil {
-				return err
-			}
-		}
-		if walkErr != nil {
-			if os.IsNotExist(walkErr) {
-				return nil
-			}
-			return walkErr
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return nil
-		}
-		rel, err := filepath.Rel(mediaRoot, path)
-		if err != nil {
-			return err
-		}
-		parent := filepath.Dir(rel)
-		// Only ordinary registered release folders, never _fold or arbitrary trees.
-		if len(regionHints) > 1 {
-			if position(regionHints[1], parent) >= 0 {
-				paths = append(paths, path)
-			}
-		} else if parent == "." || catalogyaml.Value(catalogyaml.Value(g.root, "releases"), parent) != nil {
-			paths = append(paths, path)
-		}
-		return nil
-	})
+	files, err := g.sourceMedia()
 	if err != nil {
 		return nil, nil, err
+	}
+	var paths []string
+	for _, file := range files {
+		// Only ordinary registered release folders, never _fold or arbitrary trees.
+		if len(regionHints) > 1 {
+			if position(regionHints[1], file.parent) >= 0 {
+				paths = append(paths, file.path)
+			}
+		} else if file.parent == "." || catalogyaml.Value(catalogyaml.Value(g.root, "releases"), file.parent) != nil {
+			paths = append(paths, file.path)
+		}
 	}
 	releaseNode := catalogyaml.Value(catalogyaml.Value(g.root, "releases"), release)
 	regions := catalogyaml.Strings(catalogyaml.Value(releaseNode, "regions"))

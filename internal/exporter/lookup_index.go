@@ -328,7 +328,7 @@ func (e lookupEntry) add(index *catalogIndex, path string) *game {
 	if e.GameDigest == "" {
 		return nil
 	}
-	g := &game{path: path, name: e.Title, documentDigest: e.GameDigest}
+	g := &game{path: path, name: e.Title, documentDigest: e.GameDigest, media: &index.media}
 	if index.ExportNames == nil {
 		index.ExportNames = map[string][]*game{}
 	}

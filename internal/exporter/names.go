@@ -12,6 +12,7 @@ import (
 )
 
 type catalogIndex struct {
+	media              mediaInventory
 	ExportCanonical    map[string][]*game
 	ExportShortNames   map[string][]*game
 	ExportNames        map[string][]*game

@@ -377,6 +377,13 @@ such edits. Selected-document SHA checks still apply.
 Read-only catalogs can use prebuilt indexes or a writable directory via
 `--lookup-cache-dir /cache`; `--lookup-cache-dir -` disables persisted indexes.
 Only one platform index stays in memory; returning to another reuses disk summaries.
+Source media names are enumerated once per selected game within a lookup/export
+request, including repeated inputs and variant ancestors. The inventory is
+released after every request, including errors; separate API batches enumerate
+independently. Ordinary filesystem additions become visible on the next request
+without a revision update. Selection still checks current file paths, types and
+sizes, so deleted or empty candidates can fall back within the same request.
+
 Parsed card documents and media-style maps are released after each lookup;
 compact names, fingerprints and source digests remain indexed.
 

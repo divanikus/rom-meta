@@ -161,6 +161,12 @@ func validExportInput(input ExportInput, system string, part bool) bool {
 
 // Resolve uses the same binding and output naming rules as local Build.
 func (r *ExportResolver) Resolve(inputs []ExportInput, profile Profile) (*Plan, error) {
+	if r.index != nil {
+		defer r.index.media.clear()
+	}
+	if r.arcade != nil {
+		defer r.arcade.media.clear()
+	}
 	plan := r.newPlan(profile)
 	seen := map[string]bool{}
 	for i, input := range inputs {

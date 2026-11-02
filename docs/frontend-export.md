@@ -44,6 +44,12 @@ Counts refer to the current operation, not the complete command: catalog counts
 are game cards, while ROM counts are launch inputs. Scan appears before source
 access and input counting; totals stay unknown until enumeration.
 
+Source media names are enumerated once per selected game during a local export
+or one API lookup/export request, shared by repeated ROMs and variant ancestors.
+Selection still checks the chosen files. API batches have independent inventories;
+new media appear on the next request even without a catalog revision update.
+No media listing persists between requests or commands.
+
 Direct export hands structured fields to the native adapter without first
 serializing and reparsing XML or a JSON manifest. The existing destination XML
 is parsed for preservation; new XML is emitted only as final output. Media

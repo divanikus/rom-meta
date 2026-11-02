@@ -22,6 +22,7 @@ import (
 const maxPayload = 512 << 20
 
 type game struct {
+	media          *mediaInventory
 	context        context.Context
 	mediaStyles    map[string]mediaStyle
 	mediaReasons   map[string]MediaReason

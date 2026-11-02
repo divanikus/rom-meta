@@ -262,6 +262,9 @@ func (resolver *LookupResolver) Resolve(inputs []ObservedInput) (*Plan, error) {
 // ResolveBindings explicitly permits game-only identity, never dump verification.
 // Existing exports and default exact API lookups retain their previous behavior.
 func (resolver *LookupResolver) ResolveBindings(inputs []ObservedInput, allowGame bool) (*Plan, error) {
+	if resolver.index != nil {
+		defer resolver.index.media.clear()
+	}
 	defer func() {
 		for _, game := range resolver.games {
 			game.root = nil

@@ -23,6 +23,7 @@ type arcadeBinding struct {
 	Hardware string `yaml:"hardware"`
 }
 type arcadeIndex struct {
+	media    mediaInventory
 	Snapshot string
 	Sets     map[string]arcadeBinding
 	Games    map[string]*game
@@ -106,7 +107,7 @@ func bindArcade(root string, index *arcadeIndex, record *Record, profile Profile
 		if err != nil {
 			return nilBindingError(record, err)
 		}
-		g = &game{path: path, name: field(doc, "title"), root: doc, documentDigest: digest}
+		g = &game{path: path, name: field(doc, "title"), root: doc, documentDigest: digest, media: &index.media}
 		if g.name == "" {
 			g.name = binding.Game
 		}
