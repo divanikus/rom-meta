@@ -12,7 +12,7 @@ async function catalogPost(path, body, signal) {
  if(!r.ok){const error=new Error(data.error || "The catalog operation could not finish.");error.consumed=data.consumed;error.result=data.result;throw error;}return data;
 }
 function catalogNotice(text,kind=""){return '<div class="catalog-notice '+kind+'" role="status">'+cEscape(text)+'</div>';}
-function catalogHeader(title,subtitle){$("catalog-title").textContent=title;$("catalog-subtitle").textContent=subtitle||"";}
+function catalogHeader(title,subtitle){catalogStopPlanArt();$("catalog-dialog").classList.toggle("is-plan",catalogUI.mode==="plan");$("catalog-title").textContent=title;$("catalog-subtitle").textContent=subtitle||"";}
 function catalogOpen(title,subtitle){
  catalogUI.version=(catalogUI.version||0)+1;catalogHeader(title,subtitle);const dialog=$("catalog-dialog");if(!dialog.open)dialog.showModal();$("catalog-content").innerHTML='<div class="catalog-progress"><span class="catalog-spinner"></span><span id="catalog-progress-text">Preparing your workspace…</span></div>';
 }
@@ -20,7 +20,7 @@ function catalogShowError(error){if(error.name==="AbortError")return;const slot=
 async function catalogClose(){
  if(catalogUI.busy&&(catalogUI.mode==="applying"||catalogUI.mode==="saving"))return;
  if(catalogUI.dirty&&!window.confirm("Discard unsaved changes?"))return;
- catalogUI.version=(catalogUI.version||0)+1;catalogUI.controller?.abort();catalogUI.dirty=false;catalogUI.busy=false;
+ catalogStopPlanArt();catalogUI.artwork=new Map();catalogUI.version=(catalogUI.version||0)+1;catalogUI.controller?.abort();catalogUI.dirty=false;catalogUI.busy=false;
  if(catalogUI.plan){const id=catalogUI.plan.id;catalogUI.plan=null;catalogPost("/api/catalog/fold-discard",{plan:id}).catch(()=>{});}
  $("catalog-dialog").close();
 }
@@ -133,7 +133,7 @@ async function catalogBuildPlan(manual=false){
  catalogOpen(manual?"Compare selected games":"Find possible duplicates","Building a plan for "+state.platform+". Your catalog stays unchanged.");const version=catalogUI.version;
  try{
   const response=await fetch("/api/catalog/fold-plan?stream=1",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({platform:state.platform,games:manual?[...catalogUI.compare]:[]}),signal:catalogUI.controller.signal});
-  const plan=await catalogReadPlan(response);if(catalogUI.version!==version){catalogPost("/api/catalog/fold-discard",{plan:plan.id}).catch(()=>{});return;}catalogUI.plan=plan;catalogUI.selected=new Set(catalogUI.plan.groups.filter(g=>g.status==="ready").map(g=>g.id));
+  const plan=await catalogReadPlan(response);if(catalogUI.version!==version){catalogPost("/api/catalog/fold-discard",{plan:plan.id}).catch(()=>{});return;}catalogUI.plan=plan;catalogUI.artwork=new Map();catalogUI.selected=new Set(catalogUI.plan.groups.filter(g=>g.status==="ready").map(g=>g.id));
   catalogRenderPlan();
  }catch(error){catalogShowError(error);}finally{catalogUI.busy=false;}
 }
@@ -145,22 +145,88 @@ function catalogReviewHint(pg){
  if(pg.needs_identity&&!pg.group.ReviewAccepted)return "Review the selected cards. Confirm selection prepares them for batch apply; Confirm & merge selected saves them now. Releases, source IDs and media are retained.";
  return "Preview the result to inspect the merged card.";
 }
+const catalogLanes = {
+ ready:{title:"Ready to merge",hint:"Prepared automatically. Compare a few or apply the selected batch.",empty:"No groups are ready to merge yet."},
+ review:{title:"Your review",hint:"Choose which cards belong together or which saved values to keep.",empty:"Nothing needs your decision."},
+ blocked:{title:"Conflicts",hint:"Data or file problems need attention before these can merge.",empty:"No conflicts. There is nothing to fix here."}
+};
+function catalogPlanCard(pg){
+ const g=pg.group,refs=[g.Keep,...(g.Merge||[])],title=g.Keep.Title||g.Keep.Folder,shown=refs.slice(0,4);
+ const reason=catalogGroupReason(pg)||(g.ReviewAccepted?"You confirmed these cards belong together.":"Identity and saved data agree. Releases and media are preserved.");
+ return '<article class="catalog-plan-card" data-plan-group="'+pg.id+'"><div class="catalog-plan-card-head"><h3>'+cEscape(title)+'</h3><span class="catalog-card-count">'+refs.length+' cards → 1</span></div>'+
+ '<div class="catalog-plan-covers" style="--covers:'+shown.length+'">'+shown.map(ref=>'<figure title="'+escapeAttr(ref.Folder)+'"><div class="catalog-plan-cover" data-plan-cover="'+escapeAttr(ref.Folder)+'"><span>Cover</span></div><figcaption>'+cEscape(ref.Folder)+'</figcaption></figure>').join("")+'</div>'+
+ (refs.length>shown.length?'<p class="catalog-more-cards">+'+(refs.length-shown.length)+' more cards in Compare</p>':'')+
+ '<p class="catalog-plan-reason" title="'+escapeAttr(reason)+'">'+cEscape(reason)+'</p><div class="catalog-plan-card-actions">'+
+ (pg.status==="ready"?'<label><input type="checkbox" aria-label="Include '+escapeAttr(title)+'" data-plan-select="'+pg.id+'" '+(catalogUI.selected.has(pg.id)?'checked':'')+'>Include</label>':'<span class="catalog-badge '+pg.status+'">'+(pg.status==="blocked"?"Merge blocked":"Decision needed")+'</span>')+
+ '<button class="tab-button" data-plan-review="'+pg.id+'">Compare</button></div></article>';
+}
 function catalogRenderPlan(){
  catalogUI.mode="plan";catalogUI.group=null;catalogUI.dirty=false;
- const plan=catalogUI.plan;if(!plan)return;catalogHeader("Review duplicates",plan.platform+" · Suggested groups and primary cards are already prepared.");
- const groups=plan.groups;const count=status=>groups.filter(g=>g.status===status).length;
- $("catalog-content").innerHTML='<div class="catalog-metrics">'+["ready","review","blocked"].map(status=>'<div class="catalog-metric '+status+'"><strong>'+count(status)+'</strong><span>'+catalogStatus[status]+'</span></div>').join("")+'</div><div id="catalog-feedback"></div>'+
- (groups.length&&count("blocked")===groups.length?catalogNotice("No groups are ready to merge. Compare lets you inspect why each group is blocked; it does not approve a merge.","warn"):"")+
- (groups.length?'<div class="catalog-plan-list">'+groups.map(pg=>{
-  const g=pg.group;const names=[g.Keep,...(g.Merge||[])].map(x=>x.Folder);
-  return '<article class="catalog-plan-row"><input type="checkbox" aria-label="Include '+escapeAttr(g.Keep.Title||g.Keep.Folder)+'" data-plan-select="'+pg.id+'" '+(catalogUI.selected.has(pg.id)?'checked ':'')+(pg.status!=="ready"?'disabled':'')+'><div><div class="catalog-row-title"><h3>'+cEscape(g.Keep.Title||g.Keep.Folder)+'</h3><span class="catalog-badge '+pg.status+'">'+catalogStatus[pg.status]+'</span></div><p>'+cEscape(names.join(" + "))+'</p><p>'+cEscape(catalogGroupReason(pg)||"Primary chosen from catalog preferences. Releases and media will be retained.")+'</p></div><button class="tab-button" data-plan-review="'+pg.id+'">Compare</button></article>';
- }).join("")+'</div><div class="catalog-actions"><button class="catalog-primary" id="catalog-apply-ready">Apply ready groups</button><span class="secondary" id="catalog-selected-count"></span></div>':'<div class="catalog-empty"><div class="catalog-saved">✓</div>No duplicate groups found for this platform.<p>You can also select cards in the library to compare them.</p></div>');
+ const plan=catalogUI.plan;if(!plan)return;catalogHeader("Review duplicates",plan.platform+" · Compare cards, decide what belongs together, then apply.");
+ const groups=plan.groups,ready=groups.filter(g=>g.status==="ready");
+ catalogUI.selected=new Set([...catalogUI.selected].filter(id=>ready.some(g=>g.id===id)));
+ $("catalog-content").innerHTML='<div id="catalog-feedback"></div>'+
+ (!groups.length?catalogNotice("No duplicate groups found for this platform. You can also select cards in the library to compare them."):"")+
+ (groups.length&&groups.every(g=>g.status==="blocked")?catalogNotice("No groups are ready to merge. Compare lets you inspect why each group is blocked; it does not approve a merge.","warn"):"")+
+ '<p class="catalog-board-hint">Scroll sideways to see all three columns →</p><div class="catalog-board" tabindex="0" role="region" aria-label="Merge plan columns; scroll horizontally on narrow screens">'+Object.entries(catalogLanes).map(([status,lane])=>{
+  const members=groups.filter(g=>g.status===status);
+  return '<section class="catalog-lane '+status+'" aria-labelledby="catalog-lane-'+status+'"><header class="catalog-lane-head"><div><h3 id="catalog-lane-'+status+'">'+lane.title+'</h3><span class="catalog-lane-count">'+members.length+'</span></div><p>'+lane.hint+'</p></header>'+
+  (status==="ready"?'<div class="catalog-batch"><label><input type="checkbox" id="catalog-select-ready">Select all</label><button class="catalog-primary" id="catalog-apply-ready">Apply ready groups</button><p id="catalog-selected-count"></p></div>':'')+
+  '<div class="catalog-lane-list" tabindex="0" role="region" aria-label="'+lane.title+' groups">'+(members.length?members.map(catalogPlanCard).join(""):'<div class="catalog-lane-empty"><span aria-hidden="true">'+(status==="blocked"?"✓":status==="review"?"✓":"—")+'</span><p>'+lane.empty+'</p></div>')+'</div></section>';
+ }).join("")+'</div>';
  document.querySelectorAll("[data-plan-select]").forEach(input=>input.addEventListener("change",()=>{const id=Number(input.dataset.planSelect);if(input.checked)catalogUI.selected.add(id);else catalogUI.selected.delete(id);catalogSelectionCount();}));
  document.querySelectorAll("[data-plan-review]").forEach(button=>button.addEventListener("click",()=>catalogReviewGroup(Number(button.dataset.planReview))));
- $("catalog-apply-ready")?.addEventListener("click",()=>catalogApply([...catalogUI.selected].map(id=>({id,revision:plan.groups.find(g=>g.id===id).revision,action:"merge"}))));
+ $("catalog-select-ready").addEventListener("change",event=>catalogSelectReady(event.target.checked));
+ $("catalog-apply-ready").addEventListener("click",()=>catalogApply([...catalogUI.selected].map(id=>({id,revision:plan.groups.find(g=>g.id===id).revision,action:"merge"}))));
+ catalogSelectionCount();catalogLoadPlanArt();
+}
+function catalogSelectReady(checked){
+ catalogUI.selected=new Set(checked?catalogUI.plan.groups.filter(g=>g.status==="ready").map(g=>g.id):[]);
+ document.querySelectorAll("[data-plan-select]").forEach(input=>{input.checked=catalogUI.selected.has(Number(input.dataset.planSelect));});
  catalogSelectionCount();
 }
-function catalogSelectionCount(){const n=catalogUI.selected.size;const button=$("catalog-apply-ready");if(button){button.textContent="Apply ready groups ("+n+")";button.disabled=n===0;}$("catalog-selected-count")?.replaceChildren(document.createTextNode("Only selected, ready groups will change."));}
+function catalogSelectionCount(){
+ const n=catalogUI.selected.size,total=catalogUI.plan?.groups.filter(g=>g.status==="ready").length||0,button=$("catalog-apply-ready");
+ if(button){button.textContent="Apply ready groups ("+n+")";button.disabled=n===0;}
+ const all=$("catalog-select-ready");if(all){all.checked=total>0&&n===total;all.indeterminate=n>0&&n<total;all.disabled=total===0;}
+ $("catalog-selected-count")?.replaceChildren(document.createTextNode(n+" of "+total+" ready groups selected"));
+}
+function catalogStopPlanArt(){
+ catalogUI.artworkObserver?.disconnect();catalogUI.artworkController?.abort();
+ catalogUI.artworkObserver=null;catalogUI.artworkController=null;
+}
+function catalogLoadPlanArt(){
+ if(typeof IntersectionObserver==="undefined")return;
+ const controller=new AbortController(),platform=catalogUI.platform,cache=catalogUI.artwork||(catalogUI.artwork=new Map()),queue=[];
+ catalogUI.artworkController=controller;let active=0;
+ const pump=()=>{
+  while(active<4&&queue.length&&!controller.signal.aborted){
+   const slot=queue.shift();active++;
+   catalogLoadPlanCover(slot,platform,cache,controller.signal).finally(()=>{active--;pump();});
+  }
+ };
+ const observer=new IntersectionObserver(entries=>{
+  for(const entry of entries)if(entry.isIntersecting){observer.unobserve(entry.target);queue.push(entry.target);}
+  pump();
+ });
+ catalogUI.artworkObserver=observer;
+ document.querySelectorAll("[data-plan-cover]").forEach(slot=>observer.observe(slot));
+}
+async function catalogLoadPlanCover(slot,platform,cache,signal){
+ const folder=slot.dataset.planCover,key=platform+"\n"+folder;
+ try{
+  let cover=cache.get(key);
+  if(!cache.has(key)){
+   const card=await fetchJSON("/api/game?"+new URLSearchParams({platform,game:folder}),signal);
+   cover=bestCover(card.local_media||[]);if(signal.aborted)return;cache.set(key,cover);
+  }
+  if(signal.aborted||!slot.isConnected)return;
+  if(!cover){slot.textContent="No cover";return;}
+  const img=document.createElement("img");img.alt=folder;img.loading="lazy";img.decoding="async";
+  img.addEventListener("error",()=>{if(slot.isConnected&&!signal.aborted)slot.textContent="Cover unavailable";});
+  img.src=cover.url;slot.replaceChildren(img);
+ }catch(error){if(!signal.aborted&&slot.isConnected)slot.textContent="Cover unavailable";}
+}
 function catalogCandidate(card,index,fields){
  const g=card.game,p=card.profile||{},snapshot=card.edit.fields,cover=bestCover(card.local_media||[]),included=catalogIncluded().has(g.folder),primary=included&&g.folder===catalogUI.group.group.Keep.Folder;
  return '<article class="catalog-candidate '+(primary?'is-primary':'')+(!included?' is-excluded':'')+'">'+(catalogUI.group.group.NativeDigest?'':'<label class="catalog-member"><input type="checkbox" data-candidate-include="'+index+'" '+(included?'checked':'')+'>Include in merge</label>')+(cover?'<img src="'+escapeAttr(cover.url)+'" alt="'+escapeAttr(p.title||g.folder)+'">':'')+'<span class="catalog-badge">'+(primary?"Suggested primary":"Candidate")+'</span><h3>'+cEscape(p.title||g.folder)+'</h3><p class="secondary">'+cEscape(g.folder)+'</p>'+

@@ -56,8 +56,8 @@ test('structured language and provider descriptions render as text',()=>{
 test('a plan selects only ready groups for batch apply',()=>{
  const b=browser(async()=>json({}));
  b.run('catalogUI.plan={platform:"Console",groups:[{id:0,status:"ready",group:{Keep:{Title:"Orbit",Folder:"Orbit (USA)"},Merge:[{Title:"Orbit",Folder:"Orbit (Japan)"}]}},{id:1,status:"review",group:{Keep:{Title:"Garden",Folder:"Garden"}}}]};catalogUI.selected=new Set([0]);catalogRenderPlan()');
- assert.match(b.element('catalog-content').innerHTML,/Orbit \(USA\) \+ Orbit \(Japan\)/);
- assert.match(b.element('catalog-content').innerHTML,/data-plan-select="1" disabled/);
+ assert.match(b.element('catalog-content').innerHTML,/data-plan-cover="Orbit \(USA\)"/);
+ assert.doesNotMatch(b.element('catalog-content').innerHTML,/data-plan-select="1"/);
  assert.equal(b.element('catalog-apply-ready').textContent,'Apply ready groups (1)');
 });
 
@@ -156,4 +156,58 @@ test('late confirmation cannot merge after the owner changes the selected cards'
  assert.equal(b.run('state.applied'),undefined);
  assert.equal(b.run('catalogUI.selectionDirty'),true);
  assert.equal(b.run('catalogUI.included.has("Three")'),true);
+});
+
+test('the board keeps three lanes and moves a confirmed review into the ready batch',()=>{
+ const b=browser(async()=>json({}));
+ b.run('catalogUI.plan={platform:"Console",groups:[{id:0,status:"ready",group:{Keep:{Folder:"Ready"},Merge:[{Folder:"Ready Alt"}]}},{id:1,status:"review",group:{Keep:{Folder:"Review"},Merge:[{Folder:"Review Alt"}]}},{id:2,status:"blocked",group:{Keep:{Folder:"Conflict"},Merge:[{Folder:"Conflict Alt"}]}}]};catalogUI.selected=new Set([0,2]);catalogRenderPlan()');
+ const html=b.element('catalog-content').innerHTML;
+ const lanes=html.split('<section class="catalog-lane ').slice(1);
+ assert.equal(lanes.length,3);
+ for(let id=0;id<3;id++){
+  assert.match(lanes[id],new RegExp('data-plan-group="'+id+'"'));
+  for(let other=0;other<3;other++)if(other!==id)assert.doesNotMatch(lanes[id],new RegExp('data-plan-group="'+other+'"'));
+ }
+ assert.equal(b.run('catalogUI.selected.has(2)'),false);
+ b.run('catalogAcceptGroup({...catalogUI.plan.groups[1],status:"ready",revision:2});catalogRenderPlan()');
+ assert.equal(b.element('catalog-apply-ready').textContent,'Apply ready groups (2)');
+ assert.match(b.element('catalog-content').innerHTML,/Nothing needs your decision/);
+ b.run('catalogSelectReady(false)');
+ assert.equal(b.element('catalog-apply-ready').disabled,true);
+ b.run('catalogSelectReady(true)');
+ assert.deepEqual(Array.from(b.run('[...catalogUI.selected]')),[0,1]);
+ assert.equal(b.element('catalog-select-ready').checked,true);
+ b.run('catalogUI.selected.delete(0);catalogSelectionCount()');
+ assert.equal(b.element('catalog-select-ready').indeterminate,true);
+});
+
+test('missing or inaccessible artwork leaves the plan usable and cached covers are reused',async()=>{
+ const b=browser(async()=>json({}));
+ b.run('state.slot={dataset:{planCover:"Orbit"},isConnected:true,replaceChildren(img){this.image=img}};state.cache=new Map();state.signal=new AbortController().signal;state.reads=0;fetchJSON=async()=>{state.reads++;return {local_media:[]}};bestCover=files=>files[0]||null');
+ await b.run('catalogLoadPlanCover(state.slot,"Console",state.cache,state.signal)');
+ assert.equal(b.run('state.slot.textContent'),'No cover');
+ await b.run('catalogLoadPlanCover(state.slot,"Console",state.cache,state.signal)');
+ assert.equal(b.run('state.reads'),1);
+ b.run('state.cache.clear();fetchJSON=async()=>{throw new Error("unreadable")}');
+ await b.run('catalogLoadPlanCover(state.slot,"Console",state.cache,state.signal)');
+ assert.equal(b.run('state.slot.textContent'),'Cover unavailable');
+ b.run('state.cache.clear();fetchJSON=async()=>({local_media:[{url:"/media?path=synthetic-cover.png"}]});document.createElement=()=>({addEventListener(kind,handler){this.onError=handler}})');
+ await b.run('catalogLoadPlanCover(state.slot,"Console",state.cache,state.signal)');
+ assert.equal(b.run('state.slot.image.src'),'/media?path=synthetic-cover.png');
+ b.run('state.slot.image.onError()');
+ assert.equal(b.run('state.slot.textContent'),'Cover unavailable');
+});
+
+test('board artwork loads only visible cards, limits concurrent reads and stops on leaving',async()=>{
+ const b=browser(async()=>json({}));
+ b.run('state.slots=Array.from({length:10},(_,i)=>({dataset:{planCover:"Card "+i},isConnected:true}));state.resolvers=[];state.reads=0;document.querySelectorAll=()=>state.slots;IntersectionObserver=class{constructor(callback){state.observe=callback}observe(){}unobserve(){}disconnect(){state.disconnected=true}};fetchJSON=()=>{state.reads++;return new Promise(resolve=>state.resolvers.push(resolve))};catalogLoadPlanArt()');
+ assert.equal(b.run('state.reads'),0);
+ b.run('state.observe(state.slots.map(target=>({target,isIntersecting:true})))');
+ assert.equal(b.run('state.reads'),4);
+ b.run('catalogStopPlanArt();state.resolvers.forEach(resolve=>resolve({local_media:[]}))');
+ await new Promise(setImmediate);
+ assert.equal(b.run('state.disconnected'),true);
+ assert.equal(b.run('state.reads'),4);
+ assert.equal(b.run('catalogUI.artwork.size'),0);
+ assert.equal(b.run('state.slots[0].textContent'),undefined);
 });

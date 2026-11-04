@@ -30,18 +30,25 @@ remain inspectable in the original catalog documents.
 ## Let fold prepare the work
 
 Select a platform and choose **Review duplicates**. The server runs the existing
-fold rules and proposes groups, primary cards and merged results automatically:
+fold rules and proposes groups, primary cards and merged results automatically.
+The overview has three columns with counts and local cover previews:
 
-- **Ready to apply**: identity, content, files and saved fields pass validation.
+- **Ready to merge**: identity, content, files and saved fields pass validation.
   These groups start selected. Inspect any sample, then apply them together without
   opening every comparison. Recognized revision/pressing labels such as RE and Alt
   do not by themselves require owner confirmation; provider identity still must agree.
-- **Needs your decision**: confirm which cards belong together despite identity,
+- **Your review**: confirm which cards belong together despite identity,
   edition or provider-ID doubts, or choose between differing saved field values.
-- **Merge blocked**: unreadable files, conflicting release payloads, colliding
+- **Conflicts**: unreadable files, conflicting release payloads, colliding
   non-media files or incompatible unknown fields prevent a lossless merge.
   Choose a different subset or resolve the reported data/access problem.
   Identity confirmation cannot discard conflicting data.
+
+Each group shows up to four member covers and names; **Compare** opens all
+candidates. Missing or inaccessible artwork has a placeholder and does not change
+merge readiness. **Select all** and **Apply ready groups** remain above the ready
+column while its list scrolls. On narrow screens, scroll sideways between columns.
+A confirmed review appears in the ready column when you return to the overview.
 
 These states describe rules and current evidence, not a confidence percentage.
 Matching a title alone or missing provider metadata does not establish identity.
