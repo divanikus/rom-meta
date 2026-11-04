@@ -24,8 +24,9 @@ rom-meta serve --data-root "<catalog>" --edit
 
 **Library / Operations / Export / Settings** separate browsing, background work,
 export-profile preparation and library defaults. Platform review/statistics live
-beside the selected platform; the edit pencil lives on the card. Settings edits
-library configuration, as described below.
+beside the selected platform; the edit pencil lives on the card. **API** and
+**API docs** remain in the header across views and open in a separate tab.
+Settings edits library configuration, as described below.
 
 1. Choose **Import your first DAT** in an empty library or the **+** beside
    **Platforms**. Operations offers a new import action when viewing an existing

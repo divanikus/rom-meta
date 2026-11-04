@@ -1,6 +1,6 @@
 .app>header{padding:12px 20px;gap:16px;background:linear-gradient(115deg,#172b2a,#141d26 60%);box-shadow:0 3px 20px #0002}
 .app>header .brand{letter-spacing:-.5px;font-size:21px}.nav{flex-wrap:wrap}.nav .active{background:#25423a;border-color:#477a66;color:#b9ead9}
-.library-header-actions{margin-left:auto;display:flex;align-items:center;gap:12px}.library-header-actions small{color:#a8cbbb}.top-status{font-size:12px}
+.library-header-actions{margin-left:auto;display:flex;align-items:center;gap:12px;flex-shrink:0}.api-links{display:flex;align-items:center;gap:6px}.library-header-actions small{color:#a8cbbb}.top-status{font-size:12px}
 #export-bar:has(#export-controls.hidden){display:none}
 .platform-workspace-head{padding:12px 14px;background:#19262b;border-bottom:1px solid var(--line)}
 .platform-workspace-head h2{font-size:14px;margin:0 0 10px}.platform-workspace-head .catalog-tools{display:flex;flex-wrap:wrap;gap:6px}

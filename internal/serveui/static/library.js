@@ -211,8 +211,7 @@ function libraryRenderSettings(){
   return '<fieldset class="settings-field"><legend>'+escapeHTML(field.label)+'</legend>'+(field.help?'<p class="secondary settings-help">'+escapeHTML(field.help)+'</p>':"")+control+'</fieldset>';
  }).join("")+
  '<div class="operation-actions settings-savebar"><button class="catalog-primary" id="settings-save">'+(librarySettingsUI.saving?'Saving…':'Save changes')+'</button><button class="tab-button" id="settings-reset">Discard changes</button><button class="tab-button" id="settings-reload">Reload saved</button><span id="settings-feedback" role="status"></span></div>'+
- '<p class="secondary settings-file">Saved to '+escapeHTML(section.file)+'. Existing settings outside the edited fields are preserved.</p></section></div>'+
- '<div class="operation-actions"><a class="tab-button" href="/docs" target="_blank" rel="noopener">API documentation</a><a class="tab-button" href="/api" target="_blank" rel="noopener">API endpoints</a></div>';
+ '<p class="secondary settings-file">Saved to '+escapeHTML(section.file)+'. Existing settings outside the edited fields are preserved.</p></section></div>';
  pane.querySelectorAll("[data-settings-section]").forEach(button=>button.addEventListener("click",()=>{librarySettingsUI.selected=button.dataset.settingsSection;librarySettingsUI.error="";librarySettingsUI.notice="";libraryRenderSettings();}));
  pane.querySelectorAll("[data-setting-input]").forEach(input=>input.addEventListener("input",()=>{
   const field=section.fields.find(f=>f.id===input.dataset.settingInput);
