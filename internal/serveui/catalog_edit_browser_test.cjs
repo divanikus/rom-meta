@@ -103,6 +103,8 @@ test('editable-field and identity reviews retain their distinct guidance',()=>{
  assert.match(b.element('catalog-content').innerHTML,/Confirm selection prepares these cards for batch apply/);
  assert.match(b.element('catalog-content').innerHTML,/Confirm & merge selected/);
  assert.doesNotMatch(b.element('catalog-content').innerHTML,/cannot override the conflict/);
+ b.run('catalogUI.group.group.ReviewAccepted=true;catalogUI.group.conflicts=["description"];catalogRenderReview()');
+ assert.doesNotMatch(b.element('catalog-content').innerHTML,/It is ready for batch apply/);
 });
 
 test('blocked-only plans explain that comparison is inspection rather than approval',()=>{
