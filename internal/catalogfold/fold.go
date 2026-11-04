@@ -1589,6 +1589,9 @@ func renderMergedFingerprints(games []catalogGame) string {
 			b.WriteString(item)
 		}
 	}
+	if len(seen) == 0 {
+		return "items: []\n"
+	}
 	return b.String()
 }
 

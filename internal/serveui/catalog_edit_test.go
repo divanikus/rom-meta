@@ -126,8 +126,8 @@ func TestCatalogFoldPlanApplyAndConsumedHTTP(t *testing.T) {
 	if len(groups) != 1 || groups[0].(map[string]any)["status"] != "ready" {
 		t.Fatal(response)
 	}
-	w, _ = catalogCall(t, h, "/api/catalog/fold-apply", map[string]any{"plan": id, "decisions": []map[string]any{{"id": 0, "revision": 1, "action": "merge"}}})
-	if w.Code != 200 {
+	w, response = catalogCall(t, h, "/api/catalog/fold-apply", map[string]any{"plan": id, "decisions": []map[string]any{{"id": 0, "revision": 1, "action": "merge"}}})
+	if w.Code != 200 || response["warning"] != nil {
 		t.Fatal(w.Body.String())
 	}
 	w, _ = catalogCall(t, h, "/api/catalog/fold-apply", map[string]any{"plan": id, "decisions": []map[string]any{{"id": 0, "revision": 1, "action": "merge"}}})
