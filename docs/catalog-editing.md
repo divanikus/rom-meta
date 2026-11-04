@@ -7,7 +7,9 @@ rom-meta serve --data-root /catalog --edit
 ```
 
 Without `--edit`, the browser remains read-only. Containers need a writable
-catalog mount and filesystem permissions for the service user. Fixed ROM-selection
+catalog mount and filesystem permissions for the service user. On Linux, packed
+writes retain the original ZIP owner/group: run the editor as the catalog owner
+and resolve mixed metadata ownership explicitly before enabling writes. Fixed ROM-selection
 servers do not support editing. Existing optional API authentication also protects
 editor actions; enabling editing does not introduce accounts or change the token.
 
