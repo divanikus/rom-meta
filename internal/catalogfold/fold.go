@@ -30,6 +30,7 @@ const minimumStrongMatchScore = 140
 type Options struct {
 	Context                context.Context
 	skipMAME               bool
+	planGroupsOnly         bool // BuildPlan checks each candidate independently.
 	DataRoot               string
 	Platform               string
 	Match                  string
@@ -314,7 +315,7 @@ func Fold(options Options) (Result, error) {
 			group := &groups[index]
 			if group.HoldReason != "" {
 				platformResult.HeldGroupCount++
-			} else {
+			} else if !options.planGroupsOnly {
 				options.Progress.Update("checking files", index+1, len(groups), platform+" / "+group.Keep.Folder)
 				changes, reason, err := planGroupFiles(root, *group)
 				if err != nil {

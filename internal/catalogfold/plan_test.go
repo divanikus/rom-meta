@@ -146,3 +146,17 @@ func TestReviewedUnknownSourceFieldsSurvive(t *testing.T) {
 		t.Fatal(text)
 	}
 }
+
+func TestPlanDoesNotHideCatalogScanErrorsOrCancellation(t *testing.T) {
+	root := t.TempDir()
+	webPlanFixture(t, root)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := BuildPlan(Options{DataRoot: root, Platform: "Console", Context: ctx}, nil); err == nil {
+		t.Fatal("cancelled plan succeeded")
+	}
+	writeFoldFile(t, filepath.Join(root, "platforms", "Console", "One", "game.yaml"), "title: [unterminated\n")
+	if _, err := BuildPlan(Options{DataRoot: root, Platform: "Console"}, nil); err == nil {
+		t.Fatal("invalid catalog metadata silently omitted")
+	}
+}

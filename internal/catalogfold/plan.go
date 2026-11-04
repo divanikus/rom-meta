@@ -32,6 +32,7 @@ type PlannedGroup struct {
 	Manual        bool              `json:"manual,omitempty"`
 	NeedsIdentity bool              `json:"needs_identity,omitempty"`
 	Conflicts     []string          `json:"conflicts,omitempty"`
+	inspectionErr error
 }
 type Decision struct {
 	ID       int    `json:"id"`
@@ -153,6 +154,7 @@ func BuildPlan(options Options, folders []string) (*Plan, error) {
 	options.Review = nil
 	options.ReviewPlan = ""
 	options.skipMAME = true
+	options.planGroupsOnly = true
 	p := &Plan{Platform: options.Platform, options: options, Groups: []PlannedGroup{}}
 	var groups []Group
 	if len(folders) > 0 {
@@ -238,21 +240,31 @@ func BuildPlan(options Options, folders []string) (*Plan, error) {
 				return nil, err
 			}
 		}
+		pg := PlannedGroup{ID: len(p.Groups), Revision: 1, Group: group, Manual: len(folders) > 0, NeedsIdentity: group.ReviewRequired != ""}
 		members, err := groupMembers(options.DataRoot, group)
-		if err != nil {
-			p.Close()
-			return nil, err
+		pg.Members = members
+		if err == nil {
+			pg.Stamp, err = groupStamp(options.DataRoot, group)
 		}
-		stamp, err := groupStamp(options.DataRoot, group)
 		if err != nil {
-			p.Close()
-			return nil, err
+			pg.blockInspection(err)
+		} else {
+			p.evaluate(&pg)
 		}
-		pg := PlannedGroup{ID: len(p.Groups), Revision: 1, Group: group, Members: members, Stamp: stamp, Manual: len(folders) > 0, NeedsIdentity: group.ReviewRequired != ""}
-		p.evaluate(&pg)
 		p.Groups = append(p.Groups, pg)
 	}
+	if options.Context != nil && options.Context.Err() != nil {
+		p.Close()
+		return nil, options.Context.Err()
+	}
 	return p, nil
+}
+func (pg *PlannedGroup) blockInspection(err error) {
+	pg.inspectionErr = err
+	pg.Status = "blocked"
+	pg.Reason = fmt.Sprintf("Cannot inspect this group's files: %s. Restore access and rebuild the plan.", err)
+	pg.Result = nil
+	pg.Conflicts = nil
 }
 func (p *Plan) evaluate(pg *PlannedGroup) {
 	pg.Result = nil
@@ -277,7 +289,8 @@ func (p *Plan) evaluate(pg *PlannedGroup) {
 	} else {
 		changes, reason, e := planGroupFiles(p.options.DataRoot, *g)
 		if e != nil {
-			err = e
+			pg.blockInspection(e)
+			return
 		} else if reason != "" {
 			err = fmt.Errorf("%s", reason)
 		} else {
@@ -313,6 +326,9 @@ func (p *Plan) evaluate(pg *PlannedGroup) {
 	}
 }
 func (p *Plan) verify(pg PlannedGroup) error {
+	if pg.inspectionErr != nil {
+		return fmt.Errorf("%s", pg.Reason)
+	}
 	for _, m := range pg.Members {
 		if err := verifyReviewedMember(p.options.DataRoot, p.Platform, m); err != nil {
 			return fmt.Errorf("plan is stale; rebuild it: %w", err)

@@ -36,18 +36,26 @@ fold rules and proposes groups, primary cards and merged results automatically:
   These groups start selected. Apply them together without opening each comparison.
 - **Needs your decision**: review the identity evidence or choose between differing
   saved field values. Preview the result to make the group ready.
-- **Conflict**: an identity/content boundary, colliding file or incompatible unknown
-  field prevents merging. Leave it unresolved or correct the underlying cards
-  before building a new plan. Ordinary confirmation cannot bypass these guards.
+- **Conflict**: an identity/content boundary, unreadable or colliding file, or
+  incompatible unknown field prevents merging. The comparison explains the reason;
+  result-field editing and identity confirmation are not offered as a bypass.
+  Correct the underlying cards or file access, then build a new plan.
 
 These states describe rules and current evidence, not a confidence percentage.
 Matching a title alone or missing provider metadata does not establish identity.
+An unreadable candidate is reported as blocked while the remaining ordinary groups
+are planned. Incomplete catalog scans and MAME binding preparation still fail
+explicitly. A plan with an incomplete file inspection cannot be reused after an
+access repair; build a new one. Applying ordinary groups still uses a whole-platform
+transaction, so all files required for that copy must be readable.
 
 **Compare** shows candidate cards, highlighted differences, cover art, releases,
 source observations, media and registered fingerprints. Accept the suggested
 primary, choose another eligible member, or correct the result. Previewed decisions
 stay in the plan when returning to its list. **Apply this merge** handles one group;
-**Apply ready groups** handles the selected ready groups. **Keep separate** records
+**Apply ready groups** handles the selected ready groups. Platform counts and the
+current list refresh after completed changes, including partial completion.
+**Keep separate** records
 rejection of the displayed fold evidence, not a permanent ban on every future
 identity signal.
 

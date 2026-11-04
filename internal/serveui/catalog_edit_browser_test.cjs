@@ -5,10 +5,10 @@ const vm=require('node:vm');
 const script=readFileSync(require('node:path').join(__dirname,'static/catalog-edit.js'),'utf8').replace(/catalogCapabilities\(\);\s*$/,'');
 function browser(fetch){
  const elements=new Map();
- function element(id){if(!elements.has(id))elements.set(id,{innerHTML:'',textContent:'',disabled:true,open:true,checked:false,value:'',parentElement:{},classList:{toggle(){}},addEventListener(){},setAttribute(k,v){this[k]=k==='disabled'?true:v;},close(){this.open=false;},showModal(){this.open=true;},replaceChildren(){}});return elements.get(id);}
+ function element(id){if(!elements.has(id))elements.set(id,{innerHTML:'',textContent:'',disabled:true,open:true,checked:false,value:'',parentElement:{},classList:{toggle(){}},addEventListener(){},setAttribute(k,v){this[k]=k==='disabled'?true:v;},close(){this.open=false;},showModal(){this.open=true;},replaceChildren(){},insertAdjacentHTML(position,html){this.innerHTML+=html;}});return elements.get(id);}
  const context=vm.createContext({fetch,AbortController,URLSearchParams,TextDecoder,console,MutationObserver:class{observe(){}},window:{confirm:()=>true},$:element,
  document:{querySelectorAll:()=>[],createTextNode:s=>s},escapeHTML:s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;'),escapeAttr:s=>String(s),
- state:{platform:'Console',games:[],game:{},selectedFolder:'One',view:'browse'},renderGames(){},selectGame:async()=>{},selectPlatform(){},fetchJSON:async()=>({}),bestCover:()=>null,renderReleases:()=>'',renderSourceSection:()=>'',renderMediaSection:()=>''});
+ state:{platform:'Console',games:[],game:{},selectedFolder:'One',view:'browse'},renderGames(){},renderPlatforms(){},selectGame:async()=>{},selectPlatform(){},fetchJSON:async()=>({}),bestCover:()=>null,renderReleases:()=>'',renderSourceSection:()=>'',renderMediaSection:()=>''});
  vm.runInContext(script,context);return{run:code=>vm.runInContext(code,context),element};
 }
 const json=value=>({ok:true,json:async()=>value});
@@ -59,4 +59,45 @@ test('a plan selects only ready groups for batch apply',()=>{
  assert.match(b.element('catalog-content').innerHTML,/Orbit \(USA\) \+ Orbit \(Japan\)/);
  assert.match(b.element('catalog-content').innerHTML,/data-plan-select="1" disabled/);
  assert.equal(b.element('catalog-apply-ready').textContent,'Apply ready groups (1)');
+});
+
+test('successful and partially completed folds refresh platform counts without changing selection',async()=>{
+ for(const partial of [false,true]){
+  const b=browser(async()=>partial?{ok:false,json:async()=>({error:'Later group failed',consumed:true,result:{applied:1,kept_separate:0}})}:json({result:{applied:1,kept_separate:0}}));
+  b.run('catalogUI.plan={id:"plan"};catalogUI.platform="Console";state.platforms=[{platform:"Console",game_count:2}];fetchJSON=async(path)=>{state.refreshPath=path;return [{platform:"Console",game_count:1},{platform:"Other",game_count:7}]};renderPlatforms=()=>{$("platform-list").textContent=String(state.platforms.find(p=>p.platform===state.platform).game_count)};selectPlatform=p=>{state.reloadedPlatform=p}');
+  await b.run('catalogApply([{id:0,revision:1,action:"merge"}])');
+  assert.equal(b.run('state.refreshPath'),'/api/platforms');
+  assert.equal(b.element('platform-list').textContent,'1');
+  assert.equal(b.element('platform-count').textContent,'2');
+  assert.equal(b.run('state.reloadedPlatform'),'Console');
+  assert.equal(b.run('catalogUI.plan'),null);
+ }
+});
+test('refresh failure reports saved changes rather than a failed merge',async()=>{
+ const b=browser(async()=>json({result:{applied:1,kept_separate:0}}));
+ b.run('catalogUI.plan={id:"plan"};catalogUI.platform="Console";fetchJSON=async()=>{throw new Error("Offline")}');
+ await b.run('catalogApply([{id:0,revision:1,action:"merge"}])');
+ assert.equal(b.element('catalog-title').textContent,'Catalog updated');
+ assert.match(b.element('catalog-content').innerHTML,/1 groups merged/);
+ assert.match(b.element('catalog-content').innerHTML,/Changes were saved, but the platform list could not refresh/);
+});
+test('hard conflicts do not offer field edits or identity confirmation as a solution',()=>{
+ const b=browser(async()=>json({}));
+ b.run('catalogUI.group={status:"blocked",reason:"conflicting saved fields: custom_note",conflicts:["custom_note"],needs_identity:true,group:{Keep:{Folder:"One"},Merge:[],Evidence:[]}};catalogUI.cards=[];catalogRenderReview()');
+ const html=b.element('catalog-content').innerHTML;
+ assert.match(html,/conflicting saved fields: custom_note/);
+ assert.match(html,/Field edits or identity confirmation cannot override the conflict/);
+ assert.match(html,/id="catalog-commit" disabled/);
+ assert.match(html,/id="catalog-preview-group" disabled/);
+ assert.doesNotMatch(html,/Correct the result|catalog-confirm-identity|Result matches the current preview|Choose the saved values/);
+});
+test('editable-field and identity reviews retain their distinct guidance',()=>{
+ const b=browser(async()=>json({}));
+ b.run('catalogUI.group={status:"review",reason:"conflicting saved fields: description",conflicts:["description"],group:{Keep:{Folder:"One"},Merge:[],Evidence:[]}};catalogUI.cards=[];catalogRenderReview()');
+ assert.match(b.element('catalog-content').innerHTML,/Choose the highlighted saved values/);
+ assert.match(b.element('catalog-content').innerHTML,/Correct the result/);
+ b.run('catalogUI.group.conflicts=[];catalogUI.group.needs_identity=true;catalogRenderReview()');
+ assert.match(b.element('catalog-content').innerHTML,/Compare the regional titles, edition and content/);
+ assert.match(b.element('catalog-content').innerHTML,/catalog-confirm-identity/);
+ assert.doesNotMatch(b.element('catalog-content').innerHTML,/cannot override the conflict/);
 });

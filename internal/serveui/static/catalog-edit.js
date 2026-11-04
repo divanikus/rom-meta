@@ -81,8 +81,8 @@ function catalogRenderForm(){
  const host=$("catalog-form-host");if(!host)return;
  host.innerHTML=catalogForm(catalogUI.base,catalogUI.formProfile,catalogUI.group?.conflicts||[]);catalogBindForm();
 }
-function catalogProfilePreview(card){
- if(!card)return '<p class="secondary">Resolve the highlighted values, then preview the result.</p>';
+function catalogProfilePreview(card,emptyMessage="Preview the result to inspect the merged card."){
+ if(!card)return '<p class="secondary">'+cEscape(emptyMessage)+'</p>';
  const profile=card.profile||{};
  return '<h3>'+cEscape(profile.title||card.fields?.title||"Result")+'</h3>'+["developer","publisher","release_date","genres","players"].map(key=>{
   const value=catalogFieldValue(key,{},profile);return value?'<div class="catalog-field"><div class="catalog-field-label">'+cEscape(catalogLabels[key])+'</div><div class="catalog-field-value">'+cEscape(value)+'</div></div>':'';
@@ -137,7 +137,13 @@ async function catalogBuildPlan(manual=false){
   catalogRenderPlan();
  }catch(error){catalogShowError(error);}finally{catalogUI.busy=false;}
 }
-function catalogGroupReason(pg){if(pg.conflicts?.length)return "Choose the saved values to keep: "+[...new Set(pg.conflicts.map(key=>catalogLabels[key.split(".")[0]]||key))].join(", ")+ ".";return (pg.reason||"").replace("conflicting saved fields: description","Choose which saved description to keep.").replace("confirm regional titles, edition and content with --interactive","compare the regional titles, edition and content before confirming");}
+function catalogGroupReason(pg){if(pg.status==="review"&&pg.conflicts?.length)return "Choose the saved values to keep: "+[...new Set(pg.conflicts.map(key=>catalogLabels[key.split(".")[0]]||key))].join(", ")+ ".";return (pg.reason||"").replace("confirm regional titles, edition and content with --interactive","compare the regional titles, edition and content before confirming");}
+function catalogReviewHint(pg){
+ if(pg.status==="blocked")return "This group cannot be merged. Field edits or identity confirmation cannot override the conflict. Check the reason above, resolve the underlying card or file-access problem, then build a new plan.";
+ if(pg.conflicts?.length)return "Choose the highlighted saved values, then preview the result.";
+ if(pg.needs_identity)return "Compare the regional titles, edition and content before confirming that these cards represent the same game.";
+ return "Preview the result to inspect the merged card.";
+}
 function catalogRenderPlan(){
  catalogUI.mode="plan";catalogUI.group=null;catalogUI.dirty=false;
  const plan=catalogUI.plan;if(!plan)return;catalogHeader("Review duplicates",plan.platform+" · Suggested groups and primary cards are already prepared.");
@@ -156,10 +162,10 @@ function catalogSelectionCount(){const n=catalogUI.selected.size;const button=$(
 function catalogCandidate(card,index,fields){
  const g=card.game,p=card.profile||{},snapshot=card.edit.fields,cover=bestCover(card.local_media||[]),primary=g.folder===catalogUI.group.group.Keep.Folder;
  return '<article class="catalog-candidate '+(primary?'is-primary':'')+'">'+(cover?'<img src="'+escapeAttr(cover.url)+'" alt="'+escapeAttr(p.title||g.folder)+'">':'')+'<span class="catalog-badge">'+(primary?"Suggested primary":"Candidate")+'</span><h3>'+cEscape(p.title||g.folder)+'</h3><p class="secondary">'+cEscape(g.folder)+'</p>'+
- (catalogUI.group.group.NativeDigest?'':'<button class="tab-button" data-candidate-primary="'+index+'" '+(primary?'disabled':'')+'>Use as primary</button>')+
+ (catalogUI.group.group.NativeDigest?'':'<button class="tab-button" data-candidate-primary="'+index+'" '+(primary||catalogUI.group.status==="blocked"?'disabled':'')+'>Use as primary</button>')+
  fields.map(key=>{
   const values=catalogUI.cards.map(c=>catalogFieldValue(key,c.edit.fields,c.profile));const differs=new Set(values).size>1;const local=Object.prototype.hasOwnProperty.call(snapshot,key);
-  return '<div class="catalog-field '+(differs?'different':'')+'"><div class="catalog-field-label"><span>'+cEscape(catalogLabels[key])+(differs?' · differs':'')+' · '+(local?'saved':'source')+'</span>'+(local&&key!=="title"&&!catalogUI.group.group.NativeDigest?'<button class="tab-button" data-candidate-value="'+index+'" data-value-key="'+key+'">Use value</button>':'')+'</div><div class="catalog-field-value">'+cEscape(values[index]||"—")+'</div></div>';
+  return '<div class="catalog-field '+(differs?'different':'')+'"><div class="catalog-field-label"><span>'+cEscape(catalogLabels[key])+(differs?' · differs':'')+' · '+(local?'saved':'source')+'</span>'+(local&&key!=="title"&&!catalogUI.group.group.NativeDigest&&catalogUI.group.status!=="blocked"?'<button class="tab-button" data-candidate-value="'+index+'" data-value-key="'+key+'">Use value</button>':'')+'</div><div class="catalog-field-value">'+cEscape(values[index]||"—")+'</div></div>';
  }).join("")+'<details><summary>Releases, media & evidence</summary>'+renderReleases(p.releases||g.releases||[])+'<p>'+cEscape((card.local_media||[]).length)+" local media files"+'</p><button class="tab-button" data-candidate-inspect="'+index+'">Inspect full card</button><pre>'+cEscape(card.catalog_yaml||"")+'</pre></details></article>';
 }
 async function catalogReviewGroup(id){
@@ -186,11 +192,11 @@ function catalogAcceptGroup(group){
  if(group.status==="ready")catalogUI.selected.add(group.id);else catalogUI.selected.delete(group.id);
 }
 function catalogRenderReview(){
- const pg=catalogUI.group,g=pg.group;
+ const pg=catalogUI.group,g=pg.group,blocked=pg.status==="blocked";
  $("catalog-content").innerHTML='<button class="catalog-back" id="catalog-back">← Back to plan</button><div id="catalog-feedback">'+(pg.reason?catalogNotice(catalogGroupReason(pg),pg.status==="blocked"?"error":"warn"):'')+'</div><div class="catalog-comparison"><div class="catalog-candidates">'+catalogUI.cards.map((card,i)=>catalogCandidate(card,i,["title","alternate_titles","description","descriptions","developer","publisher","release_date","genres","players"])).join("")+'</div><section class="catalog-result"><span class="catalog-eyebrow">Result</span><h3>'+cEscape(g.Keep.Title||g.Keep.Folder)+'</h3>'+
- (g.NativeDigest?'<p>MAME chooses its primary from the accepted snapshot. Edit individual cards in the library before rebuilding this plan.</p>':'<details><summary>Correct the result</summary><div id="catalog-form-host"></div></details>')+
- (pg.needs_identity?'<label class="catalog-confirm"><input type="checkbox" id="catalog-confirm-identity" '+(g.ReviewAccepted?'checked':'')+'>These cards represent the same game.</label>'+(pg.manual?'<label class="catalog-form">Evidence for this decision<input id="catalog-identity-reason" value="'+escapeAttr(g.ReviewReason||"")+'" placeholder="Why these releases belong together"></label>':''):'')+
- '<div class="catalog-actions"><button class="tab-button" id="catalog-preview-group">Preview result</button><button class="catalog-primary" id="catalog-commit" '+(pg.status!=="ready"||catalogUI.dirty?'disabled':'')+'>Apply this merge</button></div><p class="secondary" id="catalog-preview-feedback">'+(catalogUI.dirty?"Changes need a new preview.":"Result matches the current preview.")+'</p><div id="catalog-result-preview">'+catalogProfilePreview(catalogUI.preview)+'</div><details><summary>Why this group?</summary>'+(g.Evidence||[]).map(e=>'<p>'+cEscape(e.Source+": "+e.Field+" · "+e.Value)+'</p>').join("")+'</details><details><summary>Affected files</summary><pre>'+cEscape((g.FileChanges||[]).map(f=>f.Action+": "+f.FromFolder+"/"+f.Path+" → "+f.Target).join("\n")||"Catalog documents and merged card folders")+'</pre></details>'+
+ (blocked?'':g.NativeDigest?'<p>MAME chooses its primary from the accepted snapshot. Edit individual cards in the library before rebuilding this plan.</p>':'<details><summary>Correct the result</summary><div id="catalog-form-host"></div></details>')+
+ (!blocked&&pg.needs_identity?'<label class="catalog-confirm"><input type="checkbox" id="catalog-confirm-identity" '+(g.ReviewAccepted?'checked':'')+'>These cards represent the same game.</label>'+(pg.manual?'<label class="catalog-form">Evidence for this decision<input id="catalog-identity-reason" value="'+escapeAttr(g.ReviewReason||"")+'" placeholder="Why these releases belong together"></label>':''):'')+
+ '<div class="catalog-actions"><button class="tab-button" id="catalog-preview-group" '+(blocked?'disabled':'')+'>Preview result</button><button class="catalog-primary" id="catalog-commit" '+(pg.status!=="ready"||catalogUI.dirty?'disabled':'')+'>Apply this merge</button></div><p class="secondary" id="catalog-preview-feedback">'+(blocked?"Merge unavailable for this group.":catalogUI.dirty?"Changes need a new preview.":pg.status==="review"?"A decision is needed before applying.":"Result matches the current preview.")+'</p><div id="catalog-result-preview">'+catalogProfilePreview(catalogUI.preview,catalogReviewHint(pg))+'</div><details><summary>Why this group?</summary>'+(g.Evidence||[]).map(e=>'<p>'+cEscape(e.Source+": "+e.Field+" · "+e.Value)+'</p>').join("")+'</details><details><summary>Affected files</summary><pre>'+cEscape((g.FileChanges||[]).map(f=>f.Action+": "+f.FromFolder+"/"+f.Path+" → "+f.Target).join("\n")||"Catalog documents and merged card folders")+'</pre></details>'+
  '<div class="catalog-actions"><button class="tab-button" id="catalog-keep-separate" '+(!g.Evidence?.length||g.NativeDigest?'disabled':'')+'>Keep separate</button></div></section></div>';
  catalogRenderForm();
  $("catalog-back").addEventListener("click",()=>{if(!catalogUI.dirty||window.confirm("Discard unpreviewed changes?"))catalogRenderPlan();});
@@ -228,6 +234,15 @@ async function catalogPreviewGroup(){
   catalogAcceptGroup(response.group);if(catalogUI.version!==version){catalogUI.dirty=true;return;}catalogUI.preview=response.preview;catalogUI.dirty=false;catalogUI.primary="";catalogRenderReview();
  }catch(error){catalogShowError(error);}finally{catalogUI.busy=false;}
 }
+async function catalogRefreshLibrary(){
+ try{
+  state.platforms=await fetchJSON("/api/platforms");
+  $("platform-count").textContent=String(state.platforms.length);renderPlatforms();
+ }catch(error){
+  $("catalog-content").insertAdjacentHTML("beforeend",catalogNotice("Changes were saved, but the platform list could not refresh. Reload the page: "+error.message,"warn"));
+ }
+ if(state.platform===catalogUI.platform)selectPlatform(state.platform);
+}
 async function catalogApply(decisions){
  if(catalogUI.busy||!decisions.length)return;catalogUI.busy=true;catalogUI.mode="applying";
  catalogHeader("Applying reviewed changes","Keep this window open while the selected groups are saved.");
@@ -236,8 +251,8 @@ async function catalogApply(decisions){
   const response=await catalogPost("/api/catalog/fold-apply",{plan:catalogUI.plan.id,decisions});catalogUI.plan=null;catalogUI.dirty=false;
   catalogHeader("Catalog updated",catalogUI.platform);
   $("catalog-content").innerHTML='<div class="catalog-empty"><div class="catalog-saved">✓</div><h3>'+response.result.applied+' groups merged · '+response.result.kept_separate+' kept separate</h3><p>Open the library to inspect your saved cards.</p></div>'+(response.warning?catalogNotice(response.warning,"warn"):'')+(response.result.backups?.length?'<details class="raw-details"><summary>Recovery locations</summary><pre>'+cEscape(response.result.backups.join("\n"))+'</pre></details>':'');
-  catalogUI.compare.clear();catalogUpdateTools();if(state.platform===catalogUI.platform)selectPlatform(state.platform);
- }catch(error){if(error.consumed)catalogUI.plan=null;catalogHeader("Review needed","Build a new plan before retrying.");catalogShowError(error);if(error.result?.applied||error.result?.kept_separate){$("catalog-content").insertAdjacentHTML("beforeend",catalogNotice("Completed before the stop: "+error.result.applied+" merged; "+error.result.kept_separate+" kept separate.","warn"));selectPlatform(state.platform);}}finally{catalogUI.busy=false;catalogUI.mode="done";}
+  catalogUI.compare.clear();catalogUpdateTools();await catalogRefreshLibrary();
+ }catch(error){if(error.consumed)catalogUI.plan=null;catalogHeader("Review needed","Build a new plan before retrying.");catalogShowError(error);if(error.result?.applied||error.result?.kept_separate){$("catalog-content").insertAdjacentHTML("beforeend",catalogNotice("Completed before the stop: "+error.result.applied+" merged; "+error.result.kept_separate+" kept separate.","warn"));await catalogRefreshLibrary();}}finally{catalogUI.busy=false;catalogUI.mode="done";}
 }
 $("catalog-dialog").addEventListener("cancel",event=>{event.preventDefault();catalogClose();});
 $("catalog-close").addEventListener("click",catalogClose);
