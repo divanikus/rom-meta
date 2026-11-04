@@ -10,7 +10,13 @@ A merge needs both compatible release content and confirmed identity on the
 same platform. Discovery links alone do not satisfy either requirement.
 
 Content classification removes recognized region, language, retail revision,
-numbered disc/side, technical serial and verified-dump qualifiers. Demo/trial,
+numbered disc/side, technical serial and verified-dump qualifiers. Exact trailing
+`RE` / `RE-1` / `RE2`, `Alt` / `Alt 2`, `Rerelease`, `Reprint` and numeric
+`Version` labels identify release versions, not separate game products. Known
+`Made in` geographic labels are also neutral; unknown places/labels remain held.
+These labels are normalized only for grouping and identity comparison: literal
+release names, hashes and source observations remain unchanged. Matching labels
+alone never establishes game identity. Demo/trial,
 beta/prototype, sample, preview/debug and promotional stages are distinct releases
 inside the same confirmed game, including different regions and build dates.
 Their names, tags, build detail and fingerprints remain distinct. Addons,

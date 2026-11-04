@@ -180,3 +180,26 @@ func TestExplicitEditionSubtitlesDoNotNeedMarketingAdjectiveLists(t *testing.T) 
 		}
 	}
 }
+
+func TestReleaseVersionsDoNotCreateProductBoundaries(t *testing.T) {
+	for _, base := range []string{"Orbit", "星の物語", "Alt Racer", "RE Fighter"} {
+		_, expected := Analyze(base + " (USA)")
+		for _, marker := range []string{"RE", "RE-1", "RE2", "RE125", "Alt", "Alt 2", "Rerelease", "Reprint", "Version 2.00S", "Made in Japan", "Made in EU", "Made in E.U."} {
+			title, actual := Analyze(base + " (Europe) (" + marker + ")")
+			if title != base || actual != expected {
+				t.Fatalf("%s: %q %+v", marker, title, actual)
+			}
+			_, edition := Analyze(base + " (USA) (Special Edition) (" + marker + ")")
+			if Boundary([]Profile{expected}, []Profile{edition}) == "" {
+				t.Fatal("version removed edition", marker)
+			}
+		}
+	}
+	for _, marker := range []string{"RE Master", "Version 2.0 Special", "Alt Story", "Alt A", "Rerelease Collection", "Reprint Edition", "Made in Unknown", "Mega Power, Sega Pro", "3R", "Limited Run Games"} {
+		_, base := Analyze("Orbit (USA)")
+		title, p := Analyze("Orbit (Europe) (" + marker + ")")
+		if title == "Orbit" || Boundary([]Profile{base}, []Profile{p}) == "" {
+			t.Fatal("unknown label erased", marker)
+		}
+	}
+}

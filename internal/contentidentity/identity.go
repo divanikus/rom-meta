@@ -46,6 +46,10 @@ func (p Profile) Key() string {
 
 var qualifier = regexp.MustCompile(`\s*[([]([^()\[\]]*)[)\]]\s*$`)
 var technical = regexp.MustCompile(`(?i)^(rev(ision)?[ ._-]*[a-z0-9.]+|v[0-9][a-z0-9.]*|disc [0-9]+( of [0-9]+)?|disk [0-9]+|side [ab]|layer [0-9]+|[0-9x]{4}-[0-9x]{2}-[0-9x]{2}|[a-z]{4}[-_ ]?[0-9]{5}|[!])$`)
+
+// Conventional release/mastering labels identify versions of the same product.
+// Keep these exact: unknown labels and commercial editions remain boundaries.
+var releaseVersion = regexp.MustCompile(`(?i)^(re([ -]?[0-9]+)?|alt( [0-9]+)?|rerelease|reprint|version [0-9]+([.][0-9]+)*[a-z]?)$`)
 var edition = regexp.MustCompile(`(?i)(^|[ :–—-]+)((special|limited|collector'?s?|complete|definitive|deluxe|premium|ultimate|gold|extended|enhanced|anniversary|goty|game of the year) edition|director'?s? cut|special disc|bonus disc|expansion pack|append disc)$`)
 var editionLabel = regexp.MustCompile(`(?i)(\bedition\b|director[']?s? cut)`)
 
@@ -233,8 +237,17 @@ func Analyze(name string, tags ...string) (string, Profile) {
 }
 
 func neutral(field string) bool {
-	if technical.MatchString(field) {
+	if technical.MatchString(field) || releaseVersion.MatchString(field) {
 		return true
+	}
+	if place, ok := strings.CutPrefix(strings.ToLower(field), "made in "); ok {
+		place = strings.ReplaceAll(strings.TrimSpace(place), ".", "")
+		if place == "eu" {
+			return true
+		}
+		if region, ok := regions.NormalizeDATDisplay(place); ok && region != "Unknown" && region != "World" && region != "Export" {
+			return true
+		}
 	}
 	parts := strings.Split(field, ",")
 	languages := ",ar,bg,ca,cs,cy,da,de,el,en,es,et,fa,fi,fr,he,hr,hu,id,it,ja,ko,lt,lv,ms,nl,no,pl,pt,ro,ru,sk,sl,sr,sv,th,tr,uk,vi,zh,"

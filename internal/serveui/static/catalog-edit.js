@@ -149,7 +149,7 @@ function catalogRenderPlan(){
  catalogUI.mode="plan";catalogUI.group=null;catalogUI.dirty=false;
  const plan=catalogUI.plan;if(!plan)return;catalogHeader("Review duplicates",plan.platform+" · Suggested groups and primary cards are already prepared.");
  const groups=plan.groups;const count=status=>groups.filter(g=>g.status===status).length;
- $("catalog-content").innerHTML='<div class="catalog-metrics">'+["ready","review","blocked"].map(status=>'<div class="catalog-metric '+status+'"><strong>'+count(status)+'</strong><span>'+catalogStatus[status]+'</span></div>').join("")+'<div id="catalog-feedback"></div>'+
+ $("catalog-content").innerHTML='<div class="catalog-metrics">'+["ready","review","blocked"].map(status=>'<div class="catalog-metric '+status+'"><strong>'+count(status)+'</strong><span>'+catalogStatus[status]+'</span></div>').join("")+'</div><div id="catalog-feedback"></div>'+
  (groups.length&&count("blocked")===groups.length?catalogNotice("No groups are ready to merge. Compare lets you inspect why each group is blocked; it does not approve a merge.","warn"):"")+
  (groups.length?'<div class="catalog-plan-list">'+groups.map(pg=>{
   const g=pg.group;const names=[g.Keep,...(g.Merge||[])].map(x=>x.Folder);

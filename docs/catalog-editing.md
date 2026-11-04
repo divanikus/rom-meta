@@ -33,7 +33,9 @@ Select a platform and choose **Review duplicates**. The server runs the existing
 fold rules and proposes groups, primary cards and merged results automatically:
 
 - **Ready to apply**: identity, content, files and saved fields pass validation.
-  These groups start selected. Apply them together without opening each comparison.
+  These groups start selected. Inspect any sample, then apply them together without
+  opening every comparison. Recognized revision/pressing labels such as RE and Alt
+  do not by themselves require owner confirmation; provider identity still must agree.
 - **Needs your decision**: confirm which cards belong together despite identity,
   edition or provider-ID doubts, or choose between differing saved field values.
 - **Merge blocked**: unreadable files, conflicting release payloads, colliding
