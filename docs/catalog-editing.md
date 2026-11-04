@@ -24,10 +24,12 @@ rom-meta serve --data-root "<catalog>" --edit
 
 **Library / Operations / Export / Settings** separate browsing, background work,
 export-profile preparation and library defaults. Platform review/statistics live
-beside the selected platform; the edit pencil lives on the card. Settings currently
-shows source priorities; configuration editing still uses YAML.
+beside the selected platform; the edit pencil lives on the card. Settings edits
+library configuration, as described below.
 
-1. Choose **Import your first DAT** (or **Import DAT** in the header).
+1. Choose **Import your first DAT** in an empty library or the **+** beside
+   **Platforms**. Operations offers a new import action when viewing an existing
+   operation; the upload screen itself has just its upload/prepare action.
 2. Upload an ordinary XML DAT (`.dat` or `.xml`) or ZIP. For multiple DATs in a
    ZIP, choose the member. The optional platform name overrides detection.
 3. Review the prepared platform, card/release/fingerprint counts and sample
@@ -55,6 +57,35 @@ Successful imports, dismissed uploads and expired records clean up their inputs.
 An interrupted server can leave its `.rommeta/web-import-*` upload directories;
 remove those only after ensuring their owning server is stopped. A running import
 cannot be cancelled/dismissed in this first workflow.
+
+## Edit library settings
+
+**Settings** saves the actual library YAML used by the CLI:
+
+| Section | Scope |
+| --- | --- |
+| Source priorities | Metadata, artwork and video order; enables/disables automatic source selection. Export profiles can override these defaults. |
+| Enrichment | Source order for automatic metadata/artwork/video acquisition and parallel-job count. Saving does not start a fetch. |
+| Source connections | Configured provider addresses, snapshot paths/URLs, request limits, OAuth endpoints and archive tools where applicable. Credentials show availability only. |
+| Folding & regions | Preferred release regions, regional aliases/groups and per-platform overrides. Applies to newly prepared DAT/fold plans. |
+| Platform names & mappings | Local aliases and provider names/IDs in `config/platforms.yaml`; extends the built-in registry. Legacy enrichment aliases have their own section. |
+| Media policies | Source policy/attribution records in `source-policies.yaml`. |
+
+Common order/number/text settings have controls. Region groups, platform mappings
+and media-policy documents have YAML editors with validation. **Save changes**
+writes the selected section; drafts survive navigation. **Discard changes**
+restores the loaded values; **Reload saved** rereads a section after an external
+edit. Stale revisions and active catalog writers block saving without discarding
+the draft. Unknown configuration outside submitted fields and credential blocks
+are preserved, including existing file modes.
+
+Credential values remain in `config/secrets.yaml` or referenced environment
+variables; the browser neither returns nor edits them. Use
+[source setup](source-setup.md) to change credentials. Service bind address and
+access protection remain serve startup options; export-profile preferences remain
+in Export. Legacy descriptive `rules` and identity/fingerprint/grouping priority
+entries are retained; this settings editor does not imply runtime behavior for
+fields the current consumers do not use.
 
 ## Correct a card
 

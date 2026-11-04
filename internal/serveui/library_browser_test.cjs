@@ -6,7 +6,7 @@ const script=readFileSync(require('node:path').join(__dirname,'static/library.js
 function browser(){
  const elements=new Map(),calls=[],timers=[];
  function element(id){if(!elements.has(id))elements.set(id,{innerHTML:'',textContent:'',value:'',files:[],listeners:{},classes:new Set(),classList:{add(name){element(id).classes.add(name)},toggle(name,on){on?element(id).classes.add(name):element(id).classes.delete(name)}},setAttribute(){},replaceChildren(){},querySelectorAll:()=>[],addEventListener(k,v){this.listeners[k]=v},contains:()=>false,focus(){}});return elements.get(id);}
- const context=vm.createContext({console,$:element,document:{activeElement:null,querySelectorAll:()=>[],createTextNode:s=>s},
+ const context=vm.createContext({console,$:element,window:{addEventListener(){},confirm:()=>true},document:{activeElement:null,querySelectorAll:()=>[],createTextNode:s=>s},
   state:{view:'browse',exportMode:false,platforms:[],platformsLoaded:true,platform:'Console',game:{id:'kept'},games:[{id:'kept'}]},
   catalogUI:{enabled:true},escapeHTML:s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),escapeAttr:s=>String(s??'').replaceAll('"','&quot;').replaceAll('<','&lt;'),formatNumber:n=>String(n??0),
   fetchJSON:async path=>{calls.push(['GET',path]);return []},catalogPost:async(path,body)=>{calls.push(['POST',path,JSON.parse(JSON.stringify(body))]);return {id:body.id,revision:body.revision,state:'importing',filename:'example.dat'}},
@@ -65,4 +65,49 @@ test('changed options require a new plan before applying',()=>{
 test('ready plan offers explicit import and keeps changed options separate',()=>{
  const b=browser(),html=b.run('operationDetail({id:"ready",state:"ready",filename:"example.dat",revision:2,summary:{games:2,releases:2,fingerprints:2,platform:"Console",dataset:"example",added:2,reconciled:0}})');
  assert.match(html,/Import into library/);assert.match(html,/The plan has not changed your cards/);
+});
+
+test('import entry is not duplicated on the upload screen',()=>{
+ const b=browser();b.run('libraryRenderOperations()');
+ assert.doesNotMatch(b.element('operations-pane').innerHTML,/data-import-new/);
+ b.run('libraryUI.jobs=[{id:"job",state:"ready",filename:"a.dat"}];libraryUI.selected="job";libraryRenderOperations()');
+ assert.match(b.element('operations-pane').innerHTML,/data-import-new/);
+});
+function configureSettings(b){
+ b.run('state.view="settings";librarySettingsUI.sections=[{id:"priorities",title:"Source priorities",help:"Saved defaults",file:"config/sources.yaml",revision:"before",fields:[{id:"metadata",label:"Metadata",kind:"list",value:["launchbox","igdb"],choices:["launchbox","igdb"]}]}]');
+}
+test('settings drafts survive navigation and list reordering changes only the draft',()=>{
+ const b=browser();configureSettings(b);
+ b.run('settingsListChange("metadata","igdb","up");libraryNavigate("operations");libraryNavigate("settings")');
+ assert.equal(b.run('settingsValue(settingsSection(),settingsSection().fields[0]).join(",")'),'igdb,launchbox');
+ assert.equal(b.run('settingsSection().fields[0].value.join(",")'),'launchbox,igdb');
+ assert.equal(b.calls.filter(x=>x[0]==='POST').length,0);
+});
+test('settings save sends explicit empty list with the loaded revision',async()=>{
+ const b=browser();configureSettings(b);b.run('settingsChange("metadata",[]);fetchJSON=async path=>path==="/api/catalog/settings"?librarySettingsUI.sections:{}');
+ await b.run('librarySaveSettings()');
+ assert.deepEqual(b.calls.filter(x=>x[0]==='POST'),[['POST','/api/catalog/settings',{section:'priorities',revision:'before',values:{metadata:[]}}]]);
+ assert.equal(b.run('librarySettingsUI.drafts.size'),0);
+});
+test('a stale settings save retains edits and reports the conflict',async()=>{
+ const b=browser();configureSettings(b);b.run('settingsChange("metadata",[]);catalogPost=async()=>{throw new Error("Settings changed; reload")}');
+ await b.run('librarySaveSettings()');
+ assert.equal(b.run('librarySettingsUI.drafts.size'),1);
+ assert.match(b.run('librarySettingsUI.error'),/Settings changed/);
+});
+test('refresh failure after a committed settings save is shown as saved',async()=>{
+ const b=browser();configureSettings(b);b.run('settingsChange("metadata",[]);catalogPost=async()=>({saved:true,revision:"after"});fetchJSON=async()=>{throw new Error("Offline")}');
+ await b.run('librarySaveSettings()');
+ assert.equal(b.run('librarySettingsUI.drafts.size'),0);assert.equal(b.run('librarySettingsUI.error'),'');
+ assert.match(b.run('librarySettingsUI.notice'),/Saved to library.*Offline/);
+ assert.equal(b.run('settingsSection().revision'),'after');
+});
+
+test('saving one section keeps other same-file drafts saveable but preserves older conflicts',async()=>{
+ const b=browser();configureSettings(b);
+ b.run('librarySettingsUI.sections.push({id:"fetch",title:"Enrichment",file:"config/sources.yaml",revision:"before",fields:[]},{id:"source:igdb",title:"IGDB",file:"config/sources.yaml",revision:"before",fields:[]});librarySettingsUI.drafts.set("fetch",{revision:"before",values:{concurrency:3}});librarySettingsUI.drafts.set("source:igdb",{revision:"older",values:{concurrency:2}});settingsChange("metadata",[]);catalogPost=async()=>({saved:true,revision:"after"});fetchJSON=async path=>path==="/api/catalog/settings"?librarySettingsUI.sections:{}');
+ await b.run('librarySaveSettings()');
+ assert.equal(b.run('librarySettingsUI.drafts.get("fetch").revision'),'after');
+ assert.equal(b.run('librarySettingsUI.drafts.get("fetch").values.concurrency'),3);
+ assert.equal(b.run('librarySettingsUI.drafts.get("source:igdb").revision'),'older');
 });

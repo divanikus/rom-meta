@@ -944,7 +944,7 @@
         <button class="tab-button" id="export-mode" type="button" aria-pressed="false">Export</button>
         <button class="tab-button" id="settings-tab" type="button">Settings</button>
       </nav>
-      <div class="library-header-actions"><small id="operations-status" role="status"></small><button class="catalog-primary hidden" id="library-import">＋ Import DAT</button></div>
+      <div class="library-header-actions"><small id="operations-status" role="status"></small></div>
       <div class="export-bar" id="export-bar">
         <button class="hidden" id="library-mode" type="button" aria-pressed="true" tabindex="-1">Library</button>
 <div class="export-options hidden" id="export-controls">
@@ -977,7 +977,7 @@
       <div class="pane-head">
         <div class="pane-title">
           <span>Platforms</span>
-          <span id="platform-count">0</span>
+          <span class="platform-heading-actions"><span id="platform-count">0</span><button class="tab-button platform-add hidden" id="library-import" type="button" title="Import DAT" aria-label="Add platform — import DAT">＋</button></span>
         </div>
       </div>
       <div class="scroll" id="platform-list"></div>

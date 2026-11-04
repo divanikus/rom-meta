@@ -41,6 +41,15 @@ server-session state, expire after 24 inactive hours, and do not survive restart
 See [the import workflow and limits](catalog-editing.md#import-into-a-new-library)
 and the embedded OpenAPI reference for request shapes.
 
+### Library settings
+
+Editable servers expose `GET/POST /api/catalog/settings`. GET returns sections,
+field values and per-file revisions without credential values. POST supplies a
+section ID, its revision and only changed field IDs/values. Saves share the CLI
+writer lock, preserve unrelated YAML and update catalog revision state. Settings
+include priorities, acquisition, provider connections, fold regions, local platform
+mappings and media policies. See [settings scope](catalog-editing.md#edit-library-settings).
+
 ### Card sections
 
 The card has three tabs in both Library and Export preview:

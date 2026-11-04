@@ -98,12 +98,12 @@ function libraryRenderOperations(){
  const focused=document.activeElement;
  if(focused&&pane.contains?.(focused)&&["INPUT","SELECT"].includes(focused.tagName))return;
  const selected=libraryUI.jobs.find(j=>j.id===libraryUI.selected);
- pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">YOUR LIBRARY</span><h1>Operations</h1><p>Import, review, and return whenever you are ready.</p></div><button class="tab-button" data-import-new>＋ Import DAT</button></div>'+
+ pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">YOUR LIBRARY</span><h1>Operations</h1><p>Import, review, and return whenever you are ready.</p></div>'+(selected?'<button class="tab-button" data-import-new>＋ Import DAT</button>':'')+'</div>'+
  (libraryUI.error?'<p class="operation-error" role="alert">'+escapeHTML(libraryUI.error)+'</p>':"")+
  '<div class="operations-layout"><aside class="operations-list" aria-label="Library operations">'+
  (libraryUI.jobs.length?libraryUI.jobs.map(j=>'<button class="operation-row '+(j.id===libraryUI.selected?"active":"")+'" data-operation-select="'+j.id+'"><strong>'+escapeHTML(j.filename)+'</strong><span>'+escapeHTML(operationLabels[j.state]||j.state)+'</span><small>'+escapeHTML(j.summary?.platform||j.member||"DAT import")+'</small></button>').join(""):'<p class="secondary">Your operations will appear here.</p>')+
  '<p class="secondary operations-lifetime">Progress stays with the running server, even when you close this browser. Inactive operations expire after 24 hours. Restarting the server clears this list.</p></aside>'+
- (selected?operationDetail(selected):'<section class="operation-detail import-welcome"><span class="import-symbol" aria-hidden="true">↥</span><h2>Bring your library to life</h2><p>Start with a DAT. RomMeta prepares the game cards and fingerprints; your ROM files stay where they are.</p><form id="dat-upload-form"><label class="upload-label">Choose a DAT or ZIP<input type="file" id="dat-upload-file" name="file" accept=".dat,.xml,.zip" '+(libraryUI.uploading?"disabled":"")+'></label><p class="secondary">XML DATs from No-Intro, Redump and compatible datasets. ZIPs can contain several DATs. Up to 256 MiB.</p><button class="catalog-primary" type="submit" '+(libraryUI.uploading?"disabled":"")+'>'+(libraryUI.uploading?"Uploading…":"Upload & prepare")+'</button><p id="dat-upload-progress" role="status">'+(libraryUI.uploading?"Uploading "+libraryUI.uploadPercent+"% — keep this page open until the upload finishes.":"Uploading prepares a plan. You choose when to import.")+'</p></form><details><summary>Prefer the command line?</summary><p>The CLI uses the same importer and catalog rules.</p><pre>rom-meta dat import &quot;&lt;file.dat-or-zip&gt;&quot; --data-root &quot;&lt;library&gt;&quot;\n# Add --apply after reviewing the plan.</pre><p class="secondary">Use the CLI for classified MAME listxml imports.</p></details></section>')+'</div>';
+ (selected?operationDetail(selected):'<section class="operation-detail import-welcome"><span class="import-symbol" aria-hidden="true">↥</span><h2>Bring your library to life</h2><p>Start with a DAT. RomMeta prepares the game cards and fingerprints; your ROM files stay where they are.</p><form id="dat-upload-form"><label class="upload-label">Choose a DAT or ZIP<input type="file" id="dat-upload-file" name="file" accept=".dat,.xml,.zip" '+(libraryUI.uploading?"disabled":"")+'></label><p class="secondary">Preferred datasets: <strong>No-Intro</strong> for cartridges, <strong>Redump</strong> for discs, and <strong>MAME</strong> for arcade systems. Upload No-Intro, Redump or compatible XML DATs here; MAME listxml currently uses the CLI. ZIPs can contain several DATs. Up to 256 MiB.</p><button class="catalog-primary" type="submit" '+(libraryUI.uploading?"disabled":"")+'>'+(libraryUI.uploading?"Uploading…":"Upload & prepare")+'</button><p id="dat-upload-progress" role="status">'+(libraryUI.uploading?"Uploading "+libraryUI.uploadPercent+"% — keep this page open until the upload finishes.":"Uploading prepares a plan. You choose when to import.")+'</p></form><details><summary>Prefer the command line?</summary><p>The CLI uses the same importer and catalog rules.</p><pre>rom-meta dat import &quot;&lt;file.dat-or-zip&gt;&quot; --data-root &quot;&lt;library&gt;&quot;\n# Add --apply after reviewing the plan.</pre><p class="secondary">Use the CLI for classified MAME listxml imports.</p></details></section>')+'</div>';
  pane.querySelectorAll("[data-operation-select]").forEach(b=>b.addEventListener("click",()=>{libraryUI.selected=b.dataset.operationSelect;libraryRenderOperations();}));
  pane.querySelectorAll("[data-import-new]").forEach(b=>b.addEventListener("click",libraryOpenImport));
  $("dat-upload-form")?.addEventListener("submit",libraryUploadDAT);
@@ -156,15 +156,118 @@ async function libraryUploadDAT(event){
  }catch(error){libraryUI.error=error.message;}
  finally{libraryUI.uploading=false;libraryRenderOperations();libraryPollOperations();}
 }
-async function libraryLoadSettings(){
- const pane=$("settings-pane");
- try{
-  const options=await fetchJSON("/api/export-options");libraryUI.settings=options;
-  pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">LIBRARY DEFAULTS</span><h1>Settings</h1><p>These source priorities belong to the library. Export profiles can choose a different order.</p></div></div><div class="settings-cards">'+
-  [["Metadata",options.metadata_sources],["Artwork",options.artwork_sources],["Video",options.video_sources]].map(([label,values])=>'<section class="operation-detail"><h2>'+label+'</h2><ol>'+(values||[]).map(v=>'<li>'+escapeHTML(sourceLabel(v))+'</li>').join("")+'</ol></section>').join("")+
-  '</div><p class="secondary">Library configuration is currently edited in YAML. Use Export to prepare and preview a profile.</p><div class="operation-actions"><a class="tab-button" href="/docs" target="_blank" rel="noopener">API documentation</a><a class="tab-button" href="/api" target="_blank" rel="noopener">API endpoints</a></div>';
- }catch(error){pane.innerHTML='<p class="operation-error">'+escapeHTML(error.message)+'</p>';}
+const librarySettingsUI={sections:null,selected:"priorities",drafts:new Map(),loading:false,saving:false,error:"",notice:""};
+function settingsSection(){return librarySettingsUI.sections?.find(s=>s.id===librarySettingsUI.selected)}
+function settingsValue(section,field){const draft=librarySettingsUI.drafts.get(section.id);return draft&&Object.hasOwn(draft.values,field.id)?draft.values[field.id]:field.value}
+function settingsChange(id,value){
+ const section=settingsSection();if(!section||librarySettingsUI.saving)return;
+ const field=section.fields.find(f=>f.id===id);if(!field)return;
+ let draft=librarySettingsUI.drafts.get(section.id)||{revision:section.revision,values:{}};
+ if(JSON.stringify(value)===JSON.stringify(field.value))delete draft.values[id];else draft.values[id]=value;
+ if(Object.keys(draft.values).length)librarySettingsUI.drafts.set(section.id,draft);else librarySettingsUI.drafts.delete(section.id);
+ librarySettingsUI.error="";librarySettingsUI.notice="";settingsUpdateActions();
 }
+function settingsUpdateActions(){
+ const section=settingsSection(),dirty=!!section&&librarySettingsUI.drafts.has(section.id);
+ if($("settings-save"))$("settings-save").disabled=!dirty||librarySettingsUI.saving;
+ if($("settings-reset"))$("settings-reset").disabled=!dirty||librarySettingsUI.saving;
+ if($("settings-feedback"))$("settings-feedback").textContent=librarySettingsUI.error||librarySettingsUI.notice||(dirty?"Unsaved changes":"");
+}
+function settingsListHTML(section,field){
+ const selected=settingsValue(section,field)||[],choices=Array.from(new Set([...selected,...(field.value||[]),...(field.choices||[])]));
+ return '<div class="settings-list">'+choices.map((source)=>{
+  const index=selected.indexOf(source),enabled=index>=0,attributes=' data-setting-field="'+escapeAttr(field.id)+'" data-setting-source="'+escapeAttr(source)+'"';
+  const label=field.id==="regions"?source:sourceLabel(source);
+  return '<div class="source-order-row"><label><input type="checkbox" data-setting-check'+attributes+(enabled?' checked':'')+' '+(librarySettingsUI.saving?'disabled':'')+'> '+escapeHTML(label)+'</label>'+
+   '<button class="tab-button" data-setting-move="up"'+attributes+' aria-label="Move '+escapeAttr(label)+' up in '+escapeAttr(field.label)+'" '+(index<=0||librarySettingsUI.saving?'disabled':'')+'>↑</button>'+
+   '<button class="tab-button" data-setting-move="down"'+attributes+' aria-label="Move '+escapeAttr(label)+' down in '+escapeAttr(field.label)+'" '+(!enabled||index===selected.length-1||librarySettingsUI.saving?'disabled':'')+'>↓</button></div>';
+ }).join("")+'<div class="settings-add"><input id="setting-add-'+escapeAttr(field.id)+'" aria-label="Add to '+escapeAttr(field.label)+'" placeholder="'+(field.id==="regions"?'Region name':'Source name, e.g. gamelist.my-list')+'"><button class="tab-button" data-setting-add="'+field.id+'">Add</button></div>'+
+ (!selected.length?'<p class="secondary">No sources or regions selected.</p>':"")+'</div>';
+}
+function settingsListChange(fieldID,source,action){
+ const section=settingsSection(),field=section?.fields.find(f=>f.id===fieldID);if(!field||librarySettingsUI.saving)return;
+ let selected=(settingsValue(section,field)||[]).slice(),index=selected.indexOf(source);
+ if(action==="enable"&&index<0)selected.push(source);
+ else if(action==="disable")selected=selected.filter(v=>v!==source);
+ else if(action==="up"&&index>0)[selected[index-1],selected[index]]=[selected[index],selected[index-1]];
+ else if(action==="down"&&index>=0&&index<selected.length-1)[selected[index+1],selected[index]]=[selected[index],selected[index+1]];
+ else return;
+ settingsChange(fieldID,selected);libraryRenderSettings();
+}
+function libraryRenderSettings(){
+ const pane=$("settings-pane");
+ if(!librarySettingsUI.sections){pane.innerHTML='<h1>Settings</h1><p>'+escapeHTML(librarySettingsUI.error||"Loading library settings…")+'</p>';return}
+ const section=settingsSection()||librarySettingsUI.sections[0];if(!section)return;
+ librarySettingsUI.selected=section.id;
+ pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">LIBRARY SETTINGS</span><h1>Settings</h1><p>Saved in this library and used by the CLI and browser.</p></div></div>'+
+ '<div class="settings-layout"><nav class="settings-nav" aria-label="Settings sections">'+librarySettingsUI.sections.map(s=>'<button class="operation-row '+(s.id===section.id?'active':'')+'" data-settings-section="'+escapeAttr(s.id)+'">'+escapeHTML(s.title.startsWith("Connection · ")?sourceLabel(s.title.slice(13)):s.title)+(librarySettingsUI.drafts.has(s.id)?' · edited':'')+'</button>').join("")+
+ '<p class="secondary">Export profile preferences are in Export. Service address and access protection are configured when starting serve.</p></nav>'+
+ '<section class="operation-detail settings-editor"><h2>'+escapeHTML(section.title.startsWith("Connection · ")?sourceLabel(section.title.slice(13)):section.title)+'</h2><p>'+escapeHTML(section.help)+'</p>'+
+ (section.status?'<p class="settings-credential-status">'+escapeHTML(section.status)+'</p>':"")+
+ section.fields.map(field=>{
+  const value=settingsValue(section,field),id='setting-'+field.id,label=' aria-label="'+escapeAttr(field.label)+'"';
+  const control=field.kind==="list"?settingsListHTML(section,field):field.kind==="yaml"?'<textarea class="settings-yaml" id="'+id+'"'+label+' data-setting-input="'+field.id+'" spellcheck="false" rows="9" '+(librarySettingsUI.saving?'disabled':'')+'>'+escapeHTML(value||"")+'</textarea>':
+   '<input id="'+id+'"'+label+' data-setting-input="'+field.id+'" type="'+(field.kind==="number"?'number':'text')+'" '+(field.kind==="number"?'min="0" max="1000" step="1"':'')+' value="'+escapeAttr(value??"")+'" '+(librarySettingsUI.saving?'disabled':'')+'>';
+  return '<fieldset class="settings-field"><legend>'+escapeHTML(field.label)+'</legend>'+(field.help?'<p class="secondary settings-help">'+escapeHTML(field.help)+'</p>':"")+control+'</fieldset>';
+ }).join("")+
+ '<div class="operation-actions settings-savebar"><button class="catalog-primary" id="settings-save">'+(librarySettingsUI.saving?'Saving…':'Save changes')+'</button><button class="tab-button" id="settings-reset">Discard changes</button><button class="tab-button" id="settings-reload">Reload saved</button><span id="settings-feedback" role="status"></span></div>'+
+ '<p class="secondary settings-file">Saved to '+escapeHTML(section.file)+'. Existing settings outside the edited fields are preserved.</p></section></div>'+
+ '<div class="operation-actions"><a class="tab-button" href="/docs" target="_blank" rel="noopener">API documentation</a><a class="tab-button" href="/api" target="_blank" rel="noopener">API endpoints</a></div>';
+ pane.querySelectorAll("[data-settings-section]").forEach(button=>button.addEventListener("click",()=>{librarySettingsUI.selected=button.dataset.settingsSection;librarySettingsUI.error="";librarySettingsUI.notice="";libraryRenderSettings();}));
+ pane.querySelectorAll("[data-setting-input]").forEach(input=>input.addEventListener("input",()=>{
+  const field=section.fields.find(f=>f.id===input.dataset.settingInput);
+  settingsChange(field.id,field.kind==="number"?(input.value===""?0:Number(input.value)):input.value);
+ }));
+ pane.querySelectorAll("[data-setting-check]").forEach(input=>input.addEventListener("change",()=>settingsListChange(input.dataset.settingField,input.dataset.settingSource,input.checked?"enable":"disable")));
+ pane.querySelectorAll("[data-setting-move]").forEach(button=>button.addEventListener("click",()=>settingsListChange(button.dataset.settingField,button.dataset.settingSource,button.dataset.settingMove)));
+ pane.querySelectorAll("[data-setting-add]").forEach(button=>button.addEventListener("click",()=>{const source=$("setting-add-"+button.dataset.settingAdd).value.trim();if(source)settingsListChange(button.dataset.settingAdd,source,"enable");}));
+ $("settings-save").addEventListener("click",librarySaveSettings);
+ $("settings-reset").addEventListener("click",()=>{if(librarySettingsUI.saving)return;librarySettingsUI.drafts.delete(section.id);librarySettingsUI.error="";librarySettingsUI.notice="";libraryRenderSettings();});
+ $("settings-reload").addEventListener("click",async()=>{
+  if(librarySettingsUI.saving)return;
+  if(librarySettingsUI.drafts.has(section.id)&&!window.confirm("Discard changes in this section and reload saved settings?"))return;
+  librarySettingsUI.drafts.delete(section.id);await libraryLoadSettings(true);
+ });
+ settingsUpdateActions();
+}
+async function libraryLoadSettings(reload=false){
+ if(!catalogUI.enabled){$("settings-pane").innerHTML='<h1>Settings</h1><p>This server is read-only. Start serve with --edit to manage library settings.</p>';return}
+ if(librarySettingsUI.loading)return;
+ if(librarySettingsUI.sections&&!reload){libraryRenderSettings();return}
+ librarySettingsUI.loading=true;
+ try{librarySettingsUI.sections=await fetchJSON("/api/catalog/settings");librarySettingsUI.error="";}
+ catch(error){librarySettingsUI.error=error.message;}
+ finally{librarySettingsUI.loading=false;if(state.view==="settings")libraryRenderSettings();}
+}
+async function librarySaveSettings(){
+ const section=settingsSection(),draft=section&&librarySettingsUI.drafts.get(section.id);
+ if(!draft||librarySettingsUI.saving)return;
+ librarySettingsUI.saving=true;librarySettingsUI.error="";librarySettingsUI.notice="";libraryRenderSettings();
+ try{
+  const result=await catalogPost("/api/catalog/settings",{section:section.id,revision:draft.revision,values:draft.values});
+  // The save is already committed; a subsequent refresh failure must not claim it failed.
+  for(const field of section.fields)if(Object.hasOwn(draft.values,field.id))field.value=draft.values[field.id];
+  // Our own disjoint section save must not invalidate other drafts in the same file.
+  // Older drafts still keep their revision so external changes remain conflicts.
+  const savedRevision=draft.revision;
+  for(const other of librarySettingsUI.sections){
+   if(other.file!==section.file)continue;
+   const pending=librarySettingsUI.drafts.get(other.id);
+   if(pending?.revision===savedRevision)pending.revision=result.revision;
+   if(other.revision===savedRevision)other.revision=result.revision;
+  }
+  section.revision=result.revision;librarySettingsUI.drafts.delete(section.id);
+  librarySettingsUI.notice=result.warning?"Saved. "+result.warning:"Saved to library";
+  try{
+   librarySettingsUI.sections=await fetchJSON("/api/catalog/settings");
+   state.sourceDefaults=await fetchJSON("/api/export-options");
+   if(typeof resetPreviews==="function")resetPreviews();
+  }catch(error){librarySettingsUI.notice+=". Could not refresh: "+error.message;}
+ }catch(error){librarySettingsUI.error=error.message;}
+ finally{librarySettingsUI.saving=false;if(state.view==="settings")libraryRenderSettings();}
+}
+window.addEventListener("beforeunload",event=>{if(librarySettingsUI.drafts.size||librarySettingsUI.saving){event.preventDefault();event.returnValue="";}});
+
 $("operations-tab").addEventListener("click",()=>libraryNavigate("operations"));
 $("settings-tab").addEventListener("click",()=>libraryNavigate("settings"));
 $("library-import").addEventListener("click",libraryOpenImport);

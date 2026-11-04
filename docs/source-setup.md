@@ -19,6 +19,10 @@ EmuMovies uses FTPS. RAR/7z artwork packages need `7z`/`7zz`/`7za` (RAR also acc
 `sources.emumovies.tools.archive_extractor` path in `config/sources.yaml`.
 ZIP packages and direct video files do not need this extractor.
 
+Common acquisition orders, connection limits and snapshot paths can also be
+edited in **Settings** on a server started with `--edit`. Credential availability
+is shown without exposing stored values; credentials are configured below.
+
 ## Configure
 
 1. Run `rom-meta init "<catalog>"` if needed; existing config is preserved.

@@ -7,6 +7,7 @@ import (
 	"rommeta/internal/appinfo"
 	"rommeta/internal/catalogstate"
 	"rommeta/internal/httpdocs"
+	"rommeta/internal/librarysettings"
 )
 
 var browserSpecOnce sync.Once
@@ -57,6 +58,8 @@ func browserOpenAPI() any {
 			responses["409"] = httpdocs.Response("Stale input, expired preview, conflicting data or busy writer.", s.Ref(errorResponse{}))
 			paths[path] = httpdocs.Schema{"post": action}
 		}
+		addWrite("/api/catalog/settings", "Save library settings", "Editable mode and current section revision required. Updates only submitted supported fields under the shared catalog writer lock; preserves other YAML and credentials. Saving does not start imports/downloads.", librarysettings.Request{})
+		paths["/api/catalog/settings"].(httpdocs.Schema)["get"] = op("Read library settings", "Editable mode required. Source priorities, acquisition, connection options, fold regions, platform mappings and media policies. Credential values are never returned.", nil, s.Ref([]librarysettings.Section{}))
 		paths["/api/operations"] = httpdocs.Schema{"get": op("List server operations", "Session-local DAT plans, running imports and results. Closing the browser never cancels accepted work; reconnect using this list. Records expire after 24 hours or restart.", nil, s.Ref([]importOperation{}))}
 		addWrite("/api/catalog/import-plan", "Prepare uploaded DAT", "Select an uploaded ZIP member and optional platform. Returns the same server-owned operation; no card writes. Repeated running requests do not start another worker.", importAction{})
 		addWrite("/api/catalog/import-apply", "Import reviewed DAT", "Requires the current ready revision and unchanged library/settings. Starts one server-owned import under the shared CLI writer lock. Repeated accepted commands return the same operation.", importAction{})
