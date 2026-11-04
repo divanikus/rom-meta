@@ -5,6 +5,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"rommeta/internal/catalogedit"
 	"rommeta/internal/catalogyaml"
 )
 
@@ -12,6 +13,11 @@ import (
 // fields only. It does not silently pick a release or an export language policy.
 func libraryProfile(root *yaml.Node, title, platform string, blocks []sourceBlock) gameProfile {
 	p := buildGameProfile(title, platform, blocks)
+	var savedTitles []titleVariant
+	for _, value := range catalogyaml.Strings(catalogyaml.Value(root, "alternate_titles")) {
+		savedTitles = appendTitleVariants(savedTitles, titleVariant{Title: value})
+	}
+	p.AlternateTitles = appendTitleVariants(savedTitles, p.AlternateTitles...)
 	scalar := func(key string) string { return strings.TrimSpace(catalogyaml.Scalar(catalogyaml.Value(root, key))) }
 	for key, destination := range map[string]*string{"title": &p.Title, "description": &p.Description, "developer": &p.Developer, "publisher": &p.Publisher, "release_date": &p.ReleaseDate, "players": &p.Players, "rating": &p.Rating} {
 		if value := scalar(key); value != "" {
@@ -49,3 +55,16 @@ func libraryProfile(root *yaml.Node, title, platform string, blocks []sourceBloc
 }
 
 func renderCatalog(root *yaml.Node) string { content, _ := yaml.Marshal(root); return string(content) }
+
+func catalogFields(root *yaml.Node) map[string]any {
+	fields := map[string]any{}
+	for _, key := range catalogedit.Fields {
+		if node := catalogyaml.Value(root, key); node != nil {
+			var value any
+			if node.Decode(&value) == nil {
+				fields[key] = value
+			}
+		}
+	}
+	return fields
+}

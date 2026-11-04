@@ -28,7 +28,8 @@ type editRequest struct {
 }
 type editorCard struct {
 	catalogedit.Card
-	Profile gameProfile `json:"profile"`
+	Profile       gameProfile `json:"profile"`
+	SourceProfile gameProfile `json:"source_profile"`
 }
 type foldPlanRequest struct {
 	Platform string   `json:"platform"`
@@ -104,7 +105,8 @@ func (s *server) editorCard(card catalogedit.Card, platform string) editorCard {
 	if err != nil {
 		return editorCard{Card: card}
 	}
-	return editorCard{Card: card, Profile: libraryProfile(doc.Root(), catalogyaml.Scalar(catalogyaml.Value(doc.Root(), "title")), platform, sourceBlocks(doc, nil))}
+	blocks := sourceBlocks(doc, nil)
+	return editorCard{Card: card, Profile: libraryProfile(doc.Root(), catalogyaml.Scalar(catalogyaml.Value(doc.Root(), "title")), platform, blocks), SourceProfile: buildGameProfile("", platform, blocks)}
 }
 func (s *server) catalogEdit(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {

@@ -8,37 +8,10 @@ function browser(fetch){
  function element(id){if(!elements.has(id))elements.set(id,{innerHTML:'',textContent:'',disabled:true,open:true,checked:false,value:'',parentElement:{},classList:{toggle(){}},addEventListener(){},setAttribute(k,v){this[k]=k==='disabled'?true:v;},close(){this.open=false;},showModal(){this.open=true;},replaceChildren(){},insertAdjacentHTML(position,html){this.innerHTML+=html;}});return elements.get(id);}
  const context=vm.createContext({fetch,AbortController,URLSearchParams,TextDecoder,console,MutationObserver:class{observe(){}},window:{confirm:()=>true},$:element,
  document:{querySelectorAll:()=>[],createTextNode:s=>s},escapeHTML:s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;'),escapeAttr:s=>String(s),
- state:{platform:'Console',games:[],game:{},selectedFolder:'One',view:'browse'},renderGames(){},renderPlatforms(){},selectGame:async()=>{},selectPlatform(){},fetchJSON:async()=>({}),bestCover:()=>null,renderReleases:()=>'',renderSourceSection:()=>'',renderMediaSection:()=>''});
+ state:{platform:'Console',games:[],game:{},selectedFolder:'One',view:'browse'},renderDetails(){},sourceLabel:s=>s,fact:(l,v)=>l+":"+v,renderGames(){},renderPlatforms(){},selectGame:async()=>{},selectPlatform(){},fetchJSON:async()=>({}),bestCover:()=>null,renderReleases:()=>'',renderSourceSection:()=>'',renderMediaSection:()=>''});
  vm.runInContext(script,context);return{run:code=>vm.runInContext(code,context),element};
 }
 const json=value=>({ok:true,json:async()=>value});
-test('a late preview cannot approve newer unsaved values',async()=>{
- let resolve;
- const b=browser(()=>new Promise(r=>resolve=r));
- b.run('catalogUI.version=1;catalogUI.patch={description:"Earlier"}');
- const preview=b.run('catalogPreviewEdit()');
- b.run('catalogUI.patch.description="Newer";catalogDirty()');
- resolve(json({fields:{description:'Earlier'},profile:{}}));await preview;
- assert.equal(b.run('catalogUI.approvedPatch'),null);
- assert.equal(b.element('catalog-commit').disabled,true);
-});
-test('closing the workspace invalidates an in-flight edit preview',async()=>{
- let resolve;const b=browser(()=>new Promise(r=>resolve=r));
- b.run('catalogUI.version=1;catalogUI.patch={description:"Draft"}');
- const preview=b.run('catalogPreviewEdit()');
- await b.run('catalogClose()');resolve(json({fields:{},profile:{}}));await preview;
- assert.equal(b.run('catalogUI.approvedPatch'),undefined);
- assert.equal(b.element('catalog-commit').disabled,true);
-});
-test('saving sends the exact approved patch and refreshes the library title',async()=>{
- let sent;const b=browser(async(path,options)=>{
-  sent=JSON.parse(options.body);return json({card:{revision:'new',fields:{title:'New title'}}});
- });
- b.run('catalogUI.platform="Console";catalogUI.folder="One";catalogUI.revision="old";catalogUI.approvedPatch={title:"New title"};catalogUI.patch={title:"Unapproved"};state.games=[{folder:"One",title:"Old title"}]');
- await b.run('catalogSaveEdit()');
- assert.deepEqual(sent.fields,{title:'New title'});
- assert.equal(b.run('state.games[0].title'),'New title');
-});
 test('reopening a prepared group asks for its current draft without replacing it',async()=>{
  let sent;const group={id:0,revision:4,status:'ready',group:{Keep:{Folder:'One',Title:'Orbit'},Merge:[],Edits:{description:'Reviewed'}}};
  const b=browser(async(path,options)=>{sent=JSON.parse(options.body);return json({group,draft:{fields:{description:'Reviewed'}},preview:{fields:{description:'Reviewed'}}});});
@@ -58,7 +31,7 @@ test('a plan selects only ready groups for batch apply',()=>{
  b.run('catalogUI.plan={platform:"Console",groups:[{id:0,status:"ready",group:{Keep:{Title:"Orbit",Folder:"Orbit (USA)"},Merge:[{Title:"Orbit",Folder:"Orbit (Japan)"}]}},{id:1,status:"review",group:{Keep:{Title:"Garden",Folder:"Garden"}}}]};catalogUI.selected=new Set([0]);catalogRenderPlan()');
  assert.match(b.element('catalog-content').innerHTML,/data-plan-cover="Orbit \(USA\)"/);
  assert.doesNotMatch(b.element('catalog-content').innerHTML,/data-plan-select="1"/);
- assert.equal(b.element('catalog-apply-ready').textContent,'Apply ready groups (1)');
+ assert.equal(b.element('catalog-apply-ready').textContent,'Review decisions (1)');
 });
 
 test('successful and partially completed folds refresh platform counts without changing selection',async()=>{
@@ -100,8 +73,8 @@ test('editable-field and identity reviews retain their distinct guidance',()=>{
  assert.doesNotMatch(b.element('catalog-content').innerHTML,/id="catalog-preview-group" disabled/);
  assert.match(b.element('catalog-subtitle').textContent,/Needs your decision/);
  b.run('catalogUI.group.conflicts=[];catalogUI.group.needs_identity=true;catalogRenderReview()');
- assert.match(b.element('catalog-content').innerHTML,/Confirm selection prepares these cards for batch apply/);
- assert.match(b.element('catalog-content').innerHTML,/Confirm & merge selected/);
+ assert.match(b.element('catalog-content').innerHTML,/Agree & next queues this selection/);
+ assert.match(b.element('catalog-content').innerHTML,/Agree & next/);
  assert.doesNotMatch(b.element('catalog-content').innerHTML,/cannot override the conflict/);
  b.run('catalogUI.group.group.ReviewAccepted=true;catalogUI.group.conflicts=["description"];catalogRenderReview()');
  assert.doesNotMatch(b.element('catalog-content').innerHTML,/It is ready for batch apply/);
@@ -118,15 +91,15 @@ test('blocked-only plans explain that comparison is inspection rather than appro
  assert.equal(b.element('catalog-apply-ready').disabled,false);
 });
 
-test('owner confirmation sends the exact subset and applies only the fresh ready revision',async()=>{
+test('owner confirmation queues the exact subset with the fresh ready revision',async()=>{
  const calls=[];
  const group={id:0,revision:7,status:'ready',group:{Keep:{Folder:'One'},Merge:[{Folder:'Two'}],ReviewAccepted:true}};
  const b=browser(async(path,options)=>{calls.push({path,body:JSON.parse(options.body)});return json({group,preview:{fields:{}}});});
- b.run('catalogUI.plan={id:"plan",groups:[{id:0}]};catalogUI.group={id:0,revision:3,status:"review",needs_identity:true,group:{Keep:{Folder:"One"},Merge:[{Folder:"Two"},{Folder:"Three"}]}};catalogUI.included=new Set(["One","Two"]);catalogUI.selectionDirty=true;catalogRenderReview=()=>{};catalogApply=async decisions=>{state.applied=decisions}');
- await b.run('catalogPreviewGroup({confirm:true,apply:true})');
+ b.run('catalogUI.plan={id:"plan",groups:[{id:0}]};catalogUI.group={id:0,revision:3,status:"review",needs_identity:true,group:{Keep:{Folder:"One"},Merge:[{Folder:"Two"},{Folder:"Three"}]}};catalogUI.included=new Set(["One","Two"]);catalogUI.selectionDirty=true;catalogRenderReview=()=>{};catalogQueueDecision=async action=>{state.queued={action,revision:catalogUI.group.revision}}');
+ await b.run('catalogPreviewGroup({confirm:true,queue:true})');
  assert.deepEqual(calls[0].body.draft.folders,['One','Two']);
  assert.equal(calls[0].body.draft.confirm,true);
- assert.equal(b.run('state.applied[0].revision'),7);
+ assert.equal(b.run('state.queued.revision'),7);assert.equal(b.run('state.queued.action'),'merge');
  assert.equal(b.run('catalogUI.selected.has(0)'),true);
  assert.equal(b.run('catalogUI.selectionDirty'),false);
 });
@@ -135,7 +108,7 @@ test('confirmation prepares batch selection without applying, and data conflicts
   const group={id:0,revision:2,status,group:{Keep:{Folder:'One'},Merge:[{Folder:'Two'}],ReviewAccepted:true}};
   const b=browser(async()=>json({group,preview:{fields:{}}}));
   b.run('catalogUI.plan={id:"plan",groups:[{id:0}]};catalogUI.group={id:0,group:{Keep:{Folder:"One"},Merge:[{Folder:"Two"}]}};catalogRenderReview=()=>{};catalogApply=async()=>{state.applied=true}');
-  await b.run('catalogPreviewGroup({confirm:true,apply:'+String(status==='blocked')+'})');
+  await b.run('catalogPreviewGroup({confirm:true,queue:'+String(status==='blocked')+'})');
   assert.equal(b.run('state.applied'),undefined);
   assert.equal(b.run('catalogUI.selected.has(0)'),status==='ready');
  }
@@ -150,7 +123,7 @@ test('changing selection does not silently reuse an earlier owner confirmation',
 test('late confirmation cannot merge after the owner changes the selected cards',async()=>{
  let resolve;const b=browser(()=>new Promise(r=>resolve=r));
  b.run('catalogUI.version=1;catalogUI.plan={id:"plan",groups:[{id:0}]};catalogUI.group={id:0,group:{Keep:{Folder:"One"},Merge:[{Folder:"Two"}]}};catalogApply=async()=>{state.applied=true}');
- const request=b.run('catalogPreviewGroup({confirm:true,apply:true})');
+ const request=b.run('catalogPreviewGroup({confirm:true,queue:true})');
  b.run('catalogUI.included=new Set(["One","Three"]);catalogUI.selectionDirty=true;catalogDirty()');
  resolve(json({group:{id:0,revision:2,status:'ready',group:{Keep:{Folder:'One'},Merge:[{Folder:'Two'}],ReviewAccepted:true}}}));await request;
  assert.equal(b.run('state.applied'),undefined);
@@ -170,7 +143,7 @@ test('the board keeps three lanes and moves a confirmed review into the ready ba
  }
  assert.equal(b.run('catalogUI.selected.has(2)'),false);
  b.run('catalogAcceptGroup({...catalogUI.plan.groups[1],status:"ready",revision:2});catalogRenderPlan()');
- assert.equal(b.element('catalog-apply-ready').textContent,'Apply ready groups (2)');
+ assert.equal(b.element('catalog-apply-ready').textContent,'Review decisions (2)');
  assert.match(b.element('catalog-content').innerHTML,/Nothing needs your decision/);
  b.run('catalogSelectReady(false)');
  assert.equal(b.element('catalog-apply-ready').disabled,true);
@@ -244,25 +217,11 @@ test('batch apply keeps the board open, preserves unchecked groups and uses a fr
  assert.match(b.element('catalog-content').innerHTML,/2 groups merged.*2 groups remaining/);
  assert.doesNotMatch(b.element('catalog-content').innerHTML,/All groups reviewed/);
 });
-test('individual merge and keep-separate advance until no groups remain',async()=>{
- for(const action of ['merge','separate']){
-  let count=0;
-  const b=browser(async(path)=>path.endsWith('fold-discard')?json({discarded:true}):json({result:{applied:action==='merge'?1:0,kept_separate:action==='separate'?1:0},next_plan:{id:'next'+(++count),platform:'Console',groups:count===1?[{id:0,status:'review',revision:1,group:{Keep:{Folder:'Next'},Merge:[]}}]:[]}}));
-  b.run('catalogUI.mode="review";catalogUI.platform="Console";catalogUI.plan={id:"old",groups:[]};fetchJSON=async()=>[];catalogReviewGroup=async id=>{catalogUI.mode="review";state.nextGroup=id}');
-  await b.run('catalogApply([{id:0,revision:1,action:"'+action+'"}])');
-  assert.equal(b.run('state.nextGroup'),0);assert.equal(b.run('catalogUI.mode'),'review');assert.equal(b.run('catalogUI.busy'),false);
-  await b.run('catalogApply([{id:0,revision:1,action:"'+action+'"}])');
-  assert.equal(b.run('catalogUI.plan'),null);assert.equal(b.run('catalogUI.mode'),'done');
-  assert.equal(b.element('catalog-title').textContent,'Review complete');
-  assert.match(b.element('catalog-content').innerHTML,/All groups reviewed/);
-  assert.equal(b.run('catalogUI.completed.'+(action==='merge'?'applied':'kept_separate')),2);
- }
-});
 test('remaining conflicts stay actionable and never appear as a completed review',async()=>{
  const b=browser(async()=>json({result:{applied:1,kept_separate:0},next_plan:{id:'next',platform:'Console',groups:[{id:0,status:'blocked',reason:'Unreadable media',group:{Keep:{Folder:'Blocked'},Merge:[]}}]}}));
  b.run('catalogUI.mode="review";catalogUI.platform="Console";catalogUI.plan={id:"old",groups:[]};fetchJSON=async()=>[];catalogReviewGroup=async id=>{catalogUI.mode="review";state.nextGroup=id}');
  await b.run('catalogApply([{id:0,revision:1,action:"merge"}])');
- assert.equal(b.run('state.nextGroup'),0);assert.equal(b.run('catalogUI.plan.groups.length'),1);
+ assert.equal(b.run('catalogUI.mode'),'plan');assert.equal(b.run('catalogUI.plan.groups.length'),1);
  assert.notEqual(b.element('catalog-title').textContent,'Review complete');
 });
 test('continuation failure preserves the successful receipt and offers reload without replay',async()=>{
@@ -275,4 +234,105 @@ test('continuation failure preserves the successful receipt and offers reload wi
  assert.match(b.element('catalog-content').innerHTML,/Catalog temporarily unavailable/);
  assert.match(b.element('catalog-content').innerHTML,/Continue review/);
  assert.equal(calls.length,1);assert.equal(b.run('catalogUI.plan'),null);
+});
+
+test('inline save writes only the edited field, updates the card and preserves provider observations',async()=>{
+ let sent;const provider={source:'launchbox',profile:{developer:'Provider studio'}};
+ const b=browser(async(path,options)=>{sent={path,body:JSON.parse(options.body)};return json({card:{revision:'new',fields:{title:'Orbit',developer:'My studio'},profile:{title:'Orbit',developer:'My studio'},source_profile:{developer:'Provider studio'},yaml:'saved'}});});
+ b.run('catalogInline.platform="Console";catalogInline.folder="One";catalogInline.card={revision:"old",fields:{title:"Orbit"}};catalogInline.field="developer";catalogInline.draft="My studio";catalogInline.dirty=true;state.game={game:{title:"Orbit"},source_blocks:'+JSON.stringify([provider])+'};state.games=[{folder:"One",title:"Orbit"}]');
+ await b.run('catalogSaveInline()');
+ assert.equal(sent.path,'/api/catalog/edit');assert.deepEqual(sent.body.fields,{developer:'My studio'});assert.equal(sent.body.revision,'old');
+ assert.equal(b.run('state.game.profile.developer'),'My studio');assert.equal(b.run('state.game.source_blocks[0].profile.developer'),'Provider studio');
+ assert.equal(b.run('catalogInline.field'),'');assert.equal(b.run('catalogInline.dirty'),false);
+});
+test('inline save retains a failed draft and blocks navigation only while saving',async()=>{
+ let resolve;const b=browser(()=>new Promise(r=>resolve=r));
+ b.run('catalogInline.platform="Console";catalogInline.folder="One";catalogInline.card={revision:"old",fields:{}};catalogInline.field="developer";catalogInline.draft="New";catalogInline.dirty=true');
+ const pending=b.run('catalogSaveInline()');
+ assert.equal(b.run('catalogLeaveInline()'),false);
+ resolve({ok:false,json:async()=>({error:'Card changed; reload before saving'})});await pending;
+ assert.equal(b.run('catalogInline.draft'),'New');assert.equal(b.run('catalogInline.dirty'),true);assert.match(b.run('catalogInline.error'),/Card changed/);
+ assert.equal(b.run('catalogInline.saving'),false);
+});
+test('language-specific editing and source restoration preserve the other language corrections',()=>{
+ const b=browser(async()=>json({}));
+ b.run('catalogInline.card={fields:{descriptions:{en:"Saved English",ru:"Saved Russian"}}};catalogInline.field="description";catalogInline.language="en";catalogInline.draft="New English"');
+ assert.deepEqual(JSON.parse(b.run('JSON.stringify(catalogInlinePatch())')),{descriptions:{en:'New English',ru:'Saved Russian'}});
+ b.run('catalogInline.remove=true');
+ assert.deepEqual(JSON.parse(b.run('JSON.stringify(catalogInlinePatch())')),{descriptions:{ru:'Saved Russian'}});
+ b.run('catalogInline.field="developer"');
+ assert.deepEqual(JSON.parse(b.run('JSON.stringify(catalogInlinePatch())')),{developer:null});
+});
+test('late inline reads never open an editor on a different game',async()=>{
+ let resolve;const b=browser(async()=>json({}));
+ b.run('catalogUI.enabled=true;fetchJSON=()=>new Promise(r=>state.resolveEdit=r)');
+ const pending=b.run('catalogStartInline("developer")');
+ b.run('catalogLeaveInline();state.selectedFolder="Two";state.resolveEdit({fields:{},profile:{}})');
+ await pending;assert.equal(b.run('catalogInline.field'),'');
+});
+test('inline labels distinguish library title, stored values and source values',()=>{
+ const b=browser(async()=>json({}));
+ b.run('catalogUI.enabled=true;catalogInline.mode=true;state.game={catalog_fields:{title:"Orbit",developer:"Owner"},profile:{description:"Source",source:"igdb",description_language:"en"}}');
+ assert.match(b.run('catalogInlineField("developer","Developer","Owner")'),/Saved in library/);
+ assert.match(b.run('catalogInlineField("publisher","Publisher","Studio")'),/From sources/);
+ assert.match(b.run('catalogInlineField("description","Description","Source")'),/igdb.*EN/);
+ assert.match(b.run('catalogInlineBanner()'),/Release-specific values and export title settings/);
+ b.run('catalogInline.platform="Console";catalogInline.folder="One";catalogInline.card={fields:{title:"Orbit"}};catalogInline.field="title"');
+ assert.match(b.run('catalogInlineTitle("Orbit")'),/Exported names follow the release and title settings/);
+ b.run('state.exportMode=true');
+ assert.doesNotMatch(b.run('catalogInlineTitle("Orbit")'),/input|button/);
+});
+
+test('merge, separate and skip decisions advance without applying until the final batch',async()=>{
+ const calls=[];const b=browser(async(path,options)=>{calls.push({path,body:JSON.parse(options.body)});return json({result:{applied:2,kept_separate:1},next_plan:{id:'fresh',platform:'Console',groups:[]}});});
+ const group=(id,status)=>({id,revision:2,status,group:{Keep:{Folder:'Game'+id},Merge:[]}});
+ b.run('catalogUI.plan='+JSON.stringify({id:'plan',platform:'Console',groups:[group(0,'ready'),group(1,'review'),group(2,'review'),group(3,'blocked')]})+';catalogUI.selected=new Set([0]);catalogUI.group=catalogUI.plan.groups[1];catalogReviewGroup=async id=>{catalogUI.group=catalogUI.plan.groups.find(g=>g.id===id);state.nextGroup=id};fetchJSON=async()=>[]');
+ b.run('catalogUI.group.status="ready"');await b.run('catalogQueueDecision("merge")');
+ assert.equal(b.run('state.nextGroup'),2);assert.equal(calls.length,0);
+ await b.run('catalogQueueDecision("separate")');
+ assert.equal(b.run('state.nextGroup'),3);assert.equal(calls.length,0);
+ await b.run('catalogQueueDecision("skip")');
+ assert.equal(b.run('catalogUI.mode'),'decisions');assert.equal(calls.length,0);
+ assert.match(b.element('catalog-content').innerHTML,/2 merge.*1 keep separate.*1 unresolved/s);
+ assert.match(b.element('catalog-content').innerHTML,/Nothing saved yet/);
+ await b.run('catalogApply(catalogBatchDecisions())');
+ assert.equal(calls.filter(c=>c.path.endsWith('fold-apply')).length,1);
+ assert.deepEqual(calls[0].body.decisions.map(d=>d.action).sort(),['merge','merge','separate']);
+ assert.equal(b.run('catalogUI.decisions.size'),0);
+});
+test('deselecting prepared merges removes them from the final batch while keeping separation decisions',()=>{
+ const b=browser(async()=>json({}));
+ b.run('catalogUI.plan={groups:[{id:0,status:"ready",revision:2,group:{Keep:{Folder:"One"}}},{id:1,status:"review",revision:1,group:{Keep:{Folder:"Two"}}}]};catalogUI.selected=new Set([0]);catalogUI.decisions=new Map([[0,{id:0,revision:2,action:"merge"}],[1,{id:1,revision:1,action:"separate"}]]);catalogSelectReady(false)');
+ assert.equal(b.run('catalogBatchDecisions().length'),1);assert.equal(b.run('catalogBatchDecisions()[0].action'),'separate');
+});
+test('queued decisions require confirmation before closing and can be retained',async()=>{
+ const calls=[];const b=browser(async(path)=>{calls.push(path);return json({discarded:true});});
+ b.run('catalogUI.plan={id:"plan"};catalogUI.decisions=new Map([[0,{id:0,action:"separate"}]]);window.confirm=()=>false');
+ await b.run('catalogClose()');assert.equal(b.run('catalogUI.plan.id'),'plan');assert.equal(calls.length,0);
+ b.run('window.confirm=()=>true');await b.run('catalogClose()');assert.equal(b.run('catalogUI.plan'),null);assert.equal(calls.length,1);
+});
+test('comparison cards are fetched once per review session and prefetch failures remain retryable',async()=>{
+ const b=browser(async()=>json({}));
+ b.run('state.reads=0;fetchJSON=async()=>{state.reads++;return {game:{folder:"One"},fields:{},profile:{}}};catalogUI.platform="Console";state.pg={id:0,group:{Keep:{Folder:"One"},Merge:[{Folder:"Two"}]}}');
+ await b.run('catalogCandidates(state.pg)');await b.run('catalogCandidates(state.pg)');
+ assert.equal(b.run('state.reads'),4);
+ b.run('catalogUI.cardsCache=new Map();fetchJSON=async()=>{throw new Error("Offline")}');
+ await assert.rejects(b.run('catalogCandidates(state.pg)'),/Offline/);
+ assert.equal(b.run('catalogUI.cardsCache.size'),0);
+});
+
+test('ready selection counters exclude queued separation and update the batch notice',()=>{
+ const b=browser(async()=>json({}));
+ b.run('catalogUI.plan={groups:[{id:0,status:"ready",revision:1},{id:1,status:"ready",revision:1}]};catalogUI.decisions=new Map([[1,{id:1,action:"separate"}]]);catalogSelectReady(true)');
+ assert.equal(b.element('catalog-select-ready').checked,true);
+ assert.match(b.element('catalog-queue-status').innerHTML,/1 to merge · 1 to keep separate/);
+ b.run('catalogSelectReady(false)');
+ assert.match(b.element('catalog-queue-status').innerHTML,/0 to merge · 1 to keep separate/);
+});
+test('starting fold review does not discard an unsaved inline correction',async()=>{
+ const b=browser(async()=>{throw Error('Must not send a request');});
+ b.run('catalogInline.dirty=true;window.confirm=()=>false');
+ await b.run('catalogBuildPlan()');
+ assert.equal(b.run('catalogInline.dirty'),true);
+ assert.equal(b.run('catalogUI.busy'),false);
 });

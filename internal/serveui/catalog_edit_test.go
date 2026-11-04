@@ -185,3 +185,48 @@ func TestCatalogFoldContinueUsesFreshPlanAndFinishes(t *testing.T) {
 		t.Fatal(w.Body.String())
 	}
 }
+
+func TestInlineCorrectionsReachBothExportTargetsAndRestoreSources(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "platforms", "Console", "Orbit")
+	writeTestFile(t, filepath.Join(dir, "game.yaml"), "title: Library name\ndefault_release: Edition\nreleases:\n  Edition: {title: Regional name, publisher: Release publisher}\nsources:\n  launchbox:\n    matches:\n      - title: Provider name\n        developer: Provider studio\n        descriptions: {en: Provider English, ru: Provider Russian}\n")
+	h, err := HandlerWithEditing(root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var card editorCard
+	requestJSON(t, h, "/api/catalog/edit?platform=Console&game=Orbit", &card)
+	if card.SourceProfile.Developer != "Provider studio" {
+		t.Fatal(card)
+	}
+	for _, restore := range []bool{false, true} {
+		fields := map[string]any{"developer": "My studio", "descriptions": map[string]string{"en": "My English"}, "title": "My library name"}
+		if restore {
+			fields = map[string]any{"developer": nil, "descriptions": nil}
+		}
+		w, r := catalogCall(t, h, "/api/catalog/edit", editRequest{Platform: "Console", Game: "Orbit", Revision: card.Revision, Fields: fields})
+		if w.Code != 200 {
+			t.Fatal(w.Body.String())
+		}
+		bytes, _ := json.Marshal(r["card"])
+		if err = json.Unmarshal(bytes, &card); err != nil {
+			t.Fatal(err)
+		}
+		for _, target := range []string{"es-de", "launchbox"} {
+			response := postPreview(t, h, exportPreviewRequest{Platform: "Console", Settings: exportSettings{Target: target, Language: "en", Media: "none"}, Games: []previewGameRequest{{Folder: "Orbit"}}})
+			f := response.Games[0].Preview.Fields
+			developer, description, source := "My studio", "My English", "local"
+			if restore {
+				developer, description, source = "Provider studio", "Provider English", "launchbox"
+			}
+			if f["developer"].Value != developer || f["description"].Value != description || f["description"].Source != source || f["title"].Value != "Regional name" || f["publisher"].Value != "Release publisher" {
+				t.Fatal(target, f)
+			}
+		}
+		var game gameResponse
+		requestJSON(t, h, "/api/game?platform=Console&game=Orbit", &game)
+		if game.SourceBlocks[0].Profile.Developer != "Provider studio" || game.CatalogFields["title"] != "My library name" {
+			t.Fatal(game)
+		}
+	}
+}

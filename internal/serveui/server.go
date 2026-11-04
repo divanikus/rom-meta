@@ -237,6 +237,7 @@ func (s *server) game(w http.ResponseWriter, r *http.Request) {
 		MissingMetadata: !gameHasMetadata(found),
 		Profile:         libraryProfile(document.Root(), firstNonEmpty(found.Title, found.Folder), found.Platform, blocks),
 		CatalogYAML:     renderCatalog(document.Root()),
+		CatalogFields:   catalogFields(document.Root()),
 		SourceBlocks:    blocks,
 		LocalMedia:      media,
 	})
@@ -354,6 +355,7 @@ type gameListItem struct {
 }
 
 type gameResponse struct {
+	CatalogFields   map[string]any    `json:"catalog_fields"`
 	CatalogYAML     string            `json:"catalog_yaml"`
 	Game            catalogcache.Game `json:"game"`
 	HasMetadata     bool              `json:"has_metadata"`

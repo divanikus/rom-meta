@@ -15,17 +15,31 @@ editor actions; enabling editing does not introduce accounts or change the token
 
 ## Correct a card
 
-In **Library**, open a card and choose **Edit card**. Edit its title, aliases,
-alternate names, descriptions (including language-specific text), release date,
-developer, publisher, genres or players. **Preview changes** shows the resulting
-card; **Save card** writes that preview. Further edits require a new preview.
+In **Library**, click the pencil beside a value to edit it in place. **Edit card**
+also reveals fields that are not filled yet. Save or cancel that field without
+opening another workspace. Descriptions can be corrected for one language or as
+shared text for all languages. Ctrl/Cmd+Enter saves; Escape cancels.
 
-Saved fields take priority over provider values. **Use sources** removes a local
-override. Empty text returns to source selection; it is not a forced-blank rule.
-The title remains required. The editor retains unknown YAML, original provider
-observations, release identities, variants, fingerprints and media. Source refresh
-does not replace these local game-level corrections. Advanced structural fields
-remain inspectable in the original catalog documents.
+The labels distinguish values saved in the library from provider values. A save
+changes the existing game-wide fields in `game.yaml`, preserving original provider
+observations. **Restore source value**, followed by Save, removes the selected
+correction; the exporter resumes choosing source metadata using its profile.
+This does not modify a provider's downloaded record.
+
+Developer, publisher, date, genres, players and descriptions participate in the
+shared ES-DE/LaunchBox export resolver. Explicit catalog values precede provider
+candidates; a saved release-specific value can take precedence over a game-wide
+value. Language-specific descriptions apply when that language is selected.
+Shared description text applies to all languages.
+
+**Library title**, aliases and alternate names describe the catalog card.
+Exported names follow the selected release and the export title settings, so a
+library title edit is not a promise to rename every regional release. Use
+**Preview export** from the inline editor to inspect the actual projection.
+
+Unknown YAML, release identities, variants, fingerprints, media and source
+observations are retained. Source refresh does not replace local corrections.
+Stale saves are rejected without discarding the typed draft.
 
 ## Let fold prepare the work
 
@@ -34,7 +48,7 @@ fold rules and proposes groups, primary cards and merged results automatically.
 The overview has three columns with counts and local cover previews:
 
 - **Ready to merge**: identity, content, files and saved fields pass validation.
-  These groups start selected. Inspect any sample, then apply them together without
+  These groups start selected for the final batch. Inspect any sample without
   opening every comparison. Recognized revision/pressing labels such as RE and Alt
   do not by themselves require owner confirmation; provider identity still must agree.
 - **Your review**: confirm which cards belong together despite identity,
@@ -49,8 +63,7 @@ In **Your review** and **Conflicts**, click anywhere on the card or focus it and
 press Enter/Space to open Compare. Ready cards keep separate Include and Compare
 controls so selecting a batch does not navigate away. All member covers and names
 are shown inside Compare. Missing or inaccessible artwork has a placeholder and
-does not change merge readiness. **Select all** and **Apply ready groups** remain
-above the ready column while its list scrolls. On narrow screens, scroll sideways between columns.
+does not change merge readiness. **Select all** controls the ready batch; **Review decisions** opens its final summary. On narrow screens, scroll sideways between columns.
 A confirmed review appears in the ready column when you return to the overview.
 
 These states describe rules and current evidence, not a confidence percentage.
@@ -64,8 +77,10 @@ transaction, so all files required for that copy must be readable.
 **Compare** opens all candidates. Use **Include in merge** to select at least two
 cards; excluded cards stay unchanged. For identity doubts, **Confirm selection**
 records your same-game decision and prepares the group for batch apply.
-**Confirm & merge selected** confirms and saves in one action when data checks
-pass. A changed selection needs fresh confirmation. Confirmation is the owner's
+**Agree & next** validates and queues the group, then opens the next unresolved
+comparison. **Keep separate** queues evidence rejection; **Skip for now** leaves
+the group unresolved. None of these actions writes the catalog.
+A changed selection needs fresh confirmation. Confirmation is the owner's
 catalog decision, not new provider evidence. Real data conflicts keep apply
 unavailable until resolved. Editable saved-field differences can be resolved
 through the result editor before previewing again.
@@ -76,9 +91,10 @@ area to scroll with the keyboard, or use its scrollbars/touch gestures.
 **Compare** shows candidate cards, highlighted differences, cover art, releases,
 source observations, media and registered fingerprints. Accept the suggested
 primary, choose another eligible member, or correct the result. Previewed decisions
-stay in the plan when returning to its list. **Apply this merge** handles one group;
-**Apply ready groups** handles the selected ready groups. Platform counts and the
-current list refresh after completed changes, including partial completion.
+stay in the plan when returning to its list. **Review decisions** lists the exact
+merge and separation decisions, plus the unresolved/skipped count.
+**Apply N decisions** saves the selected batch in one operation.
+Platform counts and the current list refresh after completed changes, including partial completion.
 **Keep separate** records
 rejection of the displayed fold evidence, not a permanent ban on every future
 identity signal.
@@ -96,17 +112,18 @@ follow that adapter; edit individual cards before rebuilding to change saved fie
 Exact selected MAME groups can apply while unrelated conflicting groups remain held.
 Manual provider-based regrouping of MAME cards is not offered.
 
-After applying the ready batch, the same workspace refreshes to show the remaining
-groups. Applying one comparison or choosing **Keep separate** opens the next group.
-The session shows saved totals and remaining groups; its completion screen appears
-only when the current review has no groups left. Remaining conflicts stay visible.
-Returning to the board lets you choose a different group at any time.
+Review navigation reuses the current prepared plan and prefetches the next
+comparison. There is no platform transaction or full replan between decisions.
+The current comparison remains visible during a short validation read; no full
+loading overlay replaces it. Queued choices are held for this page session,
+and closing the workspace asks before discarding them.
 
-Each successful step builds a fresh plan. Prepared selections and field edits are
-carried forward only for groups whose full candidate data is unchanged, and are
-validated again. Changed candidates need a fresh review. Manual comparisons finish
-within the selected scope. If saving succeeds but preparing the next plan fails,
-**Continue review** reloads remaining work without replaying the completed merge.
+Only the final apply writes catalog data. It rechecks the chosen revisions and
+input files, applies the batch using the existing transaction, then builds a fresh
+remaining plan. The completion screen appears only when no groups remain.
+Unresolved/skipped groups remain available afterward. If saving succeeds but
+preparing the remaining plan fails, **Continue review** reloads remaining work
+without replaying a completed write.
 
 ## Plan lifetime and writes
 
