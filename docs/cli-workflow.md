@@ -83,10 +83,12 @@ rom-meta serve --data-root "<catalog>"
 ```
 
 One address serves the browser, `/api/*`, `/v1/*`, `/docs` and `/openapi.json`.
-No profile or token is required. Default bind is `127.0.0.1:8787`. Metadata writes
-remain the CLI commands above. Run catalog preparation and consumer imports
-sequentially. See [catalog API](catalog-api.md) for optional access protection and
-consumer setup, and [offline export](offline-export.md) for consumers.
+No profile or token is required. Default bind is `127.0.0.1:8787`. Add `--edit`
+to correct cards and review automatic fold plans in the browser; see the
+[browser editor guide](catalog-editing.md). Run catalog preparation, browser writes
+and consumer imports sequentially. See [catalog API](catalog-api.md) for optional
+access protection and consumer setup, and [offline export](offline-export.md) for
+consumers.
 
 The [operator regression](https://github.com/divanikus/rom-meta/blob/main/cmd/rom-meta/operator_workflow_test.go) tests this
 loop offline with synthetic DAT/provider data, including resume and preservation.
