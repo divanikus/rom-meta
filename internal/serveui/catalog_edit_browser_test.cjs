@@ -211,3 +211,23 @@ test('board artwork loads only visible cards, limits concurrent reads and stops 
  assert.equal(b.run('catalogUI.artwork.size'),0);
  assert.equal(b.run('state.slots[0].textContent'),undefined);
 });
+
+test('overview requests one primary cover and only single-action cards open comparison as a whole',()=>{
+ const b=browser(async()=>json({}));
+ for(const status of ['ready','review','blocked']){
+  const html=b.run('catalogPlanCard({id:4,status:"'+status+'",group:{Keep:{Folder:"Orbit",Title:"Orbit"},Merge:[{Folder:"Orbit Alt"},{Folder:"Orbit JP"}]}})');
+  assert.equal((html.match(/data-plan-cover=/g)||[]).length,1);
+  assert.match(html,/data-plan-cover="Orbit"/);
+  assert.doesNotMatch(html,/Orbit Alt|Orbit JP/);
+  assert.equal((html.match(/data-plan-review="4"/g)||[]).length,1);
+  if(status==='ready'){
+   assert.match(html,/^<article /);
+   assert.match(html,/data-plan-select="4"/);
+   assert.match(html,/<button class="tab-button" data-plan-review="4">Compare<\/button>/);
+  }else{
+   assert.match(html,/^<button type="button"[^>]+aria-label="Compare Orbit">/);
+   assert.doesNotMatch(html,/<input|<button[^>]*>Compare<\/button>/);
+   assert.match(html,/3 cards to compare/);
+  }
+ }
+});

@@ -44,10 +44,13 @@ The overview has three columns with counts and local cover previews:
   Choose a different subset or resolve the reported data/access problem.
   Identity confirmation cannot discard conflicting data.
 
-Each group shows up to four member covers and names; **Compare** opens all
-candidates. Missing or inaccessible artwork has a placeholder and does not change
-merge readiness. **Select all** and **Apply ready groups** remain above the ready
-column while its list scrolls. On narrow screens, scroll sideways between columns.
+Each group shows one cover from its suggested primary, a title and the card count.
+In **Your review** and **Conflicts**, click anywhere on the card or focus it and
+press Enter/Space to open Compare. Ready cards keep separate Include and Compare
+controls so selecting a batch does not navigate away. All member covers and names
+are shown inside Compare. Missing or inaccessible artwork has a placeholder and
+does not change merge readiness. **Select all** and **Apply ready groups** remain
+above the ready column while its list scrolls. On narrow screens, scroll sideways between columns.
 A confirmed review appears in the ready column when you return to the overview.
 
 These states describe rules and current evidence, not a confidence percentage.

@@ -151,14 +151,14 @@ const catalogLanes = {
  blocked:{title:"Conflicts",hint:"Data or file problems need attention before these can merge.",empty:"No conflicts. There is nothing to fix here."}
 };
 function catalogPlanCard(pg){
- const g=pg.group,refs=[g.Keep,...(g.Merge||[])],title=g.Keep.Title||g.Keep.Folder,shown=refs.slice(0,4);
- const reason=catalogGroupReason(pg)||(g.ReviewAccepted?"You confirmed these cards belong together.":"Identity and saved data agree. Releases and media are preserved.");
- return '<article class="catalog-plan-card" data-plan-group="'+pg.id+'"><div class="catalog-plan-card-head"><h3>'+cEscape(title)+'</h3><span class="catalog-card-count">'+refs.length+' cards → 1</span></div>'+
- '<div class="catalog-plan-covers" style="--covers:'+shown.length+'">'+shown.map(ref=>'<figure title="'+escapeAttr(ref.Folder)+'"><div class="catalog-plan-cover" data-plan-cover="'+escapeAttr(ref.Folder)+'"><span>Cover</span></div><figcaption>'+cEscape(ref.Folder)+'</figcaption></figure>').join("")+'</div>'+
- (refs.length>shown.length?'<p class="catalog-more-cards">+'+(refs.length-shown.length)+' more cards in Compare</p>':'')+
- '<p class="catalog-plan-reason" title="'+escapeAttr(reason)+'">'+cEscape(reason)+'</p><div class="catalog-plan-card-actions">'+
- (pg.status==="ready"?'<label><input type="checkbox" aria-label="Include '+escapeAttr(title)+'" data-plan-select="'+pg.id+'" '+(catalogUI.selected.has(pg.id)?'checked':'')+'>Include</label>':'<span class="catalog-badge '+pg.status+'">'+(pg.status==="blocked"?"Merge blocked":"Decision needed")+'</span>')+
- '<button class="tab-button" data-plan-review="'+pg.id+'">Compare</button></div></article>';
+ const g=pg.group,title=g.Keep.Title||g.Keep.Folder,count=1+(g.Merge||[]).length,ready=pg.status==="ready";
+ const reason=ready?(g.ReviewAccepted?"Confirmed by you.":""):catalogGroupReason(pg);
+ const opening=ready?'<article class="catalog-plan-card" data-plan-group="'+pg.id+'">':'<button type="button" class="catalog-plan-card is-reviewable" data-plan-group="'+pg.id+'" data-plan-review="'+pg.id+'" aria-label="Compare '+escapeAttr(title)+'">';
+ return opening+'<span class="catalog-plan-summary"><span class="catalog-plan-cover" data-plan-cover="'+escapeAttr(g.Keep.Folder)+'"><span>Cover</span></span>'+
+ '<span class="catalog-plan-copy"><span class="catalog-plan-title">'+cEscape(title)+'</span><span class="catalog-card-count">'+count+' cards'+(ready?' → 1':' to compare')+'</span>'+
+ (reason?'<span class="catalog-plan-reason" title="'+escapeAttr(reason)+'">'+cEscape(reason)+'</span>':'')+
+ (!ready?'<span class="catalog-plan-open">Compare <span aria-hidden="true">→</span></span>':'')+'</span></span>'+
+ (ready?'<div class="catalog-plan-card-actions"><label><input type="checkbox" aria-label="Include '+escapeAttr(title)+'" data-plan-select="'+pg.id+'" '+(catalogUI.selected.has(pg.id)?'checked':'')+'>Include</label><button class="tab-button" data-plan-review="'+pg.id+'">Compare</button></div></article>':'</button>');
 }
 function catalogRenderPlan(){
  catalogUI.mode="plan";catalogUI.group=null;catalogUI.dirty=false;
