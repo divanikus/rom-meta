@@ -57,8 +57,10 @@ ranks the eligible candidates. Use it to select an appropriate regional display 
 Every selected member is checked before applying any platform, and selected
 hashes are checked again in each staged platform. Only one group's full metadata
 is held at a time during preflight; the retained plan contains member references.
-Unsupported canonical fields and conflicting duplicate release payloads fail
-preflight instead of being silently discarded. The existing platform staging,
+Local and unknown fields are retained when compatible; conflicting saved values
+and duplicate release payloads fail preflight instead of being silently discarded.
+The [browser editor](catalog-editing.md) can resolve ordinary game-field conflicts
+while previewing the complete merged result. The existing platform staging,
 merge renderer and file conflict handling perform the actual fold. Directory swaps
 retry permission failures for at most 1.5 seconds (five attempts); persistent errors
 still trigger rollback, with the backup path reported if rollback also fails.

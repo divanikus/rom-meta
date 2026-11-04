@@ -87,7 +87,8 @@ func (plan *mameFoldPlan) finish(root string, options Options, result *PlatformR
 			}
 		}
 		group := Group{
-			Platform: "Arcade", Keep: GameRef{Folder: keep, Title: candidate.Title}, TargetFolder: candidate.Target,
+			NativeDigest: nativeDigest(candidate, plan.report.BindingBefore),
+			Platform:     "Arcade", Keep: GameRef{Folder: keep, Title: candidate.Title}, TargetFolder: candidate.Target,
 			ReleaseCount: candidate.Releases, FingerprintCount: candidate.Fingerprints,
 			Evidence:     []Evidence{{Source: "mame", Field: "snapshot", Value: plan.report.Snapshot, Games: append([]string(nil), candidate.Sources...)}},
 			ReviewReason: "MAME import grouping, preserving hardware boundaries and versioned set bindings",

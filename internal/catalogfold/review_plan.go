@@ -130,6 +130,9 @@ func prepareReviewPlan(root string, plan ReviewPlan, options Options, defaults r
 			group.FingerprintCount += game.FingerprintCount
 		}
 		sort.Slice(group.Merge, func(i, j int) bool { return group.Merge[i].Folder < group.Merge[j].Folder })
+		if _, err := groupDocument(root, group, rulesForPlatform(defaults, overrides, reviewed.Platform)); err != nil {
+			return nil, nil, err
+		}
 		groups[reviewed.Platform] = append(groups[reviewed.Platform], group)
 	}
 	var platforms []string
@@ -180,6 +183,9 @@ func verifyReviewedMember(root, platform string, member ReviewedMember) error {
 		}
 		filename := filepath.Join(path, file.name)
 		info, err := catalogfs.Lstat(filename)
+		if os.IsNotExist(err) && file.name == "fingerprints.yaml" && file.hash == fmt.Sprintf("%x", sha256.Sum256(nil)) {
+			continue
+		}
 		if err != nil {
 			return err
 		}
@@ -272,9 +278,7 @@ func validateReviewedContent(path string, releases map[string]any) error {
 						}
 						continue
 					}
-					if name != "ignore_evidence" {
-						return fmt.Errorf("unsupported fold field %q", name)
-					}
+					// Other fold fields are retained by the merge renderer.
 				}
 			case "sources":
 				values, ok := value.(map[string]any)
@@ -295,13 +299,11 @@ func validateReviewedContent(path string, releases map[string]any) error {
 							}
 							continue
 						}
-						if name != "matches" && name != "status" && name != "checked_at" {
-							return fmt.Errorf("unsupported source field %s.%s", source, name)
-						}
+						// Additional source fields are retained, with conflicts blocking merge.
 					}
 				}
 			default:
-				return fmt.Errorf("unsupported canonical field %q", key)
+				// Unknown fields are preserved; conflicting values fail merge preflight.
 			}
 		}
 	}

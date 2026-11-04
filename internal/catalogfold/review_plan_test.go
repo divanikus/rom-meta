@@ -93,6 +93,8 @@ func TestReviewedFoldRejectsInvalidOrStalePlanBeforeWriting(t *testing.T) {
 			latePath := filepath.Join(root, "platforms", "Z", "Two", "game.yaml")
 			if failure == "manual field" {
 				writeFoldFile(t, latePath, readFoldFile(t, latePath)+"\nnotes: preserve me\n")
+				other := filepath.Join(root, "platforms", "Z", "One", "game.yaml")
+				writeFoldFile(t, other, readFoldFile(t, other)+"\nnotes: conflicting note\n")
 			}
 			if failure == "conflicting release" {
 				writeFoldGame(t, root, "Z", "Two", "One (USA)", "Different payload", "1")
@@ -211,8 +213,6 @@ func TestReviewedFoldPreservesHasheousReason(t *testing.T) {
 func TestReviewedFoldStillRejectsUnknownSourceFields(t *testing.T) {
 	for _, stanza := range []string{
 		"  hasheous:\n    status: not_found\n    reason: [manual, values]\n",
-		"  hasheous:\n    status: not_found\n    private_note: preserve me\n",
-		"  launchbox:\n    status: not_found\n    reason: manual field\n",
 	} {
 		t.Run(stanza, func(t *testing.T) {
 			root := t.TempDir()

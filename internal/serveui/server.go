@@ -29,8 +29,16 @@ import (
 //go:embed static/index.html
 var indexHTML string
 
+//go:embed static/catalog-edit.js
+var catalogEditJS string
+
+//go:embed static/catalog-edit.css
+var catalogEditCSS string
+
 // Handler returns a read-only HTTP handler for a portable metadata data root.
-func Handler(dataRoot string) (http.Handler, error) {
+func Handler(dataRoot string) (http.Handler, error) { return HandlerWithEditing(dataRoot, false) }
+
+func HandlerWithEditing(dataRoot string, allowEdit bool) (http.Handler, error) {
 	root := strings.TrimSpace(dataRoot)
 	if root == "" {
 		root = "."
@@ -43,9 +51,25 @@ func Handler(dataRoot string) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	server := &server{root: absRoot, realRoot: realRoot}
+	server := &server{root: absRoot, realRoot: realRoot, allowEdit: allowEdit}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", server.index)
+	mux.HandleFunc("/catalog-edit.js", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		_, _ = w.Write([]byte(catalogEditJS))
+	})
+	mux.HandleFunc("/catalog-edit.css", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		_, _ = w.Write([]byte(catalogEditCSS))
+	})
 	mux.HandleFunc("/api", server.apiIndex)
 	mux.HandleFunc("/api/stats", server.stats)
 	mux.HandleFunc("/api/platforms", server.platforms)
@@ -55,11 +79,21 @@ func Handler(dataRoot string) (http.Handler, error) {
 	mux.HandleFunc("/api/export-preview", server.exportPreview)
 	mux.HandleFunc("/api/export-options", server.exportOptions)
 	mux.HandleFunc("/media", server.media)
+	mux.HandleFunc("/api/catalog", server.catalogCapabilities)
+	mux.HandleFunc("/api/catalog/edit", server.catalogEdit)
+	mux.HandleFunc("/api/catalog/edit-preview", server.catalogEditPreview)
+	mux.HandleFunc("/api/catalog/fold-plan", server.foldPlan)
+	mux.HandleFunc("/api/catalog/fold-preview", server.foldPreview)
+	mux.HandleFunc("/api/catalog/fold-apply", server.foldApply)
+	mux.HandleFunc("/api/catalog/fold-discard", server.foldDiscard)
 	server.handler = mux
 	return server, nil
 }
 
 type server struct {
+	allowEdit bool
+	editMu    sync.Mutex
+	plans     map[string]storedPlan
 	root      string
 	realRoot  string
 	handler   http.Handler

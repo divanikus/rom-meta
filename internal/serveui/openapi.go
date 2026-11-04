@@ -45,9 +45,31 @@ func browserOpenAPI() any {
 			get := item.(httpdocs.Schema)[method].(httpdocs.Schema)
 			get["operationId"] = "browser" + strings.NewReplacer("/", "_", "-", "_").Replace(path)
 		}
+
+		paths["/api/catalog"] = httpdocs.Schema{"get": op("Catalog editing capability", "Reports whether serve --edit enables catalog actions; no writes.", nil, httpdocs.Schema{"type": "object", "additionalProperties": true})}
+		editGet := op("Read editable saved fields", "Returns game-level local values, current SHA256 revision, preserved YAML and effective browser profile.", []httpdocs.Schema{platform, httpdocs.Query("game", "Exact game folder.", true, str)}, s.Ref(editorCard{}))
+		addWrite := func(path, summary, description string, request any) {
+			action := op(summary, description, nil, httpdocs.Schema{"type": "object", "additionalProperties": true})
+			action["operationId"] = "browser" + strings.NewReplacer("/", "_", "-", "_").Replace(path) + "_post"
+			action["requestBody"] = httpdocs.Schema{"required": true, "content": httpdocs.Schema{"application/json": httpdocs.Schema{"schema": s.Ref(request)}}}
+			responses := action["responses"].(httpdocs.Schema)
+			responses["403"] = httpdocs.Response("Editing disabled or cross-origin action.", s.Ref(errorResponse{}))
+			responses["409"] = httpdocs.Response("Stale input, expired preview, conflicting data or busy writer.", s.Ref(errorResponse{}))
+			paths[path] = httpdocs.Schema{"post": action}
+		}
+		addWrite("/api/catalog/edit", "Save local card corrections", "Requires serve --edit, application/json and same-origin browser requests. Revision must match stored YAML. Only listed game metadata is editable; null removes an override. Preserves other catalog/source data. saved=true remains success if derived-index refresh reports a warning.", editRequest{})
+		paths["/api/catalog/edit"].(httpdocs.Schema)["get"] = editGet
+		addWrite("/api/catalog/edit-preview", "Preview local card corrections", "Read-only preview against the current revision. Does not save or acquire provider data.", editRequest{})
+		addWrite("/api/catalog/fold-plan", "Build a platform fold plan", "Uses the same fold rules and catalog region priorities as CLI. Optional games selects 2..12 exact same-platform cards for explicit identity review. Reports ready/review/blocked groups; no mutations. stream=1 returns NDJSON progress and one result/error. Plans expire after 30 minutes, maximum four retained plans; MAME may use temporary prepared files.", foldPlanRequest{})
+		addWrite("/api/catalog/fold-preview", "Inspect or correct a group", "Omit draft to inspect the current prepared result without resetting edits. A draft changes primary/local fields and optional identity confirmation. Hard content/identity conflicts remain blocking. Returns a new group revision after changes.", foldPreviewRequest{})
+		addWrite("/api/catalog/fold-apply", "Apply selected reviewed groups", "Decisions contain exact group IDs, current revisions and merge/separate actions. All selected inputs are rechecked before writes. Uses shared writer lock, existing platform staging and MAME binding-aware apply. Every apply attempt consumes the plan; errors may report already completed ordinary groups before a MAME failure. Recovery locations are returned. Existing backups are retained; no new snapshots.", foldApplyRequest{})
+		addWrite("/api/catalog/fold-discard", "Discard a plan", "Releases the in-memory plan and task-owned MAME staging without changing catalog data.", struct {
+			Plan string `json:"plan"`
+		}{})
+
 		stats := paths["/api/stats"].(httpdocs.Schema)["get"].(httpdocs.Schema)["responses"].(httpdocs.Schema)["200"].(httpdocs.Schema)["content"].(httpdocs.Schema)
 		stats["application/x-ndjson"] = httpdocs.Schema{"schema": httpdocs.Schema{"type": "string"}, "example": "{\"progress\":{\"Stage\":\"checking media\",\"Current\":1}}\n{\"result\":{\"GameCount\":1}}\n"}
-		browserSpec = httpdocs.Document("RomMeta browser API", appinfo.Version, "Read-only local catalog browser. No authentication; keep on loopback or a trusted network. The serve runtime composes these browser routes with the portable /v1 consumer API and one OpenAPI document.", paths, s, false)
+		browserSpec = httpdocs.Document("RomMeta browser API", appinfo.Version, "Local catalog browser, read-only by default; serve --edit enables reviewed catalog changes. No authentication; keep on loopback or a trusted network. The serve runtime composes these browser routes with the portable /v1 consumer API and one OpenAPI document.", paths, s, false)
 	})
 	return browserSpec
 }

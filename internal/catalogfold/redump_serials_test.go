@@ -218,13 +218,17 @@ func TestSerialReviewCannotOverrideFileOrAliasHolds(t *testing.T) {
 		name, extra, source string
 		want                string
 	}{
-		{name: "unowned canonical data", extra: "custom_notes: retain\n", want: "unsupported canonical field"},
+		{name: "unowned canonical data", extra: "custom_notes: retain\n", want: "conflicting saved fields"},
 		{name: "unconfirmed alias", source: "  launchbox:\n    matches:\n      - database_id: '10'\n        title: English Game\n        alternate_titles: [Localized Game]\n", want: "no matching explicit release region"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			root := t.TempDir()
 			writeSerialGame(t, root, "Xbox 360", "English Game", "USA", "EA-2276", "", "", tt.source)
 			writeSerialGame(t, root, "Xbox 360", "Localized Game", "Japan", "EA-2276", "", tt.extra, "")
+			if tt.extra != "" {
+				path := filepath.Join(root, "platforms", "Xbox 360", "English Game", "game.yaml")
+				writeFoldFile(t, path, readFoldFile(t, path)+"\ncustom_notes: different\n")
+			}
 			r, e := Fold(Options{DataRoot: root, Review: func(ReviewPrompt) (ReviewDecision, error) { return ReviewApply, nil }})
 			if e != nil || r.AppliedGroupCount != 0 || r.HeldGroupCount != 1 || !strings.Contains(r.Groups[0].HoldReason, tt.want) {
 				t.Fatalf("%v %+v", e, r)

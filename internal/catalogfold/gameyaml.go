@@ -23,6 +23,7 @@ func parseGameYAML(contents []byte) (catalogGame, error) {
 		return catalogGame{}, err
 	}
 	game := catalogGame{
+		Document:        document,
 		Title:           catalogyaml.Scalar(catalogyaml.Value(root, "title")),
 		ContentKey:      catalogyaml.Scalar(catalogyaml.Value(catalogyaml.Value(root, "fold"), "content_key")),
 		DefaultRelease:  catalogyaml.Scalar(catalogyaml.Value(root, "default_release")),

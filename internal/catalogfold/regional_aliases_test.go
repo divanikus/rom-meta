@@ -43,7 +43,7 @@ func TestRegionalAliasFoldSafety(t *testing.T) {
 		{name: "unrelated anchor title", anchor: strings.Replace(regionalAnchorSource, "English Game", "English Game Demo", 1)},
 		{name: "ignored direct evidence", targetExtra: "fold:\n  ignore_evidence: ['launchbox.database_id=10']\n"},
 		{name: "ignored alias evidence", targetExtra: "fold:\n  ignore_evidence: ['launchbox.regional_alias=10']\n"},
-		{name: "unknown canonical field", targetExtra: "manual_notes: keep this\n", groups: 1, held: 1},
+		{name: "unknown canonical field", targetExtra: "manual_notes: keep this\n", groups: 1},
 		{name: "unscoped IGDB", anchor: "  igdb:\n    matches:\n      - igdb_id: '10'\n        alternate_titles: ['Nippon Game']\n"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

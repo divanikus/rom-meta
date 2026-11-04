@@ -14,6 +14,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"context"
+	"rommeta/internal/catalogedit"
 	"rommeta/internal/catalogfs"
 	"rommeta/internal/catalogrules"
 	"rommeta/internal/catalogyaml"
@@ -26,6 +28,8 @@ const minimumStrongMatchScore = 140
 
 // Options controls post-metadata catalog folding.
 type Options struct {
+	Context                context.Context
+	skipMAME               bool
 	DataRoot               string
 	Platform               string
 	Match                  string
@@ -118,6 +122,9 @@ type PlatformResult struct {
 
 // Group is one proposed or applied game-bundle merge.
 type Group struct {
+	Edits             catalogedit.Patch `json:"-"`
+	MetadataConflicts []string
+	NativeDigest      string
 	Platform          string
 	Keep              GameRef
 	TargetFolder      string
@@ -159,6 +166,7 @@ type Evidence struct {
 }
 
 type catalogGame struct {
+	Document             *catalogyaml.Document
 	ContentKey           string
 	Content              []contentidentity.Profile
 	HasRomsetBindings    bool
@@ -244,12 +252,17 @@ func Fold(options Options) (Result, error) {
 
 	stopReview := false
 	for platformIndex, platform := range platforms {
+		if options.Context != nil {
+			if err := options.Context.Err(); err != nil {
+				return result, err
+			}
+		}
 		if options.OnPlatformStart != nil {
 			options.OnPlatformStart(platformIndex+1, len(platforms), platform)
 		}
 		groups := reviewedGroups[platform]
 		var mame *mameFoldPlan
-		if reviewedGroups == nil && platform == "Arcade" {
+		if reviewedGroups == nil && platform == "Arcade" && !options.skipMAME {
 			mame, err = prepareMAMEFold(root, options)
 			if err != nil {
 				return Result{}, err
@@ -262,12 +275,12 @@ func Fold(options Options) (Result, error) {
 				gameCount += 1 + len(group.Merge)
 			}
 		} else {
-			games, err := readPlatformCatalog(root, platform, options.Progress)
+			games, err := readPlatformCatalog(root, platform, options.Progress, options.Context)
 			if err != nil {
 				return Result{}, err
 			}
 			gameCount = len(games)
-			if mame != nil {
+			if mame != nil || options.skipMAME && platform == "Arcade" {
 				unbound := games[:0]
 				for _, game := range games {
 					if !game.HasRomsetBindings {
@@ -293,6 +306,11 @@ func Fold(options Options) (Result, error) {
 		result.GameCount += gameCount
 		platformResult.CandidateGroupCount = len(groups)
 		for index := range groups {
+			if options.Context != nil {
+				if err := options.Context.Err(); err != nil {
+					return result, err
+				}
+			}
 			group := &groups[index]
 			if group.HoldReason != "" {
 				platformResult.HeldGroupCount++
@@ -303,6 +321,15 @@ func Fold(options Options) (Result, error) {
 					return Result{}, err
 				}
 				group.FileChanges = changes
+				if reason == "" {
+					_, err := groupDocument(root, *group, rulesForPlatform(defaultRegionRules, platformRegionRules, platform))
+					if err != nil {
+						reason = err.Error()
+						if fields, ok := err.(*fieldConflicts); ok {
+							group.MetadataConflicts = fields.Fields
+						}
+					}
+				}
 				if reason != "" {
 					group.HoldReason = reason
 					platformResult.HeldGroupCount++
@@ -597,7 +624,7 @@ func catalogPlatforms(root, platformFilter string, progress taskprogress.Func) (
 	return platforms, nil
 }
 
-func readPlatformCatalog(root, platform string, progress taskprogress.Func) ([]catalogGame, error) {
+func readPlatformCatalog(root, platform string, progress taskprogress.Func, ctx context.Context) ([]catalogGame, error) {
 	platformPath := filepath.Join(root, "platforms", platform)
 	entries, err := catalogfs.ReadDir(platformPath)
 	if err != nil {
@@ -613,6 +640,11 @@ func readPlatformCatalog(root, platform string, progress taskprogress.Func) ([]c
 	sort.Strings(folders)
 	games := make([]catalogGame, 0, len(folders))
 	for index, folder := range folders {
+		if ctx != nil {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		progress.Update("reading", index+1, len(folders), platform+" / "+folder)
 		game, err := readGameSummary(catalogGame{
 			Platform: platform,
@@ -654,6 +686,7 @@ func readGameSummary(game catalogGame) (catalogGame, error) {
 	}
 	parsed.FingerprintCount = fingerprintCount
 	parsed.SourceBlocks = nil
+	parsed.Document = nil
 	return parsed, nil
 }
 
@@ -1230,15 +1263,18 @@ func applyGroup(root string, group *Group, regions regionRules) error {
 	}
 	group.FileChanges = changes
 
-	merged := renderMergedGameYAML(games, regions)
-	mergedDoc, err := catalogyaml.Parse([]byte(merged))
+	merged, err := mergedDocument(games, regions, group.Edits)
+	if err != nil {
+		return err
+	}
+	mergedDoc, err := catalogyaml.Parse(merged)
 	if err != nil {
 		return err
 	}
 	if _, err := catalogyaml.Variants(mergedDoc.Root()); err != nil {
 		return err
 	}
-	if err := catalogfs.WriteFile(filepath.Join(keepPath, "game.yaml"), []byte(merged), 0o644); err != nil {
+	if err := catalogfs.WriteFile(filepath.Join(keepPath, "game.yaml"), merged, 0o644); err != nil {
 		return err
 	}
 	if err := catalogfs.WriteFile(filepath.Join(keepPath, "fingerprints.yaml"), []byte(renderMergedFingerprints(games)), 0o644); err != nil {

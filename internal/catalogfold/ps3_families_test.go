@@ -152,6 +152,10 @@ func TestPS3DiscFamiliesDoNotBypassHolds(t *testing.T) {
 			}
 			writeSerialGame(t, root, platform, "English", "USA", "BLUS30198", "", "", anchorSource)
 			writeSerialGame(t, root, platform, "Localized", "Japan", "BLJM60137", "", tt.extra, tt.source)
+			if tt.extra != "" {
+				path := filepath.Join(root, "platforms", platform, "English", "game.yaml")
+				writeFoldFile(t, path, readFoldFile(t, path)+"\nmanual_notes: different\n")
+			}
 			if tt.thirdSerial != "" {
 				writeSerialGame(t, root, platform, "Third", "Europe", tt.thirdSerial, "", "", tt.thirdSource)
 			}

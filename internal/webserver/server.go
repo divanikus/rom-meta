@@ -17,6 +17,7 @@ import (
 )
 
 type Options struct {
+	AllowEdit                                          bool
 	DataRoot, Addr, ProfilePath, LookupCacheDir, Token string
 	ROMRoot, Platform, Match                           string
 	Limit                                              int
@@ -37,11 +38,14 @@ func New(options Options) (*Server, error) {
 	if options.Limit < 0 {
 		return nil, fmt.Errorf("limit must be non-negative (0: all)")
 	}
-	browser, err := serveui.Handler(options.DataRoot)
+	browser, err := serveui.HandlerWithEditing(options.DataRoot, options.AllowEdit)
 	if err != nil {
 		return nil, err
 	}
 	snapshot := options.ROMRoot != "" || options.Platform != ""
+	if snapshot && options.AllowEdit {
+		return nil, fmt.Errorf("--edit requires catalog mode; omit fixed --rom-root/--platform selection")
+	}
 	if snapshot && (options.ROMRoot == "" || options.Platform == "") {
 		return nil, fmt.Errorf("fixed selection requires both --rom-root and --platform")
 	}
@@ -159,7 +163,7 @@ func combinedOpenAPI(lookup, protected bool) (any, error) {
 	}
 	info := doc["info"].(map[string]any)
 	info["title"] = "RomMeta API"
-	info["description"] = "One read-only HTTP service for catalog browsing, lookup and media. /api routes support the browser; /v1 routes provide portable consumer contracts. CLI commands perform catalog mutations. Profile is optional; default selection follows source priorities. Initial platform loads and full statistics may be expensive."
+	info["description"] = "One HTTP service for catalog browsing, lookup and media. Catalog editing requires serve --edit. /api routes support the browser; /v1 routes provide portable consumer contracts. CLI and explicitly enabled browser actions share catalog operations. Profile is optional; default selection follows source priorities. Initial platform loads and full statistics may be expensive."
 	if protected {
 		doc["components"].(map[string]any)["securitySchemes"] = map[string]any{"bearerAuth": map[string]any{"type": "http", "scheme": "bearer", "description": "Optional ROMMETA_API_TOKEN."}, "basicAuth": map[string]any{"type": "http", "scheme": "basic", "description": "Browser access: user rommeta, password ROMMETA_API_TOKEN. This is a shared service secret, not a user account."}}
 		doc["security"] = []any{map[string]any{"bearerAuth": []string{}}, map[string]any{"basicAuth": []string{}}}

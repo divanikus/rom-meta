@@ -13,8 +13,9 @@ func (s *server) apiIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{
-		"mode": "browser", "read_only": true, "documentation": "/docs", "openapi": "/openapi.json",
+		"mode": "browser", "read_only": !s.allowEdit, "documentation": "/docs", "openapi": "/openapi.json",
 		"endpoints": map[string]string{
+			"catalog": "/api/catalog", "edit": "GET/POST /api/catalog/edit", "fold_plan": "POST /api/catalog/fold-plan", "fold_preview": "POST /api/catalog/fold-preview", "fold_apply": "POST /api/catalog/fold-apply",
 			"platforms": "/api/platforms", "names": "/api/games?platform=<folder>&names=1",
 			"summaries":      "/api/games?platform=<folder>&game=<folder>",
 			"game":           "/api/game?platform=<folder>&game=<folder>",

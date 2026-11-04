@@ -124,7 +124,10 @@ show metadata, Sources and then Media together in Overview; Releases & fingerpri
 and Raw have separate tabs. Registered file names, sizes and hashes load on demand;
 export mode shows selected media and a native XML preview. Variants use readable
 translation labels.
-No catalog/frontend writes occur in the web UI. See [the browser guide](docs/catalog-api.md#browse-with-an-export-profile).
+Add `--edit` to correct cards and build automatic fold plans with visual comparison
+and batch apply. See [catalog editing](docs/catalog-editing.md). Frontend export
+remains a CLI action; [browser export preview](docs/catalog-api.md#browse-with-an-export-profile)
+prepares its selection profile.
 
 ## HTTP API
 

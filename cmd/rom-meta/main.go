@@ -9,6 +9,7 @@ import (
 	"rommeta/internal/appinfo"
 	"rommeta/internal/catalog"
 	"rommeta/internal/catalogchanges"
+	"rommeta/internal/catalogedit"
 	"rommeta/internal/catalogfs"
 	"rommeta/internal/exporter"
 )
@@ -16,12 +17,18 @@ import (
 func main() { os.Exit(runCommand()) }
 
 func runCommand() (code int) {
+	var releaseWriter func()
 	changes := catalogchanges.Begin(func(root, platform string) error {
 		fmt.Fprintf(os.Stderr, "Updating catalog index: %s\n", platform)
 		return exporter.RefreshPlatformIndex(root, platform)
 	})
 	defer catalogfs.Cleanup()
 	defer func() {
+		defer func() {
+			if releaseWriter != nil {
+				releaseWriter()
+			}
+		}()
 		if err := changes.Finish(); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			if code == 0 {
@@ -38,6 +45,14 @@ func runCommand() (code int) {
 		return
 	}
 
+	if root, needed := catalogWriterRoot(args); needed {
+		var err error
+		releaseWriter, err = catalogedit.Lock(root)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+	}
 	switch args[0] {
 	case "version", "--version":
 		if len(args) != 1 {

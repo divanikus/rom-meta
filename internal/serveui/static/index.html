@@ -929,6 +929,8 @@
     }
     .export-xml { white-space:pre; overflow:auto; max-height:65vh; font-size:12px; }
   </style>
+<link rel="stylesheet" href="/catalog-edit.css">
+<script src="/catalog-edit.js" defer></script>
 </head>
 <body>
   <div class="app" id="app">
@@ -945,7 +947,8 @@
           <button class="tab-button active" id="library-mode" type="button" aria-pressed="true">Library</button>
           <button class="tab-button" id="export-mode" type="button" aria-pressed="false">Export preview</button>
         </div>
-        <div class="export-options hidden" id="export-controls">
+        <div class="catalog-tools hidden" id="catalog-tools"><button class="tab-button" id="catalog-build-plan" type="button">Review duplicates</button><button class="tab-button" id="catalog-edit-card" type="button">Edit card</button><button class="tab-button" id="catalog-add-compare" type="button">Add to comparison</button><button class="tab-button" id="catalog-compare" type="button" disabled>Compare (0)</button></div>
+<div class="export-options hidden" id="export-controls">
           <label>Frontend <select id="export-target"><option value="es-de">ES-DE</option><option value="launchbox">LaunchBox</option></select></label>
           <label>Description <select id="export-language"><option value="en">English</option><option value="ru">Русский → English</option><option value="ja">日本語 → English</option><option value="fr">Français → English</option><option value="de">Deutsch → English</option><option value="es">Español → English</option><option value="it">Italiano → English</option><option value="pt">Português → English</option><option value="zh">中文 → English</option><option value="ko">한국어 → English</option></select></label>
           <label>Media <select id="export-media"><option value="all">Images + video</option><option value="images">Images</option><option value="cover">Cover only</option><option value="none">None</option><option value="expanded">All supported media</option><option value="custom" disabled>Custom selection</option></select></label>
@@ -1029,6 +1032,7 @@
       <p><button class="tab-button" id="profile-close" type="button">Close</button></p>
     </div>
   </div>
+<dialog class="catalog-dialog" id="catalog-dialog" aria-labelledby="catalog-title"><div class="catalog-head"><div><span class="catalog-eyebrow">Your library · made personal</span><h2 id="catalog-title">Catalog workspace</h2><p id="catalog-subtitle"></p></div><button class="tab-button" id="catalog-close" type="button" aria-label="Close catalog workspace">Close</button></div><div class="catalog-content" id="catalog-content"></div></dialog>
   <script>
     const state = {
       platforms: [],

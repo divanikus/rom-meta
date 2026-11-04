@@ -1,6 +1,6 @@
-# Read-only catalog API
+# Catalog browser and API
 
-`rom-meta serve` hosts a read-only browser, catalog API and local media on one
+`rom-meta serve` hosts a browser, catalog API and local media on one
 address. It uses the portable catalog without provider acquisition or a new
 authoritative database. Consumers include the
 [RomM importer](romm-server-importer.md) and
@@ -19,7 +19,9 @@ Catalog mode needs no ROM mount, token, profile or `--all`. Default address:
 `127.0.0.1:8787`; use `--addr` to change it. `--profile` overrides priorities from
 `sources.yaml`. Startup reads platform headers/profile, not the full media library.
 The browser (`/`), API index (`/api`) and documentation (`/docs`, `/openapi.json`)
-share this process.
+share this process. Catalog access is read-only by default. Add `--edit` to enable
+[card corrections and automatic fold plans with visual review](catalog-editing.md).
+The portable `/v1` consumer contracts remain read-only.
 
 The ordinary browser and `GET /api/game` show explicit saved game fields over a
 source overview, all saved descriptions, releases, variants and local media.
@@ -514,8 +516,10 @@ before refreshing.
 ## Container build
 
 Cross-build a static Linux binary at `bin/linux-amd64/rom-meta`, then use
-`docker/Dockerfile.api`. The image runs as UID/GID 568 with a read-only catalog,
-optional profile/selected-ROM mounts and optional token environment. It needs no
+`docker/Dockerfile.api`. The image runs as UID/GID 568. Read-only catalog,
+optional profile/selected-ROM mounts and an optional token suit browsing/export.
+For `--edit`, make only the catalog mount writable and grant the service user
+appropriate catalog filesystem permissions; retain a read-only container root. It needs no
 RomM database or Resources access.
 
 The image sets `GOMEMLIMIT=1536MiB` for a 2 GiB container. Override it for other
