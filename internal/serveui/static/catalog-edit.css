@@ -30,7 +30,9 @@
 .catalog-row-title{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
 .catalog-plan-row input{accent-color:#95dbbf;width:18px;height:18px}
 .catalog-comparison{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,380px);gap:22px;align-items:start}
-.catalog-candidates{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;align-items:start}
+.catalog-candidate-area{min-width:0}.catalog-scroll-hint{margin:0 0 10px;color:var(--muted);font-size:12px}
+.catalog-candidates{display:grid;grid-auto-flow:column;grid-auto-columns:min(320px,100%);gap:14px;align-items:start;min-width:0;max-height:60vh;overflow:auto;padding-bottom:12px;scroll-snap-type:x proximity;scrollbar-color:#668c80 #172225}
+.catalog-candidates:focus-visible{outline:2px solid #74b49d;outline-offset:4px}.catalog-candidate{scroll-snap-align:start}
 .catalog-candidate,.catalog-result{padding:18px;border:1px solid var(--line);border-radius:15px;background:#1b2529;min-width:0}
 .catalog-candidate.is-primary{border-color:#7db7a1;box-shadow:inset 0 3px #8dcbb3}
 .catalog-candidate img{height:170px;max-width:100%;object-fit:contain;display:block;margin:0 auto 16px;filter:drop-shadow(0 6px 9px #0004)}
@@ -60,5 +62,5 @@
 .catalog-saved{font-size:42px;color:#a8e3ce;margin-bottom:12px}
 @keyframes catalog-enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes catalog-spin{to{transform:rotate(360deg)}}
-@media(max-width:850px){.catalog-comparison,.catalog-edit-grid{grid-template-columns:1fr}.catalog-result{position:static}.catalog-content{padding:18px}.catalog-head{padding:18px}.catalog-plan-row{gap:10px;padding:12px}.catalog-head h2{font-size:20px}.catalog-tools{margin-left:0}.catalog-candidates{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}}
+@media(max-width:850px){.catalog-comparison,.catalog-edit-grid{grid-template-columns:1fr}.catalog-result{position:static}.catalog-content{padding:18px}.catalog-head{padding:18px}.catalog-plan-row{gap:10px;padding:12px}.catalog-head h2{font-size:20px}.catalog-tools{margin-left:0}.catalog-candidates{max-height:65vh}}
 @media(prefers-reduced-motion:reduce){.catalog-dialog[open],.catalog-spinner{animation:none}.catalog-content button,.catalog-head button,.catalog-plan-row{transition:none}}

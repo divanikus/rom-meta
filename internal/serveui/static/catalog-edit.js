@@ -4,7 +4,7 @@ const catalogUI = {enabled:false, plan:null, selected:new Set(), compare:new Set
 const catalogLabels = {title:"Title",aliases:"Aliases",alternate_titles:"Alternate titles",description:"Description · all languages",descriptions:"Descriptions",release_date:"Release date",developer:"Developer",publisher:"Publisher",genres:"Genres",players:"Players"};
 const catalogLists = new Set(["aliases","alternate_titles","genres"]);
 const catalogLanguages = {en:"English",ru:"Русский",ja:"日本語",fr:"Français",de:"Deutsch",es:"Español",it:"Italiano",pt:"Português",zh:"中文",ko:"한국어"};
-const catalogStatus = {ready:"Ready to apply",review:"Needs your decision",blocked:"Conflict"};
+const catalogStatus = {ready:"Ready to apply",review:"Needs your decision",blocked:"Merge blocked"};
 const cEscape = value => escapeHTML(String(value ?? ""));
 async function catalogPost(path, body, signal) {
  const r = await fetch(path,{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify(body),signal});
@@ -149,6 +149,7 @@ function catalogRenderPlan(){
  const plan=catalogUI.plan;if(!plan)return;catalogHeader("Review duplicates",plan.platform+" · Suggested groups and primary cards are already prepared.");
  const groups=plan.groups;const count=status=>groups.filter(g=>g.status===status).length;
  $("catalog-content").innerHTML='<div class="catalog-metrics">'+["ready","review","blocked"].map(status=>'<div class="catalog-metric '+status+'"><strong>'+count(status)+'</strong><span>'+catalogStatus[status]+'</span></div>').join("")+'<div id="catalog-feedback"></div>'+
+ (groups.length&&count("blocked")===groups.length?catalogNotice("No groups are ready to merge. Compare lets you inspect why each group is blocked; it does not approve a merge.","warn"):"")+
  (groups.length?'<div class="catalog-plan-list">'+groups.map(pg=>{
   const g=pg.group;const names=[g.Keep,...(g.Merge||[])].map(x=>x.Folder);
   return '<article class="catalog-plan-row"><input type="checkbox" aria-label="Include '+escapeAttr(g.Keep.Title||g.Keep.Folder)+'" data-plan-select="'+pg.id+'" '+(catalogUI.selected.has(pg.id)?'checked ':'')+(pg.status!=="ready"?'disabled':'')+'><div><div class="catalog-row-title"><h3>'+cEscape(g.Keep.Title||g.Keep.Folder)+'</h3><span class="catalog-badge '+pg.status+'">'+catalogStatus[pg.status]+'</span></div><p>'+cEscape(names.join(" + "))+'</p><p>'+cEscape(catalogGroupReason(pg)||"Primary chosen from catalog preferences. Releases and media will be retained.")+'</p></div><button class="tab-button" data-plan-review="'+pg.id+'">Compare</button></article>';
@@ -171,7 +172,7 @@ function catalogCandidate(card,index,fields){
 async function catalogReviewGroup(id){
  if(catalogUI.busy)return;
  catalogUI.busy=true;catalogUI.mode="review";catalogUI.primary="";catalogUI.patch={};catalogUI.dirty=false;catalogUI.group=catalogUI.plan.groups.find(g=>g.id===id);
- catalogOpen("Compare games","Choose the result; all source observations and releases are retained.");const version=catalogUI.version;
+ catalogOpen("Compare games","Loading candidates and checking merge status…");const version=catalogUI.version;
  try{
   const refs=[catalogUI.group.group.Keep,...(catalogUI.group.group.Merge||[])];
   catalogUI.cards=await Promise.all(refs.map(async ref=>{
@@ -193,7 +194,8 @@ function catalogAcceptGroup(group){
 }
 function catalogRenderReview(){
  const pg=catalogUI.group,g=pg.group,blocked=pg.status==="blocked";
- $("catalog-content").innerHTML='<button class="catalog-back" id="catalog-back">← Back to plan</button><div id="catalog-feedback">'+(pg.reason?catalogNotice(catalogGroupReason(pg),pg.status==="blocked"?"error":"warn"):'')+'</div><div class="catalog-comparison"><div class="catalog-candidates">'+catalogUI.cards.map((card,i)=>catalogCandidate(card,i,["title","alternate_titles","description","descriptions","developer","publisher","release_date","genres","players"])).join("")+'</div><section class="catalog-result"><span class="catalog-eyebrow">Result</span><h3>'+cEscape(g.Keep.Title||g.Keep.Folder)+'</h3>'+
+ catalogHeader("Compare games",catalogUI.cards.length+" cards · "+catalogStatus[pg.status]+". "+(blocked?"Preview and apply are unavailable. Inspect the reason below.":"Review the proposed result; source observations and releases are retained."));
+ $("catalog-content").innerHTML='<button class="catalog-back" id="catalog-back">← Back to plan</button><div id="catalog-feedback">'+(pg.reason?catalogNotice(catalogGroupReason(pg),pg.status==="blocked"?"error":"warn"):'')+'</div><div class="catalog-comparison"><section class="catalog-candidate-area"><p class="catalog-scroll-hint">Scroll sideways to compare cards →</p><div class="catalog-candidates" tabindex="0" role="region" aria-label="Candidate cards; scroll horizontally to compare">'+catalogUI.cards.map((card,i)=>catalogCandidate(card,i,["title","alternate_titles","description","descriptions","developer","publisher","release_date","genres","players"])).join("")+'</div></section><section class="catalog-result"><span class="catalog-eyebrow">'+(blocked?"Merge status":"Result")+'</span><h3>'+cEscape(blocked?"Merge blocked":g.Keep.Title||g.Keep.Folder)+'</h3>'+
  (blocked?'':g.NativeDigest?'<p>MAME chooses its primary from the accepted snapshot. Edit individual cards in the library before rebuilding this plan.</p>':'<details><summary>Correct the result</summary><div id="catalog-form-host"></div></details>')+
  (!blocked&&pg.needs_identity?'<label class="catalog-confirm"><input type="checkbox" id="catalog-confirm-identity" '+(g.ReviewAccepted?'checked':'')+'>These cards represent the same game.</label>'+(pg.manual?'<label class="catalog-form">Evidence for this decision<input id="catalog-identity-reason" value="'+escapeAttr(g.ReviewReason||"")+'" placeholder="Why these releases belong together"></label>':''):'')+
  '<div class="catalog-actions"><button class="tab-button" id="catalog-preview-group" '+(blocked?'disabled':'')+'>Preview result</button><button class="catalog-primary" id="catalog-commit" '+(pg.status!=="ready"||catalogUI.dirty?'disabled':'')+'>Apply this merge</button></div><p class="secondary" id="catalog-preview-feedback">'+(blocked?"Merge unavailable for this group.":catalogUI.dirty?"Changes need a new preview.":pg.status==="review"?"A decision is needed before applying.":"Result matches the current preview.")+'</p><div id="catalog-result-preview">'+catalogProfilePreview(catalogUI.preview,catalogReviewHint(pg))+'</div><details><summary>Why this group?</summary>'+(g.Evidence||[]).map(e=>'<p>'+cEscape(e.Source+": "+e.Field+" · "+e.Value)+'</p>').join("")+'</details><details><summary>Affected files</summary><pre>'+cEscape((g.FileChanges||[]).map(f=>f.Action+": "+f.FromFolder+"/"+f.Path+" → "+f.Target).join("\n")||"Catalog documents and merged card folders")+'</pre></details>'+

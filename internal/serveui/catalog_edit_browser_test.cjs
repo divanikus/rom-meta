@@ -89,6 +89,7 @@ test('hard conflicts do not offer field edits or identity confirmation as a solu
  assert.match(html,/Field edits or identity confirmation cannot override the conflict/);
  assert.match(html,/id="catalog-commit" disabled/);
  assert.match(html,/id="catalog-preview-group" disabled/);
+ assert.match(b.element('catalog-subtitle').textContent,/Merge blocked\. Preview and apply are unavailable/);
  assert.doesNotMatch(html,/Correct the result|catalog-confirm-identity|Result matches the current preview|Choose the saved values/);
 });
 test('editable-field and identity reviews retain their distinct guidance',()=>{
@@ -96,8 +97,21 @@ test('editable-field and identity reviews retain their distinct guidance',()=>{
  b.run('catalogUI.group={status:"review",reason:"conflicting saved fields: description",conflicts:["description"],group:{Keep:{Folder:"One"},Merge:[],Evidence:[]}};catalogUI.cards=[];catalogRenderReview()');
  assert.match(b.element('catalog-content').innerHTML,/Choose the highlighted saved values/);
  assert.match(b.element('catalog-content').innerHTML,/Correct the result/);
+ assert.doesNotMatch(b.element('catalog-content').innerHTML,/id="catalog-preview-group" disabled/);
+ assert.match(b.element('catalog-subtitle').textContent,/Needs your decision/);
  b.run('catalogUI.group.conflicts=[];catalogUI.group.needs_identity=true;catalogRenderReview()');
  assert.match(b.element('catalog-content').innerHTML,/Compare the regional titles, edition and content/);
  assert.match(b.element('catalog-content').innerHTML,/catalog-confirm-identity/);
  assert.doesNotMatch(b.element('catalog-content').innerHTML,/cannot override the conflict/);
+});
+
+test('blocked-only plans explain that comparison is inspection rather than approval',()=>{
+ const b=browser(async()=>json({}));
+ b.run('catalogUI.plan={platform:"Console",groups:[{id:0,status:"blocked",reason:"different edition markers",group:{Keep:{Folder:"One"},Merge:[{Folder:"Two"}]}}]};catalogRenderPlan()');
+ assert.match(b.element('catalog-content').innerHTML,/No groups are ready to merge/);
+ assert.match(b.element('catalog-content').innerHTML,/it does not approve a merge/);
+ assert.equal(b.element('catalog-apply-ready').disabled,true);
+ b.run('catalogUI.plan.groups[0].status="ready";catalogUI.selected.add(0);catalogRenderPlan()');
+ assert.doesNotMatch(b.element('catalog-content').innerHTML,/No groups are ready to merge/);
+ assert.equal(b.element('catalog-apply-ready').disabled,false);
 });

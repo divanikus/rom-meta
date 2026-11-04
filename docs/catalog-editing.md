@@ -36,7 +36,7 @@ fold rules and proposes groups, primary cards and merged results automatically:
   These groups start selected. Apply them together without opening each comparison.
 - **Needs your decision**: review the identity evidence or choose between differing
   saved field values. Preview the result to make the group ready.
-- **Conflict**: an identity/content boundary, unreadable or colliding file, or
+- **Merge blocked**: an identity/content boundary, unreadable or colliding file, or
   incompatible unknown field prevents merging. The comparison explains the reason;
   result-field editing and identity confirmation are not offered as a bypass.
   Correct the underlying cards or file access, then build a new plan.
@@ -49,6 +49,16 @@ explicitly. A plan with an incomplete file inspection cannot be reused after an
 access repair; build a new one. Applying ordinary groups still uses a whole-platform
 transaction, so all files required for that copy must be readable.
 
+**Compare** opens both mergeable and blocked groups. A blocked group is inspection
+only: **Preview result** and **Apply this merge** are disabled, with its status and
+reason shown explicitly. The plan is a list of candidates, not approval to merge
+every listed group. When only blocked groups remain, the list explains that no
+merge is ready. Resolving ordinary saved-field differences uses **Needs your
+decision** instead: choose values, preview, then apply when ready.
+
+Candidate cards keep a readable width in a horizontal scroll area; the result
+stays beside them on wider screens and below on narrow screens. Focus the card
+area to scroll with the keyboard, or use its scrollbars/touch gestures.
 **Compare** shows candidate cards, highlighted differences, cover art, releases,
 source observations, media and registered fingerprints. Accept the suggested
 primary, choose another eligible member, or correct the result. Previewed decisions
