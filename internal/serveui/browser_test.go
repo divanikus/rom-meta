@@ -10,7 +10,7 @@ func TestBrowserLoading(t *testing.T) {
 	if err != nil {
 		t.Skip("Node is optional; install it to run embedded-browser logic tests")
 	}
-	cmd := exec.Command(node, "--test", "browser_test.cjs", "catalog_edit_browser_test.cjs")
+	cmd := exec.Command(node, "--test", "browser_test.cjs", "catalog_edit_browser_test.cjs", "library_browser_test.cjs")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("browser tests: %v\n%s", err, output)
 	}

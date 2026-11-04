@@ -8,7 +8,6 @@ import (
 
 	"rommeta/internal/dat"
 	"rommeta/internal/platformnames"
-	"rommeta/internal/store"
 )
 
 func runDAT(args []string) error {
@@ -105,25 +104,10 @@ func runDATImportCommand(args []string, requireArcade bool) error {
 		printDATImportUsage()
 		return fmt.Errorf("DAT file path is required")
 	}
-	catalogConfig, err := store.LoadCatalogConfig(options.DataRoot)
+	var err error
+	options.ImportOptions, err = dat.LibraryOptions(options.ImportOptions)
 	if err != nil {
 		return err
-	}
-	registry, _, err := platformnames.LoadRegistry(catalogConfig.Root)
-	if err != nil {
-		return err
-	}
-	options.DataRoot = catalogConfig.Root
-	options.RegionPriority = catalogConfig.Fold.RegionPriority
-	options.RegionGroups = catalogConfig.Fold.RegionGroups
-	if len(catalogConfig.Fold.Platforms) > 0 {
-		options.PlatformRegionPriority = map[string][]string{}
-		for platformName, platformConfig := range catalogConfig.Fold.Platforms {
-			resolved := registry.ResolveCLI(platformName)
-			if strings.TrimSpace(resolved) != "" {
-				options.PlatformRegionPriority[resolved] = platformConfig.RegionPriority
-			}
-		}
 	}
 	format, err := dat.DetectFormat(path, options.MemberPath)
 	if err != nil {

@@ -1,0 +1,173 @@
+/* Library navigation and server-owned DAT operations. No browser job queue. */
+const libraryUI={jobs:[],selected:null,view:"library",timer:null,polling:false,uploading:false,uploadPercent:0,error:"",refreshed:new Set(),settings:null,file:null,drafts:new Map()};
+const importStages={opening:"Opening DAT",parsing:"Reading releases",planning:"Preparing changes",bundling:"Grouping releases",writing:"Saving cards",importing:"Starting import"};
+const operationLabels={needs_selection:"Choose a DAT",planning:"Preparing plan",ready:"Ready to import",needs_review:"Needs attention",importing:"Importing",succeeded:"Complete",failed:"Could not finish"};
+function libraryNavigate(view){
+ if(typeof catalogLeaveInline==="function"&&!catalogLeaveInline())return;
+ libraryUI.view=view;
+ if(view==="library"||view==="export"){setView("browse");setExportMode(view==="export");}
+ else setView(view);
+ librarySyncNavigation();
+ if(view==="operations")libraryPollOperations();
+ if(view==="settings")libraryLoadSettings();
+}
+function librarySyncNavigation(){
+ if(typeof libraryUI==="undefined")return;
+ const view=state.view==="browse"?(state.exportMode?"export":"library"):state.view;
+ libraryUI.view=view;
+ $("top-status")?.classList.toggle("hidden",view!=="library"&&view!=="export");
+ for(const [id,target] of [["browse-tab","library"],["operations-tab","operations"],["export-mode","export"],["settings-tab","settings"]]){
+  $(id)?.classList.toggle("active",view===target);$(id)?.setAttribute("aria-current",view===target?"page":"false");
+ }
+ $("operations-pane")?.classList.toggle("hidden",view!=="operations");
+ $("settings-pane")?.classList.toggle("hidden",view!=="settings");
+ const empty=state.platformsLoaded&&state.platforms.length===0&&state.view==="browse";
+ $("library-empty")?.classList.toggle("hidden",!empty);
+ if(empty)for(const id of ["platform-pane","game-pane","detail-pane"])$(id).classList.add("hidden");
+ const enabled=typeof catalogUI!=="undefined"&&catalogUI.enabled;
+ $("library-import")?.classList.toggle("hidden",!enabled);
+ document.querySelectorAll("[data-import-new]").forEach(el=>el.classList.toggle("hidden",!enabled));
+ $("empty-readonly")?.classList.toggle("hidden",enabled);
+ $("card-tools")?.classList.toggle("hidden",!enabled||!state.game||view!=="library");
+ $("platform-heading")?.replaceChildren(document.createTextNode(state.platform||"Library"));
+}
+function operationBusy(job){return job.state==="planning"||job.state==="importing"}
+async function libraryPollOperations(){
+ if(libraryUI.polling)return;
+ libraryUI.polling=true;
+ try{
+  libraryUI.jobs=await fetchJSON("/api/operations");
+  if(libraryUI.selected===null)libraryUI.selected=(libraryUI.jobs.find(operationBusy)||libraryUI.jobs[0])?.id||"";
+  libraryUI.error="";
+  const active=libraryUI.jobs.filter(operationBusy).length,waiting=libraryUI.jobs.filter(j=>["ready","needs_selection","needs_review","failed"].includes(j.state)).length;
+  $("operations-count").textContent=active?String(active):waiting?String(waiting):"";
+  $("operations-status").textContent=active?active+" running on server":waiting?waiting+" to review":"";
+  for(const job of libraryUI.jobs){
+   if(job.state==="succeeded"&&!libraryUI.refreshed.has(job.id)){
+    libraryUI.refreshed.add(job.id);
+    state.platforms=await fetchJSON("/api/platforms");state.platformsLoaded=true;
+    $("platform-count").textContent=formatNumber(state.platforms.length);renderPlatforms();librarySyncNavigation();
+   }
+  }
+  if(state.view==="operations")libraryRenderOperations();
+ }catch(error){libraryUI.error=error.message;if(state.view==="operations")libraryRenderOperations();}
+ finally{
+  libraryUI.polling=false;clearTimeout(libraryUI.timer);
+  libraryUI.timer=setTimeout(libraryPollOperations,libraryUI.jobs.some(operationBusy)?1000:5000);
+ }
+}
+function libraryOpenImport(){
+ if(typeof catalogLeaveInline==="function"&&!catalogLeaveInline())return;
+ libraryUI.selected="";libraryUI.file=null;libraryNavigate("operations");libraryRenderOperations();
+ $("dat-upload-file")?.focus();
+}
+function operationSummary(job){
+ const x=job.summary;if(!x)return "";
+ return '<div class="operation-summary"><div><strong>'+formatNumber(x.games)+'</strong><span>game cards</span></div><div><strong>'+formatNumber(x.releases)+'</strong><span>releases</span></div><div><strong>'+formatNumber(x.fingerprints)+'</strong><span>fingerprints</span></div></div>'+
+ '<dl class="operation-facts"><dt>Platform</dt><dd>'+escapeHTML(x.platform)+'</dd><dt>Dataset</dt><dd>'+escapeHTML(x.dataset)+'</dd><dt>Source</dt><dd>'+escapeHTML(x.authority||x.format)+'</dd><dt>Changes</dt><dd>'+formatNumber(x.added)+' added · '+formatNumber(x.reconciled)+' reconciled</dd></dl>'+
+ (x.conflicts?.length?'<div class="operation-error"><strong>Resolve these before importing</strong><ul>'+x.conflicts.map(v=>'<li>'+escapeHTML(v)+'</li>').join("")+'</ul></div>':"")+
+ (x.samples?.length?'<details><summary>Sample releases</summary><ul>'+x.samples.map(v=>'<li>'+escapeHTML(v.Name||v.Description)+'</li>').join("")+'</ul></details>':"");
+}
+function libraryPlanDirty(job){
+ const draft=libraryUI.drafts.get(job.id);
+ return !!draft&&(draft.member!==(job.member||"")||draft.platform.trim()!==(job.platform||""));
+}
+function libraryUpdateApply(job){
+ if(!job)return;const dirty=libraryPlanDirty(job);
+ document.querySelectorAll("[data-import-apply]").forEach(button=>{button.disabled=dirty;});
+ const hint=$("dat-apply-hint");if(hint)hint.textContent=dirty?"Options changed. Prepare the plan again before importing.":"The plan has not changed your cards.";
+}
+function operationDetail(job){
+ const busy=operationBusy(job),done=job.state==="succeeded",p=job.progress||{},draft=libraryUI.drafts.get(job.id)||{},selected=draft.member??job.member??"";
+ return '<article class="operation-detail"><div class="operation-eyebrow">DAT IMPORT · '+escapeHTML(operationLabels[job.state]||job.state)+'</div><h2>'+escapeHTML(job.filename)+'</h2>'+
+ (job.member?'<p class="secondary">'+escapeHTML(job.member)+'</p>':"")+
+ (busy?'<div class="operation-progress" role="status"><strong>'+escapeHTML(importStages[p.Stage]||p.Stage||"Preparing")+'</strong><span>'+escapeHTML(p.Item||"")+'</span>'+(p.Total?'<progress value="'+Number(p.Current||0)+'" max="'+Number(p.Total)+'"></progress><span>'+formatNumber(p.Current)+' / '+formatNumber(p.Total)+'</span>':'<progress aria-label="Operation in progress"></progress>')+'<p>You can close your browser. This operation continues on the server.</p></div>':"")+
+ (job.error?'<p class="operation-error" role="alert">'+escapeHTML(job.error)+'</p>':"")+
+ (job.warning?'<p class="operation-error" role="status">'+escapeHTML(job.warning)+'</p>':"")+
+ operationSummary(job)+
+ (!busy&&!done?'<form id="dat-plan-form" data-operation="'+escapeAttr(job.id)+'"><details '+(!job.summary?'open':'')+'><summary>'+(job.summary?'Change import options':'Import options')+'</summary>'+
+ (job.members?.length?'<label>DAT in ZIP<select name="member" id="dat-member">'+(job.members.length>1&&!selected?'<option value="">Choose a DAT…</option>':"")+job.members.map(m=>'<option value="'+escapeAttr(m)+'" '+(m===selected?"selected":"")+'>'+escapeHTML(m)+'</option>').join("")+'</select></label>':"")+
+ '<label>Platform name <span class="secondary">(leave empty to detect)</span><input id="dat-platform" name="platform" maxlength="150" value="'+escapeAttr(draft.platform??job.platform??"")+'" placeholder="'+escapeAttr(job.summary?.platform||"Detected from the DAT")+'"></label><button class="tab-button" type="submit">Prepare plan</button></details></form>':"")+
+ '<div class="operation-actions">'+(job.state==="ready"?'<button class="catalog-primary" data-import-apply="'+job.id+'">Import into library</button><span class="secondary" id="dat-apply-hint">The plan has not changed your cards.</span>':"")+
+ (done?'<button class="catalog-primary" data-import-open="'+job.id+'">Open '+escapeHTML(job.summary?.platform||"platform")+'</button><span class="secondary">Saved to your library.</span>':"")+
+ (!busy?'<button class="tab-button" data-import-dismiss="'+job.id+'">'+(done?"Dismiss result":"Discard upload")+'</button>':"")+'</div></article>';
+}
+function libraryRenderOperations(){
+ const pane=$("operations-pane");if(!pane)return;
+ // Keep a partially completed options form stable while background polling runs.
+ const focused=document.activeElement;
+ if(focused&&pane.contains?.(focused)&&["INPUT","SELECT"].includes(focused.tagName))return;
+ const selected=libraryUI.jobs.find(j=>j.id===libraryUI.selected);
+ pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">YOUR LIBRARY</span><h1>Operations</h1><p>Import, review, and return whenever you are ready.</p></div><button class="tab-button" data-import-new>＋ Import DAT</button></div>'+
+ (libraryUI.error?'<p class="operation-error" role="alert">'+escapeHTML(libraryUI.error)+'</p>':"")+
+ '<div class="operations-layout"><aside class="operations-list" aria-label="Library operations">'+
+ (libraryUI.jobs.length?libraryUI.jobs.map(j=>'<button class="operation-row '+(j.id===libraryUI.selected?"active":"")+'" data-operation-select="'+j.id+'"><strong>'+escapeHTML(j.filename)+'</strong><span>'+escapeHTML(operationLabels[j.state]||j.state)+'</span><small>'+escapeHTML(j.summary?.platform||j.member||"DAT import")+'</small></button>').join(""):'<p class="secondary">Your operations will appear here.</p>')+
+ '<p class="secondary operations-lifetime">Progress stays with the running server, even when you close this browser. Inactive operations expire after 24 hours. Restarting the server clears this list.</p></aside>'+
+ (selected?operationDetail(selected):'<section class="operation-detail import-welcome"><span class="import-symbol" aria-hidden="true">↥</span><h2>Bring your library to life</h2><p>Start with a DAT. RomMeta prepares the game cards and fingerprints; your ROM files stay where they are.</p><form id="dat-upload-form"><label class="upload-label">Choose a DAT or ZIP<input type="file" id="dat-upload-file" name="file" accept=".dat,.xml,.zip" '+(libraryUI.uploading?"disabled":"")+'></label><p class="secondary">XML DATs from No-Intro, Redump and compatible datasets. ZIPs can contain several DATs. Up to 256 MiB.</p><button class="catalog-primary" type="submit" '+(libraryUI.uploading?"disabled":"")+'>'+(libraryUI.uploading?"Uploading…":"Upload & prepare")+'</button><p id="dat-upload-progress" role="status">'+(libraryUI.uploading?"Uploading "+libraryUI.uploadPercent+"% — keep this page open until the upload finishes.":"Uploading prepares a plan. You choose when to import.")+'</p></form><details><summary>Prefer the command line?</summary><p>The CLI uses the same importer and catalog rules.</p><pre>rom-meta dat import &quot;&lt;file.dat-or-zip&gt;&quot; --data-root &quot;&lt;library&gt;&quot;\n# Add --apply after reviewing the plan.</pre><p class="secondary">Use the CLI for classified MAME listxml imports.</p></details></section>')+'</div>';
+ pane.querySelectorAll("[data-operation-select]").forEach(b=>b.addEventListener("click",()=>{libraryUI.selected=b.dataset.operationSelect;libraryRenderOperations();}));
+ pane.querySelectorAll("[data-import-new]").forEach(b=>b.addEventListener("click",libraryOpenImport));
+ $("dat-upload-form")?.addEventListener("submit",libraryUploadDAT);
+ $("dat-upload-file")?.addEventListener("change",event=>{libraryUI.file=event.target.files?.[0]||null;});
+ for(const id of ["dat-member","dat-platform"])$(id)?.addEventListener("input",()=>{libraryUI.drafts.set(selected.id,{member:$("dat-member")?.value||"",platform:$("dat-platform").value});libraryUpdateApply(selected);});
+ libraryUpdateApply(selected);
+ if(libraryUI.file&&$("dat-upload-progress")&&!libraryUI.uploading)$("dat-upload-progress").textContent="Selected: "+libraryUI.file.name;
+ $("dat-upload-form")?.classList.toggle("hidden",!catalogUI.enabled);
+ $("dat-plan-form")?.addEventListener("submit",async event=>{
+  event.preventDefault();const job=libraryUI.jobs.find(j=>j.id===libraryUI.selected);if(!job)return;
+  await libraryImportAction("/api/catalog/import-plan",{id:job.id,revision:job.revision,member:$("dat-member")?.value||"",platform:$("dat-platform").value});
+ });
+ pane.querySelectorAll("[data-import-apply]").forEach(b=>b.addEventListener("click",()=>libraryImportAction("/api/catalog/import-apply",{id:selected.id,revision:selected.revision})));
+ pane.querySelectorAll("[data-import-dismiss]").forEach(b=>b.addEventListener("click",async()=>{await libraryImportAction("/api/catalog/import-dismiss",{id:selected.id,revision:selected.revision});}));
+ pane.querySelectorAll("[data-import-open]").forEach(b=>b.addEventListener("click",async()=>{
+  libraryNavigate("library");await selectPlatform(selected.summary.platform);
+ }));
+ librarySyncNavigation();
+}
+function libraryRememberJob(job){
+ const i=libraryUI.jobs.findIndex(j=>j.id===job.id);
+ if(i<0)libraryUI.jobs.unshift(job);else libraryUI.jobs[i]=job;
+ libraryUI.selected=job.id;
+}
+async function libraryImportAction(path,body){
+ try{
+  libraryUI.error="";
+  const response=await catalogPost(path,body);
+  if(response.dismissed){libraryUI.jobs=libraryUI.jobs.filter(j=>j.id!==body.id);libraryUI.selected="";}
+  else {libraryUI.drafts.delete(body.id);libraryRememberJob(response);}
+  libraryRenderOperations();libraryPollOperations();
+ }catch(error){libraryUI.error=error.message;libraryRenderOperations();}
+}
+async function libraryUploadDAT(event){
+ event.preventDefault();if(libraryUI.uploading)return;
+ const file=$("dat-upload-file")?.files?.[0]||libraryUI.file;
+ if(!file){libraryUI.error="Choose a DAT or ZIP file first.";libraryRenderOperations();return;}
+ if(file.size>256*1024*1024){libraryUI.error="Choose a file up to 256 MiB.";libraryRenderOperations();return;}
+ libraryUI.uploading=true;libraryUI.uploadPercent=0;libraryUI.error="";libraryRenderOperations();
+ try{
+  const job=await new Promise((resolve,reject)=>{
+   const xhr=new XMLHttpRequest(),body=new FormData();body.append("file",file);
+   xhr.open("POST","/api/catalog/import-upload");xhr.responseType="json";
+   xhr.upload.onprogress=e=>{if(e.lengthComputable)libraryUI.uploadPercent=Math.round(e.loaded/e.total*100);const el=$("dat-upload-progress");if(el)el.textContent="Uploading "+libraryUI.uploadPercent+"% — keep this page open until the upload finishes.";};
+   xhr.onload=()=>xhr.status>=200&&xhr.status<300?resolve(xhr.response):reject(new Error(xhr.response?.error||"Upload failed. Try again."));
+   xhr.onerror=()=>reject(new Error("Connection lost. Check Operations for a received upload before sending it again."));
+   xhr.send(body);
+  });
+  libraryUI.file=null;libraryRememberJob(job);
+ }catch(error){libraryUI.error=error.message;}
+ finally{libraryUI.uploading=false;libraryRenderOperations();libraryPollOperations();}
+}
+async function libraryLoadSettings(){
+ const pane=$("settings-pane");
+ try{
+  const options=await fetchJSON("/api/export-options");libraryUI.settings=options;
+  pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">LIBRARY DEFAULTS</span><h1>Settings</h1><p>These source priorities belong to the library. Export profiles can choose a different order.</p></div></div><div class="settings-cards">'+
+  [["Metadata",options.metadata_sources],["Artwork",options.artwork_sources],["Video",options.video_sources]].map(([label,values])=>'<section class="operation-detail"><h2>'+label+'</h2><ol>'+(values||[]).map(v=>'<li>'+escapeHTML(sourceLabel(v))+'</li>').join("")+'</ol></section>').join("")+
+  '</div><p class="secondary">Library configuration is currently edited in YAML. Use Export to prepare and preview a profile.</p><div class="operation-actions"><a class="tab-button" href="/docs" target="_blank" rel="noopener">API documentation</a><a class="tab-button" href="/api" target="_blank" rel="noopener">API endpoints</a></div>';
+ }catch(error){pane.innerHTML='<p class="operation-error">'+escapeHTML(error.message)+'</p>';}
+}
+$("operations-tab").addEventListener("click",()=>libraryNavigate("operations"));
+$("settings-tab").addEventListener("click",()=>libraryNavigate("settings"));
+$("library-import").addEventListener("click",libraryOpenImport);
+document.querySelectorAll("[data-import-new]").forEach(b=>b.addEventListener("click",libraryOpenImport));
+librarySyncNavigation();
+libraryPollOperations();

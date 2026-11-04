@@ -29,10 +29,11 @@ function catalogUpdateTools(){
  if(catalogUI.comparePlatform&&catalogUI.comparePlatform!==state.platform){catalogUI.compare.clear();catalogUI.comparePlatform=state.platform;}
  $("catalog-add-compare").textContent=catalogUI.compare.has(state.selectedFolder)?"Remove from comparison":"Add to comparison";
  $("catalog-tools").classList.toggle("hidden",!catalogUI.enabled||state.view!=="browse"||state.exportMode);
- $("catalog-edit-card").disabled=!state.game;$("catalog-edit-card").textContent=catalogInline.mode?"Finish editing":"Edit card";$("catalog-build-plan").disabled=!state.platform;
+ $("catalog-edit-card").disabled=!state.game;$("catalog-edit-card").textContent=catalogInline.mode?"✓ Finish editing":"✎ Edit card";$("catalog-build-plan").disabled=!state.platform;
  $("catalog-add-compare").disabled=!state.game;
  $("catalog-compare").disabled=catalogUI.compare.size<2;
  $("catalog-compare").textContent="Compare ("+catalogUI.compare.size+")";
+ if(typeof librarySyncNavigation==="function")librarySyncNavigation();
 }
 async function catalogCapabilities(){
  try{const response=await fetchJSON("/api/catalog");catalogUI.enabled=!!response.editing;catalogUpdateTools();if(typeof renderDetails==="function")renderDetails();}catch{/* Read-only older servers remain browsable. */}

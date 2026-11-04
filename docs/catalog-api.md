@@ -20,7 +20,7 @@ Catalog mode needs no ROM mount, token, profile or `--all`. Default address:
 `sources.yaml`. Startup reads platform headers/profile, not the full media library.
 The browser (`/`), API index (`/api`) and documentation (`/docs`, `/openapi.json`)
 share this process. Catalog access is read-only by default. Add `--edit` to enable
-[card corrections and automatic fold plans with visual review](catalog-editing.md).
+[DAT upload/import, card corrections and fold review](catalog-editing.md).
 The portable `/v1` consumer contracts remain read-only.
 
 The ordinary browser and `GET /api/game` show explicit saved game fields over a
@@ -28,6 +28,18 @@ source overview, all saved descriptions, releases, variants and local media.
 Provider observations stay separately inspectable; collapsed catalog YAML also
 retains unknown owner fields and release-specific overrides. The source-match
 badges/filter still describe provider coverage, not all available metadata.
+
+### Browser operations
+
+The browser has Library, Operations, Export and Settings navigation.
+`GET /api/operations` reconnects to this server's DAT jobs without starting work.
+Editable catalog servers also provide multipart `POST /api/catalog/import-upload`
+and JSON `import-plan`, `import-apply`, `import-dismiss` under `/api/catalog/`.
+Plans/apply commands use the operation ID and revision; writes share the CLI
+catalog lock. Closing the browser does not cancel accepted work. Records are
+server-session state, expire after 24 inactive hours, and do not survive restart.
+See [the import workflow and limits](catalog-editing.md#import-into-a-new-library)
+and the embedded OpenAPI reference for request shapes.
 
 ### Card sections
 

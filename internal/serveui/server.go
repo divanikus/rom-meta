@@ -21,6 +21,7 @@ import (
 	"rommeta/internal/catalogrules"
 	"rommeta/internal/catalogstate"
 	"rommeta/internal/catalogyaml"
+	"rommeta/internal/dat"
 	"rommeta/internal/httpdocs"
 	"rommeta/internal/medianames"
 	"rommeta/internal/platformnames"
@@ -34,6 +35,12 @@ var catalogEditJS string
 
 //go:embed static/catalog-edit.css
 var catalogEditCSS string
+
+//go:embed static/library.js
+var libraryJS string
+
+//go:embed static/library.css
+var libraryCSS string
 
 // Handler returns a read-only HTTP handler for a portable metadata data root.
 func Handler(dataRoot string) (http.Handler, error) { return HandlerWithEditing(dataRoot, false) }
@@ -70,6 +77,22 @@ func HandlerWithEditing(dataRoot string, allowEdit bool) (http.Handler, error) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		_, _ = w.Write([]byte(catalogEditCSS))
 	})
+	mux.HandleFunc("/library.js", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		_, _ = w.Write([]byte(libraryJS))
+	})
+	mux.HandleFunc("/library.css", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		_, _ = w.Write([]byte(libraryCSS))
+	})
 	mux.HandleFunc("/api", server.apiIndex)
 	mux.HandleFunc("/api/stats", server.stats)
 	mux.HandleFunc("/api/platforms", server.platforms)
@@ -79,6 +102,11 @@ func HandlerWithEditing(dataRoot string, allowEdit bool) (http.Handler, error) {
 	mux.HandleFunc("/api/export-preview", server.exportPreview)
 	mux.HandleFunc("/api/export-options", server.exportOptions)
 	mux.HandleFunc("/media", server.media)
+	mux.HandleFunc("/api/operations", server.operationsList)
+	mux.HandleFunc("/api/catalog/import-upload", server.importUpload)
+	mux.HandleFunc("/api/catalog/import-plan", server.importPlan)
+	mux.HandleFunc("/api/catalog/import-apply", server.importApply)
+	mux.HandleFunc("/api/catalog/import-dismiss", server.importDismiss)
 	mux.HandleFunc("/api/catalog", server.catalogCapabilities)
 	mux.HandleFunc("/api/catalog/edit", server.catalogEdit)
 	mux.HandleFunc("/api/catalog/edit-preview", server.catalogEditPreview)
@@ -91,14 +119,18 @@ func HandlerWithEditing(dataRoot string, allowEdit bool) (http.Handler, error) {
 }
 
 type server struct {
-	allowEdit bool
-	editMu    sync.Mutex
-	plans     map[string]storedPlan
-	root      string
-	realRoot  string
-	handler   http.Handler
-	summaryMu sync.Mutex
-	summaries map[string]summaryEntry
+	operationsMu sync.Mutex
+	operations   map[string]*importOperation
+	uploads      int
+	datImport    func(string, dat.ImportOptions) (dat.ImportResult, error)
+	allowEdit    bool
+	editMu       sync.Mutex
+	plans        map[string]storedPlan
+	root         string
+	realRoot     string
+	handler      http.Handler
+	summaryMu    sync.Mutex
+	summaries    map[string]summaryEntry
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -394,7 +426,7 @@ func listPlatforms(root string) ([]platformItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	var result []platformItem
+	result := make([]platformItem, 0)
 	for _, entry := range entries {
 		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
 			continue

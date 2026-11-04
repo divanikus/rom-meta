@@ -19,6 +19,13 @@ conversion to XML first. Import previews
 changes; `--apply` writes release/checksum records, preserving existing metadata/
 media. It does not copy ROMs. Unresolved identities stop mutation with a report.
 
+For the browser alternative, run `rom-meta serve --data-root "<catalog>" --edit`
+after initialization. **Import DAT** uploads the file, prepares the same import
+plan and applies it after review. **Operations** reconnects to current progress
+after closing/reopening the browser while the server stays running. See
+[the browser workflow](catalog-editing.md#import-into-a-new-library).
+The CLI commands above remain a complete standalone path.
+
 ## 2. Enrich metadata, then inspect coverage
 
 ```shell

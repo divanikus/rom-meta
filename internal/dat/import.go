@@ -172,8 +172,10 @@ func Import(path string, options ImportOptions) (ImportResult, error) {
 	}
 
 	importGames := importableGames(parsed.games, plan)
-	if isPlanOnlyImport(plan) && options.Apply {
-		return ImportResult{}, fmt.Errorf("arcade or machine-style DAT/listxml import is currently plan-only; run dat plan and review machine, BIOS, device, CHD, and sample counts before catalog generation")
+	if options.Apply {
+		if err := ValidateImportPlan(plan); err != nil {
+			return ImportResult{}, err
+		}
 	}
 
 	reportProgress(options.Progress, ImportProgress{Stage: "bundling", Current: len(importGames), Total: len(importGames), Item: plan.PlatformName})
@@ -637,6 +639,15 @@ func planFromDatafile(inputPath string, opened openedDAT, parsed datafile, optio
 
 func isArcadePlan(plan Plan) bool {
 	return isArcadeDataset(plan.DatasetName, plan.Authority, plan.Format)
+}
+
+// ValidateImportPlan reports whether the ordinary DAT importer can apply a plan.
+// Classified arcade imports use their separate CLI workflow.
+func ValidateImportPlan(plan Plan) error {
+	if isPlanOnlyImport(plan) {
+		return fmt.Errorf("arcade or machine-style DAT/listxml import is currently plan-only; run dat plan and review machine, BIOS, device, CHD, and sample counts before catalog generation")
+	}
+	return nil
 }
 
 func isPlanOnlyImport(plan Plan) bool {

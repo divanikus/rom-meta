@@ -57,6 +57,18 @@ func browserOpenAPI() any {
 			responses["409"] = httpdocs.Response("Stale input, expired preview, conflicting data or busy writer.", s.Ref(errorResponse{}))
 			paths[path] = httpdocs.Schema{"post": action}
 		}
+		paths["/api/operations"] = httpdocs.Schema{"get": op("List server operations", "Session-local DAT plans, running imports and results. Closing the browser never cancels accepted work; reconnect using this list. Records expire after 24 hours or restart.", nil, s.Ref([]importOperation{}))}
+		addWrite("/api/catalog/import-plan", "Prepare uploaded DAT", "Select an uploaded ZIP member and optional platform. Returns the same server-owned operation; no card writes. Repeated running requests do not start another worker.", importAction{})
+		addWrite("/api/catalog/import-apply", "Import reviewed DAT", "Requires the current ready revision and unchanged library/settings. Starts one server-owned import under the shared CLI writer lock. Repeated accepted commands return the same operation.", importAction{})
+		addWrite("/api/catalog/import-dismiss", "Dismiss completed or pending import", "Removes the receipt and any uploaded input. Running operations cannot be dismissed.", importAction{})
+		upload := op("Upload DAT", "Upload one ordinary XML DAT or ZIP (256 MiB, DAT members at most 512 MiB expanded). Requires editable mode and same-origin access. A server operation prepares the plan; multi-DAT ZIPs require member selection. MAME uses the classified CLI workflow.", nil, s.Ref(importOperation{}))
+		upload["requestBody"] = httpdocs.Schema{"required": true, "content": httpdocs.Schema{"multipart/form-data": httpdocs.Schema{"schema": httpdocs.Schema{"type": "object", "required": []string{"file"}, "properties": httpdocs.Schema{"file": httpdocs.Schema{"type": "string", "format": "binary"}}}}}}
+		paths["/api/catalog/import-upload"] = httpdocs.Schema{"post": upload}
+		for _, path := range []string{"/api/catalog/import-upload", "/api/catalog/import-plan", "/api/catalog/import-apply"} {
+			responses := paths[path].(httpdocs.Schema)["post"].(httpdocs.Schema)["responses"].(httpdocs.Schema)
+			delete(responses, "200")
+			responses["202"] = httpdocs.Response("Accepted operation snapshot; poll GET /api/operations.", s.Ref(importOperation{}))
+		}
 		addWrite("/api/catalog/edit", "Save local card corrections", "Requires serve --edit, application/json and same-origin browser requests. Revision must match stored YAML. Only listed game metadata is editable; null removes an override. Preserves other catalog/source data. saved=true remains success if derived-index refresh reports a warning.", editRequest{})
 		paths["/api/catalog/edit"].(httpdocs.Schema)["get"] = editGet
 		addWrite("/api/catalog/edit-preview", "Preview local card corrections", "Read-only preview against the current revision. Does not save or acquire provider data.", editRequest{})

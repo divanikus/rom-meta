@@ -13,6 +13,49 @@ and resolve mixed metadata ownership explicitly before enabling writes. Fixed RO
 servers do not support editing. Existing optional API authentication also protects
 editor actions; enabling editing does not introduce accounts or change the token.
 
+## Import into a new library
+
+Initialize the library once, then start the same CLI server:
+
+```shell
+rom-meta init "<catalog>"
+rom-meta serve --data-root "<catalog>" --edit
+```
+
+**Library / Operations / Export / Settings** separate browsing, background work,
+export-profile preparation and library defaults. Platform review/statistics live
+beside the selected platform; the edit pencil lives on the card. Settings currently
+shows source priorities; configuration editing still uses YAML.
+
+1. Choose **Import your first DAT** (or **Import DAT** in the header).
+2. Upload an ordinary XML DAT (`.dat` or `.xml`) or ZIP. For multiple DATs in a
+   ZIP, choose the member. The optional platform name overrides detection.
+3. Review the prepared platform, card/release/fingerprint counts and sample
+   releases. **Prepare plan** refreshes the preview after changing options.
+4. **Import into library** applies the reviewed plan. **Open platform** takes you
+   to the saved cards; the platform count refreshes automatically.
+
+No-Intro, Redump and compatible Logiqx XML use the ordinary CLI importer, including
+library region/alias policy and preservation of existing metadata. No ROMs are
+uploaded or copied. ClrMamePro text needs conversion to XML; classified MAME
+listxml remains a CLI workflow. The CLI remains fully usable without a server.
+
+After the upload completes, planning and import belong to the server. Closing the
+browser does not cancel them. Reopen **Operations** to recover the same current
+progress or result; reconnecting never resubmits an import. Keep the page open
+during the file upload itself. Accepted Apply retries are idempotent. Only one
+catalog writer runs at a time, including CLI edits; changed catalog/configuration
+requires a fresh plan.
+
+Operations are scoped to this running server, shared by its authorized clients.
+There is no account-specific history or restart/reboot recovery. Inactive records
+expire after 24 hours or dismissal. Uploads are limited to 256 MiB, XML members
+to 512 MiB expanded, and the server retains at most 32 operations/uploads.
+Successful imports, dismissed uploads and expired records clean up their inputs.
+An interrupted server can leave its `.rommeta/web-import-*` upload directories;
+remove those only after ensuring their owning server is stopped. A running import
+cannot be cancelled/dismissed in this first workflow.
+
 ## Correct a card
 
 In **Library**, click the pencil beside a value to edit it in place. **Edit card**

@@ -60,9 +60,9 @@ func (s *server) catalogCapabilities(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	writeJSON(w, map[string]any{"editing": s.allowEdit, "fields": catalogedit.Fields})
+	writeJSON(w, map[string]any{"editing": s.allowEdit, "fields": catalogedit.Fields, "dat_import": s.allowEdit, "upload_limit": maxDATUpload, "operations_lifetime": "server-session"})
 }
-func (s *server) editRequest(w http.ResponseWriter, r *http.Request, target any) bool {
+func (s *server) catalogWriteAllowed(w http.ResponseWriter, r *http.Request) bool {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", "POST")
 		writeError(w, 405, fmt.Errorf("use POST"))
@@ -70,11 +70,6 @@ func (s *server) editRequest(w http.ResponseWriter, r *http.Request, target any)
 	}
 	if !s.allowEdit {
 		writeError(w, 403, fmt.Errorf("catalog editing is disabled; start serve with --edit"))
-		return false
-	}
-	kind, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || kind != "application/json" {
-		writeError(w, 415, fmt.Errorf("use application/json"))
 		return false
 	}
 	if origin := r.Header.Get("Origin"); origin != "" {
@@ -86,6 +81,17 @@ func (s *server) editRequest(w http.ResponseWriter, r *http.Request, target any)
 	}
 	if site := r.Header.Get("Sec-Fetch-Site"); site == "cross-site" {
 		writeError(w, 403, fmt.Errorf("cross-site catalog actions are not allowed"))
+		return false
+	}
+	return true
+}
+func (s *server) editRequest(w http.ResponseWriter, r *http.Request, target any) bool {
+	if !s.catalogWriteAllowed(w, r) {
+		return false
+	}
+	kind, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || kind != "application/json" {
+		writeError(w, 415, fmt.Errorf("use application/json"))
 		return false
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20))
