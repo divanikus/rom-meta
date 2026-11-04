@@ -96,6 +96,18 @@ follow that adapter; edit individual cards before rebuilding to change saved fie
 Exact selected MAME groups can apply while unrelated conflicting groups remain held.
 Manual provider-based regrouping of MAME cards is not offered.
 
+After applying the ready batch, the same workspace refreshes to show the remaining
+groups. Applying one comparison or choosing **Keep separate** opens the next group.
+The session shows saved totals and remaining groups; its completion screen appears
+only when the current review has no groups left. Remaining conflicts stay visible.
+Returning to the board lets you choose a different group at any time.
+
+Each successful step builds a fresh plan. Prepared selections and field edits are
+carried forward only for groups whose full candidate data is unchanged, and are
+validated again. Changed candidates need a fresh review. Manual comparisons finish
+within the selected scope. If saving succeeds but preparing the next plan fails,
+**Continue review** reloads remaining work without replaying the completed merge.
+
 ## Plan lifetime and writes
 
 Planning and previewing do not change catalog cards. Plans belong to the current
@@ -114,7 +126,9 @@ Ordinary selected groups use one existing platform staging/swap. MAME uses its
 binding-aware transaction. Recovery paths are shown after apply. If an ordinary
 Arcade batch completes and a subsequent MAME batch fails, completed work and recovery
 locations are reported; build a fresh plan for remaining cases. An apply attempt
-consumes its plan even on failure. Recovery folders use the existing fold behavior;
+consumes its plan even on failure. The browser requests `continue: true` after a
+successful apply; the response contains `next_plan` with a new ID, or a separate
+`continuation_error` alongside the successful result. Recovery folders use the existing fold behavior;
 no filesystem or ZFS snapshot is requested.
 
 Single-card saves use atomic replacement and reject stale revisions. The recognition

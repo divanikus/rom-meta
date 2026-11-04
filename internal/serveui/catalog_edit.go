@@ -40,6 +40,7 @@ type foldPreviewRequest struct {
 	Draft *catalogfold.Draft `json:"draft,omitempty"`
 }
 type foldApplyRequest struct {
+	Continue  bool                   `json:"continue,omitempty"`
 	Plan      string                 `json:"plan"`
 	Decisions []catalogfold.Decision `json:"decisions"`
 }
@@ -238,6 +239,24 @@ func (s *server) foldPlan(w http.ResponseWriter, r *http.Request) {
 		plan.Close()
 		return
 	}
+	response, err := s.registerFoldPlan(plan)
+	if err != nil {
+		if streaming {
+			_ = encode.Encode(map[string]any{"error": err.Error()})
+		} else {
+			writeError(w, 500, err)
+		}
+		return
+	}
+	if streaming {
+		_ = encode.Encode(map[string]any{"result": response})
+	} else {
+		writeJSON(w, response)
+	}
+}
+
+// registerFoldPlan requires editMu. Each continuation receives a new, expiring ID.
+func (s *server) registerFoldPlan(plan *catalogfold.Plan) (foldPlanResponse, error) {
 	if s.plans == nil {
 		s.plans = map[string]storedPlan{}
 	}
@@ -262,8 +281,7 @@ func (s *server) foldPlan(w http.ResponseWriter, r *http.Request) {
 	var nonce [16]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
 		plan.Close()
-		writeError(w, 500, err)
-		return
+		return foldPlanResponse{}, err
 	}
 	id := hex.EncodeToString(nonce[:])
 	s.plans[id] = storedPlan{plan: plan, created: time.Now()}
@@ -279,12 +297,7 @@ func (s *server) foldPlan(w http.ResponseWriter, r *http.Request) {
 	for i := range groups {
 		groups[i].Result = nil
 	}
-	response := foldPlanResponse{ID: id, Platform: plan.Platform, Groups: groups}
-	if streaming {
-		_ = encode.Encode(map[string]any{"result": response})
-	} else {
-		writeJSON(w, response)
-	}
+	return foldPlanResponse{ID: id, Platform: plan.Platform, Groups: groups}, nil
 }
 func (s *server) foldPreview(w http.ResponseWriter, r *http.Request) {
 	var request foldPreviewRequest
@@ -351,6 +364,20 @@ func (s *server) foldApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response := map[string]any{"result": result, "consumed": true}
+	if request.Continue {
+		next, nextErr := stored.plan.Continue(r.Context(), request.Decisions)
+		if nextErr == nil {
+			var registered foldPlanResponse
+			registered, nextErr = s.registerFoldPlan(next)
+			if nextErr == nil {
+				response["next_plan"] = registered
+			}
+		}
+		// Saving succeeded even when preparing the next review fails. Never invite replay.
+		if nextErr != nil {
+			response["continuation_error"] = nextErr.Error()
+		}
+	}
 	if indexErr != nil {
 		response["warning"] = indexErr.Error()
 	}

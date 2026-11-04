@@ -1301,7 +1301,13 @@ func applyGroup(root string, group *Group, regions regionRules) error {
 
 func ignoreGroupEvidence(root string, group *Group) error {
 	evidence := group.Evidence
-	if group.ReviewRequired != "" {
+	// Browser identity reviews also use ReviewRequired. Narrow to serial hints
+	// only when such a hint actually exists, otherwise ignore the selected evidence.
+	hasSerialHint := false
+	for _, item := range evidence {
+		hasSerialHint = hasSerialHint || isXboxSerialHint(item)
+	}
+	if group.ReviewRequired != "" && hasSerialHint {
 		// Reject the proposed serial bridge without discarding the established
 		// identities connecting already verified regional members.
 		evidence = nil

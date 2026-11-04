@@ -77,7 +77,7 @@ test('refresh failure reports saved changes rather than a failed merge',async()=
  const b=browser(async()=>json({result:{applied:1,kept_separate:0}}));
  b.run('catalogUI.plan={id:"plan"};catalogUI.platform="Console";fetchJSON=async()=>{throw new Error("Offline")}');
  await b.run('catalogApply([{id:0,revision:1,action:"merge"}])');
- assert.equal(b.element('catalog-title').textContent,'Catalog updated');
+ assert.equal(b.element('catalog-title').textContent,'Changes saved');
  assert.match(b.element('catalog-content').innerHTML,/1 groups merged/);
  assert.match(b.element('catalog-content').innerHTML,/Changes were saved, but the platform list could not refresh/);
 });
@@ -230,4 +230,49 @@ test('overview requests one primary cover and only single-action cards open comp
    assert.match(html,/3 cards to compare/);
   }
  }
+});
+
+test('batch apply keeps the board open, preserves unchecked groups and uses a fresh plan',async()=>{
+ const group=(id,status,folder)=>({id,revision:1,status,group:{Keep:{Folder:folder,Title:folder},Merge:[{Folder:folder+'2'}]}});
+ const next={id:'fresh',platform:'Console',groups:[group(0,'ready','Unchecked'),group(1,'review','Review')]};
+ let request;
+ const b=browser(async(path,options)=>{request=JSON.parse(options.body);return json({result:{applied:2,kept_separate:0},next_plan:next});});
+ b.run('catalogUI.mode="plan";catalogUI.platform="Console";catalogUI.plan='+JSON.stringify({id:'old',groups:[group(2,'ready','Unchecked'),group(3,'ready','Merged')]})+';catalogUI.selected=new Set([3]);fetchJSON=async()=>[]');
+ await b.run('catalogApply([{id:3,revision:1,action:"merge"}])');
+ assert.equal(request.continue,true);assert.equal(b.run('catalogUI.plan.id'),'fresh');
+ assert.equal(b.run('catalogUI.mode'),'plan');assert.equal(b.run('catalogUI.selected.size'),0);
+ assert.match(b.element('catalog-content').innerHTML,/2 groups merged.*2 groups remaining/);
+ assert.doesNotMatch(b.element('catalog-content').innerHTML,/All groups reviewed/);
+});
+test('individual merge and keep-separate advance until no groups remain',async()=>{
+ for(const action of ['merge','separate']){
+  let count=0;
+  const b=browser(async(path)=>path.endsWith('fold-discard')?json({discarded:true}):json({result:{applied:action==='merge'?1:0,kept_separate:action==='separate'?1:0},next_plan:{id:'next'+(++count),platform:'Console',groups:count===1?[{id:0,status:'review',revision:1,group:{Keep:{Folder:'Next'},Merge:[]}}]:[]}}));
+  b.run('catalogUI.mode="review";catalogUI.platform="Console";catalogUI.plan={id:"old",groups:[]};fetchJSON=async()=>[];catalogReviewGroup=async id=>{catalogUI.mode="review";state.nextGroup=id}');
+  await b.run('catalogApply([{id:0,revision:1,action:"'+action+'"}])');
+  assert.equal(b.run('state.nextGroup'),0);assert.equal(b.run('catalogUI.mode'),'review');assert.equal(b.run('catalogUI.busy'),false);
+  await b.run('catalogApply([{id:0,revision:1,action:"'+action+'"}])');
+  assert.equal(b.run('catalogUI.plan'),null);assert.equal(b.run('catalogUI.mode'),'done');
+  assert.equal(b.element('catalog-title').textContent,'Review complete');
+  assert.match(b.element('catalog-content').innerHTML,/All groups reviewed/);
+  assert.equal(b.run('catalogUI.completed.'+(action==='merge'?'applied':'kept_separate')),2);
+ }
+});
+test('remaining conflicts stay actionable and never appear as a completed review',async()=>{
+ const b=browser(async()=>json({result:{applied:1,kept_separate:0},next_plan:{id:'next',platform:'Console',groups:[{id:0,status:'blocked',reason:'Unreadable media',group:{Keep:{Folder:'Blocked'},Merge:[]}}]}}));
+ b.run('catalogUI.mode="review";catalogUI.platform="Console";catalogUI.plan={id:"old",groups:[]};fetchJSON=async()=>[];catalogReviewGroup=async id=>{catalogUI.mode="review";state.nextGroup=id}');
+ await b.run('catalogApply([{id:0,revision:1,action:"merge"}])');
+ assert.equal(b.run('state.nextGroup'),0);assert.equal(b.run('catalogUI.plan.groups.length'),1);
+ assert.notEqual(b.element('catalog-title').textContent,'Review complete');
+});
+test('continuation failure preserves the successful receipt and offers reload without replay',async()=>{
+ const calls=[];
+ const b=browser(async(path)=>{calls.push(path);return json({result:{applied:1,kept_separate:0,backups:['recovery']},consumed:true,continuation_error:'Catalog temporarily unavailable'});});
+ b.run('catalogUI.mode="review";catalogUI.plan={id:"old",groups:[]};fetchJSON=async()=>[]');
+ await b.run('catalogApply([{id:0,revision:1,action:"merge"}])');
+ assert.equal(b.element('catalog-title').textContent,'Changes saved');
+ assert.match(b.element('catalog-content').innerHTML,/1 groups merged.*recovery/s);
+ assert.match(b.element('catalog-content').innerHTML,/Catalog temporarily unavailable/);
+ assert.match(b.element('catalog-content').innerHTML,/Continue review/);
+ assert.equal(calls.length,1);assert.equal(b.run('catalogUI.plan'),null);
 });

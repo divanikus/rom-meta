@@ -135,3 +135,53 @@ func TestCatalogFoldPlanApplyAndConsumedHTTP(t *testing.T) {
 		t.Fatal(w.Body.String())
 	}
 }
+
+func TestCatalogFoldContinueUsesFreshPlanAndFinishes(t *testing.T) {
+	root := editFixture(t)
+	for _, folder := range []string{"Three", "Four"} {
+		dir := filepath.Join(root, "platforms", "Console", folder)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		region := "USA"
+		if folder == "Four" {
+			region = "Japan"
+		}
+		body := "title: Garden\nreleases:\n  Garden (" + region + "): {}\nsources:\n  launchbox:\n    matches:\n      - database_id: '22'\n        title: Garden\n"
+		if err := os.WriteFile(filepath.Join(dir, "game.yaml"), []byte(body), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h, err := HandlerWithEditing(root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, p := catalogCall(t, h, "/api/catalog/fold-plan", map[string]any{"platform": "Console"})
+	if w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	oldID := p["id"]
+	groups := p["groups"].([]any)
+	if len(groups) != 2 {
+		t.Fatal(p)
+	}
+	group := groups[0].(map[string]any)
+	decision := map[string]any{"id": group["id"], "revision": group["revision"], "action": "merge"}
+	w, r := catalogCall(t, h, "/api/catalog/fold-apply", map[string]any{"plan": oldID, "decisions": []any{decision}, "continue": true})
+	if w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	next := r["next_plan"].(map[string]any)
+	if next["id"] == oldID || len(next["groups"].([]any)) != 1 {
+		t.Fatal(r)
+	}
+	w, _ = catalogCall(t, h, "/api/catalog/fold-apply", map[string]any{"plan": oldID, "decisions": []any{decision}, "continue": true})
+	if w.Code != 409 {
+		t.Fatal("consumed plan was replayable")
+	}
+	group = next["groups"].([]any)[0].(map[string]any)
+	w, r = catalogCall(t, h, "/api/catalog/fold-apply", map[string]any{"plan": next["id"], "decisions": []any{map[string]any{"id": group["id"], "revision": group["revision"], "action": "separate"}}, "continue": true})
+	if w.Code != 200 || len(r["next_plan"].(map[string]any)["groups"].([]any)) != 0 {
+		t.Fatal(w.Body.String())
+	}
+}

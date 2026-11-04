@@ -19,6 +19,7 @@ type Plan struct {
 	Groups   []PlannedGroup `json:"groups"`
 	options  Options
 	mame     *mameFoldPlan
+	manual   bool
 }
 type PlannedGroup struct {
 	ID             int               `json:"id"`
@@ -155,7 +156,7 @@ func BuildPlan(options Options, folders []string) (*Plan, error) {
 	options.ReviewPlan = ""
 	options.skipMAME = true
 	options.planGroupsOnly = true
-	p := &Plan{Platform: options.Platform, options: options, Groups: []PlannedGroup{}}
+	p := &Plan{Platform: options.Platform, options: options, manual: len(folders) > 0, Groups: []PlannedGroup{}}
 	var groups []Group
 	if len(folders) > 0 {
 		if len(folders) < 2 || len(folders) > 12 {
