@@ -123,8 +123,8 @@ func TestKeepSeparateAndManualIdentityReview(t *testing.T) {
 	if manual.Groups[0].Status != "review" {
 		t.Fatal(manual.Groups)
 	}
-	if _, err := manual.Preview(0, Draft{Confirm: true}); err == nil {
-		t.Fatal("missing identity reason accepted")
+	if _, err := manual.Apply(context.Background(), []Decision{{ID: 0, Revision: 1, Action: "merge"}}); err == nil {
+		t.Fatal("unconfirmed manual selection applied")
 	}
 	pg, err := manual.Preview(0, Draft{Confirm: true, Reason: "Reviewed same release family"})
 	if err != nil || pg.Status != "ready" {

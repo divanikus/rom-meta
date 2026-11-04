@@ -35,9 +35,9 @@ type ReviewedGroup struct {
 }
 
 type ReviewedMember struct {
-	Folder             string `json:"folder"`
-	GameSHA256         string `json:"game_sha256"`
-	FingerprintsSHA256 string `json:"fingerprints_sha256"`
+	Folder             string `json:"folder" yaml:"folder"`
+	GameSHA256         string `json:"game_sha256" yaml:"game_sha256"`
+	FingerprintsSHA256 string `json:"fingerprints_sha256" yaml:"fingerprints_sha256"`
 }
 
 func readReviewPlan(path string) (ReviewPlan, error) {

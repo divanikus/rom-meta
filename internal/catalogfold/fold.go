@@ -142,6 +142,7 @@ type Group struct {
 	ReviewReason      string
 	DevelopmentParent string
 	IdentityReview    *ReviewedIdentity
+	ownerReview       *ownerMergeReview
 	HoldReason        string
 	ReviewRequired    string
 	ReviewAccepted    bool
@@ -1222,7 +1223,7 @@ func applyGroup(root string, group *Group, regions regionRules) error {
 		group.SkipReason = "content identity review requires an explicit reviewed plan reason"
 		return nil
 	}
-	games, reason := reviewedIdentityGames(games, group.DevelopmentParent, group.IdentityReview)
+	_, reason := groupReviewedGames(games, *group)
 	if reason != "" {
 		group.Skipped = true
 		group.SkipReason = reason
@@ -1264,7 +1265,7 @@ func applyGroup(root string, group *Group, regions regionRules) error {
 	}
 	group.FileChanges = changes
 
-	merged, err := mergedDocument(games, regions, group.Edits)
+	merged, err := renderGroupDocument(games, regions, *group)
 	if err != nil {
 		return err
 	}

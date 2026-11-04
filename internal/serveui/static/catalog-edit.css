@@ -64,3 +64,5 @@
 @keyframes catalog-spin{to{transform:rotate(360deg)}}
 @media(max-width:850px){.catalog-comparison,.catalog-edit-grid{grid-template-columns:1fr}.catalog-result{position:static}.catalog-content{padding:18px}.catalog-head{padding:18px}.catalog-plan-row{gap:10px;padding:12px}.catalog-head h2{font-size:20px}.catalog-tools{margin-left:0}.catalog-candidates{max-height:65vh}}
 @media(prefers-reduced-motion:reduce){.catalog-dialog[open],.catalog-spinner{animation:none}.catalog-content button,.catalog-head button,.catalog-plan-row{transition:none}}
+
+.catalog-member{display:flex;align-items:center;gap:8px;margin-bottom:15px;color:#c4e7d9;font-size:13px}.catalog-member input{accent-color:#95dbbf;width:18px;height:18px}.catalog-candidate.is-excluded{opacity:.55;border-style:dashed}

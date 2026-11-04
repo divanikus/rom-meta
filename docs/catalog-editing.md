@@ -34,12 +34,12 @@ fold rules and proposes groups, primary cards and merged results automatically:
 
 - **Ready to apply**: identity, content, files and saved fields pass validation.
   These groups start selected. Apply them together without opening each comparison.
-- **Needs your decision**: review the identity evidence or choose between differing
-  saved field values. Preview the result to make the group ready.
-- **Merge blocked**: an identity/content boundary, unreadable or colliding file, or
-  incompatible unknown field prevents merging. The comparison explains the reason;
-  result-field editing and identity confirmation are not offered as a bypass.
-  Correct the underlying cards or file access, then build a new plan.
+- **Needs your decision**: confirm which cards belong together despite identity,
+  edition or provider-ID doubts, or choose between differing saved field values.
+- **Merge blocked**: unreadable files, conflicting release payloads, colliding
+  non-media files or incompatible unknown fields prevent a lossless merge.
+  Choose a different subset or resolve the reported data/access problem.
+  Identity confirmation cannot discard conflicting data.
 
 These states describe rules and current evidence, not a confidence percentage.
 Matching a title alone or missing provider metadata does not establish identity.
@@ -49,12 +49,14 @@ explicitly. A plan with an incomplete file inspection cannot be reused after an
 access repair; build a new one. Applying ordinary groups still uses a whole-platform
 transaction, so all files required for that copy must be readable.
 
-**Compare** opens both mergeable and blocked groups. A blocked group is inspection
-only: **Preview result** and **Apply this merge** are disabled, with its status and
-reason shown explicitly. The plan is a list of candidates, not approval to merge
-every listed group. When only blocked groups remain, the list explains that no
-merge is ready. Resolving ordinary saved-field differences uses **Needs your
-decision** instead: choose values, preview, then apply when ready.
+**Compare** opens all candidates. Use **Include in merge** to select at least two
+cards; excluded cards stay unchanged. For identity doubts, **Confirm selection**
+records your same-game decision and prepares the group for batch apply.
+**Confirm & merge selected** confirms and saves in one action when data checks
+pass. A changed selection needs fresh confirmation. Confirmation is the owner's
+catalog decision, not new provider evidence. Real data conflicts keep apply
+unavailable until resolved. Editable saved-field differences can be resolved
+through the result editor before previewing again.
 
 Candidate cards keep a readable width in a horizontal scroll area; the result
 stays beside them on wider screens and below on narrow screens. Focus the card
@@ -71,7 +73,11 @@ identity signal.
 
 For a pair the automatic plan does not propose, use **Add to comparison** on 2–12
 cards from one platform, then **Compare**. Manual groups need an explicit same-game
-confirmation and a reason, while retaining the normal content/ID/file checks.
+confirmation. The recorded decision contains exact members, document hashes,
+previous content keys and release names under `fold.owner_reviews`; all original
+provider observations remain. No external evidence link is required. This explicit
+owner choice can cross automatic identity/content boundaries, while automatic
+fold and strict CLI reviewed plans retain their existing rules.
 
 MAME uses its accepted snapshot and hardware/set bindings. Its primary and result
 follow that adapter; edit individual cards before rebuilding to change saved fields.

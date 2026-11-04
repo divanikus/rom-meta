@@ -86,22 +86,22 @@ test('hard conflicts do not offer field edits or identity confirmation as a solu
  b.run('catalogUI.group={status:"blocked",reason:"conflicting saved fields: custom_note",conflicts:["custom_note"],needs_identity:true,group:{Keep:{Folder:"One"},Merge:[],Evidence:[]}};catalogUI.cards=[];catalogRenderReview()');
  const html=b.element('catalog-content').innerHTML;
  assert.match(html,/conflicting saved fields: custom_note/);
- assert.match(html,/Field edits or identity confirmation cannot override the conflict/);
+ assert.match(html,/Identity confirmation cannot discard conflicting data/);
  assert.match(html,/id="catalog-commit" disabled/);
  assert.match(html,/id="catalog-preview-group" disabled/);
- assert.match(b.element('catalog-subtitle').textContent,/Merge blocked\. Preview and apply are unavailable/);
+ assert.match(b.element('catalog-subtitle').textContent,/Resolve the data conflict or change the selection/);
  assert.doesNotMatch(html,/Correct the result|catalog-confirm-identity|Result matches the current preview|Choose the saved values/);
 });
 test('editable-field and identity reviews retain their distinct guidance',()=>{
  const b=browser(async()=>json({}));
- b.run('catalogUI.group={status:"review",reason:"conflicting saved fields: description",conflicts:["description"],group:{Keep:{Folder:"One"},Merge:[],Evidence:[]}};catalogUI.cards=[];catalogRenderReview()');
+ b.run('catalogUI.group={status:"review",reason:"conflicting saved fields: description",conflicts:["description"],group:{Keep:{Folder:"One"},Merge:[{Folder:"Two"}],Evidence:[]}};catalogUI.cards=[];catalogRenderReview()');
  assert.match(b.element('catalog-content').innerHTML,/Choose the highlighted saved values/);
  assert.match(b.element('catalog-content').innerHTML,/Correct the result/);
  assert.doesNotMatch(b.element('catalog-content').innerHTML,/id="catalog-preview-group" disabled/);
  assert.match(b.element('catalog-subtitle').textContent,/Needs your decision/);
  b.run('catalogUI.group.conflicts=[];catalogUI.group.needs_identity=true;catalogRenderReview()');
- assert.match(b.element('catalog-content').innerHTML,/Compare the regional titles, edition and content/);
- assert.match(b.element('catalog-content').innerHTML,/catalog-confirm-identity/);
+ assert.match(b.element('catalog-content').innerHTML,/Confirm selection prepares these cards for batch apply/);
+ assert.match(b.element('catalog-content').innerHTML,/Confirm & merge selected/);
  assert.doesNotMatch(b.element('catalog-content').innerHTML,/cannot override the conflict/);
 });
 
@@ -114,4 +114,44 @@ test('blocked-only plans explain that comparison is inspection rather than appro
  b.run('catalogUI.plan.groups[0].status="ready";catalogUI.selected.add(0);catalogRenderPlan()');
  assert.doesNotMatch(b.element('catalog-content').innerHTML,/No groups are ready to merge/);
  assert.equal(b.element('catalog-apply-ready').disabled,false);
+});
+
+test('owner confirmation sends the exact subset and applies only the fresh ready revision',async()=>{
+ const calls=[];
+ const group={id:0,revision:7,status:'ready',group:{Keep:{Folder:'One'},Merge:[{Folder:'Two'}],ReviewAccepted:true}};
+ const b=browser(async(path,options)=>{calls.push({path,body:JSON.parse(options.body)});return json({group,preview:{fields:{}}});});
+ b.run('catalogUI.plan={id:"plan",groups:[{id:0}]};catalogUI.group={id:0,revision:3,status:"review",needs_identity:true,group:{Keep:{Folder:"One"},Merge:[{Folder:"Two"},{Folder:"Three"}]}};catalogUI.included=new Set(["One","Two"]);catalogUI.selectionDirty=true;catalogRenderReview=()=>{};catalogApply=async decisions=>{state.applied=decisions}');
+ await b.run('catalogPreviewGroup({confirm:true,apply:true})');
+ assert.deepEqual(calls[0].body.draft.folders,['One','Two']);
+ assert.equal(calls[0].body.draft.confirm,true);
+ assert.equal(b.run('state.applied[0].revision'),7);
+ assert.equal(b.run('catalogUI.selected.has(0)'),true);
+ assert.equal(b.run('catalogUI.selectionDirty'),false);
+});
+test('confirmation prepares batch selection without applying, and data conflicts still stop one-click merge',async()=>{
+ for(const status of ['ready','blocked']){
+  const group={id:0,revision:2,status,group:{Keep:{Folder:'One'},Merge:[{Folder:'Two'}],ReviewAccepted:true}};
+  const b=browser(async()=>json({group,preview:{fields:{}}}));
+  b.run('catalogUI.plan={id:"plan",groups:[{id:0}]};catalogUI.group={id:0,group:{Keep:{Folder:"One"},Merge:[{Folder:"Two"}]}};catalogRenderReview=()=>{};catalogApply=async()=>{state.applied=true}');
+  await b.run('catalogPreviewGroup({confirm:true,apply:'+String(status==='blocked')+'})');
+  assert.equal(b.run('state.applied'),undefined);
+  assert.equal(b.run('catalogUI.selected.has(0)'),status==='ready');
+ }
+});
+test('changing selection does not silently reuse an earlier owner confirmation',async()=>{
+ let sent;const b=browser(async(path,options)=>{sent=JSON.parse(options.body);return json({group:{id:0,status:'review',group:{Keep:{Folder:'One'},Merge:[{Folder:'Three'}]}}});});
+ b.run('catalogUI.plan={id:"plan",groups:[{id:0}]};catalogUI.group={id:0,group:{Keep:{Folder:"One"},Merge:[{Folder:"Two"}],ReviewAccepted:true}};catalogUI.included=new Set(["One","Three"]);catalogUI.selectionDirty=true;catalogRenderReview=()=>{}');
+ await b.run('catalogPreviewGroup()');
+ assert.equal(sent.draft.confirm,false);
+ assert.deepEqual(sent.draft.folders,['One','Three']);
+});
+test('late confirmation cannot merge after the owner changes the selected cards',async()=>{
+ let resolve;const b=browser(()=>new Promise(r=>resolve=r));
+ b.run('catalogUI.version=1;catalogUI.plan={id:"plan",groups:[{id:0}]};catalogUI.group={id:0,group:{Keep:{Folder:"One"},Merge:[{Folder:"Two"}]}};catalogApply=async()=>{state.applied=true}');
+ const request=b.run('catalogPreviewGroup({confirm:true,apply:true})');
+ b.run('catalogUI.included=new Set(["One","Three"]);catalogUI.selectionDirty=true;catalogDirty()');
+ resolve(json({group:{id:0,revision:2,status:'ready',group:{Keep:{Folder:'One'},Merge:[{Folder:'Two'}],ReviewAccepted:true}}}));await request;
+ assert.equal(b.run('state.applied'),undefined);
+ assert.equal(b.run('catalogUI.selectionDirty'),true);
+ assert.equal(b.run('catalogUI.included.has("Three")'),true);
 });

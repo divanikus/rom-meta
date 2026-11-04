@@ -21,18 +21,21 @@ type Plan struct {
 	mame     *mameFoldPlan
 }
 type PlannedGroup struct {
-	ID            int               `json:"id"`
-	Revision      int               `json:"revision"`
-	Status        string            `json:"status"`
-	Reason        string            `json:"reason,omitempty"`
-	Group         Group             `json:"group"`
-	Members       []ReviewedMember  `json:"-"`
-	Stamp         string            `json:"-"`
-	Result        *catalogedit.Card `json:"result,omitempty"`
-	Manual        bool              `json:"manual,omitempty"`
-	NeedsIdentity bool              `json:"needs_identity,omitempty"`
-	Conflicts     []string          `json:"conflicts,omitempty"`
-	inspectionErr error
+	ID             int               `json:"id"`
+	Revision       int               `json:"revision"`
+	Status         string            `json:"status"`
+	Reason         string            `json:"reason,omitempty"`
+	Group          Group             `json:"group"`
+	Members        []ReviewedMember  `json:"-"`
+	Stamp          string            `json:"-"`
+	Result         *catalogedit.Card `json:"result,omitempty"`
+	Manual         bool              `json:"manual,omitempty"`
+	NeedsIdentity  bool              `json:"needs_identity,omitempty"`
+	Conflicts      []string          `json:"conflicts,omitempty"`
+	Candidates     []GameRef         `json:"candidates"`
+	IdentityReason string            `json:"identity_reason,omitempty"`
+	original       Group
+	inspectionErr  error
 }
 type Decision struct {
 	ID       int    `json:"id"`
@@ -40,6 +43,7 @@ type Decision struct {
 	Action   string `json:"action"`
 }
 type Draft struct {
+	Folders []string          `json:"folders,omitempty"`
 	Primary string            `json:"primary"`
 	Fields  catalogedit.Patch `json:"fields"`
 	Reason  string            `json:"reason"`
@@ -62,11 +66,7 @@ func groupDocument(root string, g Group, regions regionRules) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	games, reason := reviewedIdentityGames(games, g.DevelopmentParent, g.IdentityReview)
-	if reason != "" {
-		return nil, fmt.Errorf("%s", reason)
-	}
-	return mergedDocument(games, regions, g.Edits)
+	return renderGroupDocument(games, regions, g)
 }
 func readGroup(root string, g Group) ([]catalogGame, error) {
 	var games []catalogGame
@@ -186,7 +186,7 @@ func BuildPlan(options Options, folders []string) (*Plan, error) {
 			indexes[i] = i
 		}
 		keep := chooseKeep(games, indexes, p.regions())
-		group := Group{Platform: options.Platform, Keep: gameRef(games[keep]), ReviewRequired: "Confirm that these cards represent the same game and explain the evidence."}
+		group := Group{Platform: options.Platform, Keep: gameRef(games[keep]), ReviewRequired: "Confirm that the selected cards belong together as one game."}
 		for i, game := range games {
 			if i != keep {
 				group.Merge = append(group.Merge, gameRef(game))
@@ -240,7 +240,7 @@ func BuildPlan(options Options, folders []string) (*Plan, error) {
 				return nil, err
 			}
 		}
-		pg := PlannedGroup{ID: len(p.Groups), Revision: 1, Group: group, Manual: len(folders) > 0, NeedsIdentity: group.ReviewRequired != ""}
+		pg := PlannedGroup{ID: len(p.Groups), Revision: 1, Group: group, original: group, Candidates: append([]GameRef{group.Keep}, group.Merge...), Manual: len(folders) > 0, NeedsIdentity: group.ReviewRequired != ""}
 		members, err := groupMembers(options.DataRoot, group)
 		pg.Members = members
 		if err == nil {
@@ -272,12 +272,12 @@ func (p *Plan) evaluate(pg *PlannedGroup) {
 	pg.Status = "ready"
 	pg.Reason = ""
 	g := &pg.Group
-	if g.HoldReason != "" && len(g.MetadataConflicts) == 0 {
+	if g.NativeDigest != "" && g.HoldReason != "" && len(g.MetadataConflicts) == 0 {
 		pg.Status = "blocked"
 		pg.Reason = g.HoldReason
 		return
 	}
-	if g.Skipped {
+	if g.NativeDigest != "" && g.Skipped {
 		pg.Status = "blocked"
 		pg.Reason = g.SkipReason
 		return
@@ -287,6 +287,16 @@ func (p *Plan) evaluate(pg *PlannedGroup) {
 	if g.NativeDigest != "" {
 		data, err = catalogfs.ReadFile(filepath.Join(p.mame.work, "review", "staged", "platforms", g.Platform, g.TargetFolder, "game.yaml"))
 	} else {
+		games, e := readGroup(p.options.DataRoot, *g)
+		if e != nil {
+			pg.blockInspection(e)
+			return
+		}
+		if err = p.evaluateIdentity(pg, games); err != nil {
+			pg.Status = "blocked"
+			pg.Reason = err.Error()
+			return
+		}
 		changes, reason, e := planGroupFiles(p.options.DataRoot, *g)
 		if e != nil {
 			pg.blockInspection(e)
@@ -295,7 +305,11 @@ func (p *Plan) evaluate(pg *PlannedGroup) {
 			err = fmt.Errorf("%s", reason)
 		} else {
 			g.FileChanges = changes
-			data, err = groupDocument(p.options.DataRoot, *g, p.regions())
+			if pg.NeedsIdentity && !g.ReviewAccepted {
+				data, err = mergedDocument(games, p.regions(), g.Edits)
+			} else {
+				data, err = renderGroupDocument(games, p.regions(), *g)
+			}
 		}
 	}
 	if err != nil {
@@ -334,7 +348,7 @@ func (p *Plan) verify(pg PlannedGroup) error {
 			return fmt.Errorf("plan is stale; rebuild it: %w", err)
 		}
 	}
-	stamp, err := groupStamp(p.options.DataRoot, pg.Group)
+	stamp, err := groupStamp(p.options.DataRoot, pg.original)
 	if err != nil || stamp != pg.Stamp {
 		return fmt.Errorf("card files changed; rebuild the plan")
 	}
@@ -349,11 +363,20 @@ func (p *Plan) Preview(id int, draft Draft) (PlannedGroup, error) {
 		return pg, err
 	}
 	if pg.Group.NativeDigest != "" {
+		if draft.Folders != nil {
+			return pg, fmt.Errorf("MAME membership follows snapshot bindings")
+		}
 		if len(draft.Fields) > 0 || draft.Primary != "" && draft.Primary != pg.Group.Keep.Folder {
 			return pg, fmt.Errorf("MAME primary follows snapshot bindings; edit cards separately and rebuild")
 		}
 	} else {
-		refs := append([]GameRef{pg.Group.Keep}, pg.Group.Merge...)
+		refs, changed, err := p.selectMembers(pg, draft.Folders)
+		if err != nil {
+			return pg, err
+		}
+		if changed {
+			pg.Manual = true
+		}
 		if draft.Primary != "" {
 			found := false
 			for i, ref := range refs {
@@ -371,11 +394,10 @@ func (p *Plan) Preview(id int, draft Draft) (PlannedGroup, error) {
 		pg.Group.Merge = append([]GameRef(nil), refs[1:]...)
 		pg.Group.Edits = draft.Fields
 		pg.Group.ReviewAccepted = draft.Confirm
-		if pg.Manual && draft.Confirm {
-			if strings.TrimSpace(draft.Reason) == "" {
-				return pg, fmt.Errorf("explain the evidence for this identity decision")
-			}
-			pg.Group.ReviewReason = strings.TrimSpace(draft.Reason)
+		pg.Group.ownerReview = nil
+		pg.Group.ReviewReason = strings.TrimSpace(draft.Reason)
+		if draft.Confirm && pg.Group.ReviewReason == "" {
+			pg.Group.ReviewReason = "Owner confirmed these selected cards belong together as one game."
 		}
 	}
 	pg.Revision++

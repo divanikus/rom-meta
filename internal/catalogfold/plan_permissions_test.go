@@ -88,8 +88,8 @@ func TestPlanIsolatesInaccessibleMedia(t *testing.T) {
 				if kind != "held-directory" && pg.Status != "ready" {
 					t.Fatal(pg)
 				}
-				if kind == "held-directory" && pg.Group.Keep.Title == "Orbit" && pg.Status != "blocked" {
-					t.Fatal("content guard bypassed", pg)
+				if kind == "held-directory" && pg.Group.Keep.Title == "Orbit" && pg.Status != "review" || !pg.NeedsIdentity {
+					t.Fatal("content review missing after access repair", pg)
 				}
 			}
 		})
