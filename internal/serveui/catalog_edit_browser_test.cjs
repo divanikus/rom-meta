@@ -482,3 +482,10 @@ test('manual card selection opens its comparison directly without applying it',a
  assert.equal(b.run('state.reviewed'),7);assert.equal(b.run('state.busyOnOpen'),false);assert.equal(b.run('state.board'),undefined);
  assert.deepEqual(calls.map(c=>c.path),['/api/catalog/fold-plan?stream=1']);assert.deepEqual(calls[0].body.games,['One','Two']);
 });
+
+test('closing a comparison restores its entry action for the same selection',async()=>{
+ const b=browser(async()=>json({}));b.run('catalogUI.comparePlatform="Console";catalogUI.compare=new Set(["One","Two"]);catalogUI.busy=true;catalogUI.mode="review";catalogUpdateTools()');
+ assert.equal(b.element('catalog-compare').disabled,true);
+ await b.run('catalogClose()');
+ assert.equal(b.element('catalog-compare').disabled,false);assert.equal(b.element('catalog-compare').textContent,'Compare for merge (2)');
+});

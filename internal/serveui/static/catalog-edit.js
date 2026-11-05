@@ -23,7 +23,7 @@ async function catalogClose(){
  if(catalogUI.decisions?.size&&!window.confirm("Discard queued fold decisions? Nothing has been saved yet."))return;
  catalogStopPlanArt();catalogUI.artwork=new Map();catalogUI.cardsCache=new Map();catalogUI.decisions=new Map();catalogUI.version=(catalogUI.version||0)+1;catalogUI.controller?.abort();catalogUI.dirty=false;catalogUI.busy=false;
  if(catalogUI.plan){const id=catalogUI.plan.id;catalogUI.plan=null;catalogPost("/api/catalog/fold-discard",{plan:id}).catch(()=>{});}
- $("catalog-dialog").close();
+ $("catalog-dialog").close();catalogUpdateTools();
 }
 function catalogUpdateTools(){
  if(catalogUI.comparePlatform&&catalogUI.comparePlatform!==state.platform){catalogUI.compare.clear();catalogUI.comparePlatform=state.platform;}
