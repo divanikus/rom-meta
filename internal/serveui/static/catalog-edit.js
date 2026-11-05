@@ -469,10 +469,13 @@ function catalogEditorTargets(){
   if(sources.some(s=>s.id===r.target.source)&&(r.target.match>=0||!Object.keys(r.fields).length))continue;
   result.push({target:r.target,label:sourceLabel(r.target.source)+" · "+r.label});
  }
+ // Keep the current scope visible even before its first field is changed.
+ if(f.target.kind==="manual"&&!result.some(r=>catalogTargetKey(r.target)===catalogTargetKey(f.target)))result.push({target:f.target,label:(sources.find(s=>s.id===f.target.source)?.name||sourceLabel(f.target.source))+" · "+(f.target.scope||"whole game")+" · new record"});
  // Keep unsaved scoped records selectable when moving between targets.
  for(const draft of f.edits.values())if(!result.some(r=>catalogTargetKey(r.target)===catalogTargetKey(draft.target)))result.push({target:draft.target,label:sourceLabel(draft.target.source)+" · "+(draft.target.scope||"whole game")+" · draft"});
  return result;
 }
+function catalogScopeExists(scope){return (catalogInline.card?.records||[]).some(r=>r.target.source===catalogInline.target.source&&r.target.match>=0&&r.target.release_index==null&&!r.fields.releases&&(r.fields.release||"")===scope);}
 function catalogInlineBanner(){
  const f=catalogInline;if(!catalogEditorActive())return "";
  if(f.loading)return '<div class="catalog-inline-banner" role="status">Opening editable fields…</div>';
@@ -482,7 +485,7 @@ function catalogInlineBanner(){
  const help=f.target.kind==="library"?"Library values override selected sources. Clear a value to resume normal source selection. Exported names still follow release/title settings.":source?"Only fields you change belong to this variant. Enable and order it in Export → Advanced → Metadata, or Settings → Source priorities.": "Editing this exact saved source record. Refreshing that provider can replace these changes; use a named variant to retain your own version.";
  return '<div class="catalog-inline-banner catalog-editor-bar"><div class="catalog-editor-heading"><strong>Edit card</strong><span id="catalog-editor-count">'+count+' changed '+(count===1?"record":"records")+'</span></div>'+
  '<label>Editing<select id="catalog-editor-target"'+disabled+'>'+targets.map(r=>'<option value="'+escapeAttr(catalogTargetKey(r.target))+'" '+(catalogTargetKey(r.target)===key?'selected':'')+'>'+cEscape(r.label)+(f.edits.has(catalogTargetKey(r.target))?' · edited':'')+'</option>').join("")+'</select></label>'+
- (f.target.kind==="manual"?'<label>Applies to<select id="catalog-editor-scope"'+disabled+'><option value="">Whole game</option>'+(f.card.releases||[]).map(r=>'<option value="'+escapeAttr(r)+'" '+(f.target.scope===r?'selected':'')+'>'+cEscape(r)+'</option>').join("")+'</select></label>':"")+
+ (f.target.kind==="manual"?'<label>Applies to<select id="catalog-editor-scope"'+disabled+'><option value="" '+(catalogScopeExists("")?'disabled':'')+'>Whole game</option>'+(f.card.releases||[]).map(r=>'<option value="'+escapeAttr(r)+'" '+(f.target.scope===r?'selected':'')+' '+(catalogScopeExists(r)?'disabled':'')+'>'+cEscape(r)+'</option>').join("")+'</select></label>':"")+
  '<div class="catalog-inline-actions"><button class="tab-button" id="catalog-new-source"'+disabled+'>New named variant</button>'+(source?'<button class="tab-button" id="catalog-rename-source"'+disabled+'>Rename variant</button>':"")+'</div>'+
  (f.nameMode?'<div class="catalog-source-name"><label>Variant name<input id="catalog-source-name" maxlength="120" value="'+escapeAttr(f.nameDraft)+'"'+disabled+'></label><button class="tab-button" id="catalog-save-source-name"'+disabled+'>'+(f.nameMode==="rename"?"Save name":"Create variant")+'</button><button class="tab-button" id="catalog-cancel-source-name"'+disabled+'>Cancel</button></div>':"")+
  '<p>'+cEscape(help)+'</p>'+(hasOverrides&&f.target.kind!=="library"?'<p class="catalog-editor-hint">This card also has explicit library values. They still take priority; choose Library fields to review or clear them.</p>':"")+
@@ -519,6 +522,7 @@ function catalogEqualValue(a,b){
  return JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
 }
 function catalogEditorChange(key,value){
+ if(catalogInline.saving)return;
  const f=catalogInline,token=catalogTargetKey(f.target),draft=f.edits.get(token)||{target:{...f.target},fields:Object.create(null)},base=catalogTargetBase();
  if(catalogEqualValue(value,base[key])||(value==null&&!Object.hasOwn(base,key)))delete draft.fields[key];else draft.fields[key]=value;
  if(Object.keys(draft.fields).length)f.edits.set(token,draft);else f.edits.delete(token);
@@ -629,8 +633,8 @@ function catalogBindInline(){
  }));
  document.querySelectorAll("[data-card-description]").forEach(input=>input.addEventListener("input",()=>{if(!f.saving)catalogEditorDescription(input.dataset.cardDescription,input.value);}));
  document.querySelectorAll("[data-card-remove]").forEach(button=>button.addEventListener("click",()=>{if(f.saving)return;f.invalid.delete(catalogTargetKey(f.target)+"|"+button.dataset.cardRemove);catalogEditorChange(button.dataset.cardRemove,null);catalogInlineRender();}));
- $("catalog-add-language")?.addEventListener("click",()=>{const lang=$("catalog-description-language").value.trim().toLowerCase();if(!/^[a-z]{2,3}(-[a-z0-9]{2,8})*$/.test(lang)){f.error="Use a language code such as en, ru or pt-BR.";catalogEditorActions();return;}f.extra.add(lang);catalogInlineRender();});
- $("catalog-add-field")?.addEventListener("click",()=>{const key=$("catalog-extra-field").value.trim();if(!key||["matches","__proto__","constructor","prototype"].includes(key)||Object.hasOwn(catalogTargetValues(),key))return;catalogEditorChange(key,"");catalogInlineRender();});
+ $("catalog-add-language")?.addEventListener("click",()=>{if(f.saving)return;const lang=$("catalog-description-language").value.trim().toLowerCase();if(!/^[a-z]{2,3}(-[a-z0-9]{2,8})*$/.test(lang)){f.error="Use a language code such as en, ru or pt-BR.";catalogEditorActions();return;}f.extra.add(lang);catalogInlineRender();});
+ $("catalog-add-field")?.addEventListener("click",()=>{if(f.saving)return;const key=$("catalog-extra-field").value.trim();if(!key||["matches","__proto__","constructor","prototype"].includes(key)||Object.hasOwn(catalogTargetValues(),key))return;catalogEditorChange(key,"");catalogInlineRender();});
 }
 window.addEventListener?.("beforeunload",event=>{if(catalogInline.dirty||catalogInline.invalid.size||catalogInline.saving){event.preventDefault();event.returnValue="";}});
 

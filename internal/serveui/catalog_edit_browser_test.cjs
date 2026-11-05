@@ -345,3 +345,9 @@ test('starting fold review does not discard an unsaved inline correction',async(
  assert.equal(b.run('catalogInline.dirty'),true);
  assert.equal(b.run('catalogUI.busy'),false);
 });
+test('an untouched new release record remains the visible edit destination',()=>{
+ const b=browser(async()=>json({}));b.run('catalogInline.card={fields:{},registry:{sources:[{id:"manual.one",name:"Personal"}]},releases:["USA","Japan"],records:[{target:{kind:"source",source:"manual.one",match:0},fields:{developer:"Whole game"}}]};catalogInline.target={kind:"manual",source:"manual.one",match:-1,scope:"Japan"}');
+ assert.equal(b.run('catalogEditorTargets().filter(r=>catalogTargetKey(r.target)===catalogTargetKey(catalogInline.target)).length'),1);
+ assert.equal(b.run('catalogScopeExists("")'),true);assert.equal(b.run('catalogScopeExists("Japan")'),false);
+ b.run('catalogInline.saving=true;catalogEditorChange("developer","Late draft")');assert.equal(b.run('catalogInline.edits.size'),0);
+});
