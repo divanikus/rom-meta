@@ -6,6 +6,7 @@ import (
 
 	"rommeta/internal/appinfo"
 	"rommeta/internal/catalogstate"
+	"rommeta/internal/curation"
 	"rommeta/internal/httpdocs"
 	"rommeta/internal/librarysettings"
 )
@@ -48,7 +49,7 @@ func browserOpenAPI() any {
 		}
 
 		paths["/api/catalog"] = httpdocs.Schema{"get": op("Catalog editing capability", "Reports whether serve --edit enables catalog actions; no writes.", nil, httpdocs.Schema{"type": "object", "additionalProperties": true})}
-		editGet := op("Read editable saved fields", "Returns game-level local values, current SHA256 revision, preserved YAML and effective browser profile.", []httpdocs.Schema{platform, httpdocs.Query("game", "Exact game folder.", true, str)}, s.Ref(editorCard{}))
+		editGet := op("Read editable card and source records", "Returns library fields, exact source record targets, named-source registry, current SHA256 revision, preserved YAML and browser profile.", []httpdocs.Schema{platform, httpdocs.Query("game", "Exact game folder.", true, str)}, s.Ref(editorCard{}))
 		addWrite := func(path, summary, description string, request any) {
 			action := op(summary, description, nil, httpdocs.Schema{"type": "object", "additionalProperties": true})
 			action["operationId"] = "browser" + strings.NewReplacer("/", "_", "-", "_").Replace(path) + "_post"
@@ -58,6 +59,8 @@ func browserOpenAPI() any {
 			responses["409"] = httpdocs.Response("Stale input, expired preview, conflicting data or busy writer.", s.Ref(errorResponse{}))
 			paths[path] = httpdocs.Schema{"post": action}
 		}
+		addWrite("/api/catalog/curation", "Create or rename a named source", "Explicit name and current registry revision required. Stable source IDs keep saved profile priorities valid. Does not copy metadata or enable a source.", curationRequest{})
+		paths["/api/catalog/curation"].(httpdocs.Schema)["get"] = op("Read named sources", "Editable mode required; library-wide names and stable source IDs.", nil, s.Ref(curation.Registry{}))
 		addWrite("/api/catalog/settings", "Save library settings", "Editable mode and current section revision required. Updates only submitted supported fields under the shared catalog writer lock; preserves other YAML and credentials. Saving does not start imports/downloads.", librarysettings.Request{})
 		paths["/api/catalog/settings"].(httpdocs.Schema)["get"] = op("Read library settings", "Editable mode required. Source priorities, acquisition, connection options, fold regions, platform mappings and media policies. Credential values are never returned.", nil, s.Ref([]librarysettings.Section{}))
 		paths["/api/operations"] = httpdocs.Schema{"get": op("List server operations", "Session-local DAT plans, running imports and results. Closing the browser never cancels accepted work; reconnect using this list. Records expire after 24 hours or restart.", nil, s.Ref([]importOperation{}))}
@@ -72,7 +75,7 @@ func browserOpenAPI() any {
 			delete(responses, "200")
 			responses["202"] = httpdocs.Response("Accepted operation snapshot; poll GET /api/operations.", s.Ref(importOperation{}))
 		}
-		addWrite("/api/catalog/edit", "Save local card corrections", "Requires serve --edit, application/json and same-origin browser requests. Revision must match stored YAML. Only listed game metadata is editable; null removes an override. Preserves other catalog/source data. saved=true remains success if derived-index refresh reports a warning.", editRequest{})
+		addWrite("/api/catalog/edit", "Save card and source fields", "Requires serve --edit, JSON and same-origin requests. Revision covers the entire stored card. Send edits with exact targets and changed fields for one atomic save; legacy fields/target is a single edit. Null removes a field. New manual targets require a registered source ID and optional existing release scope. Unsubmitted values are preserved. saved=true remains success if index refresh reports a warning.", editRequest{})
 		paths["/api/catalog/edit"].(httpdocs.Schema)["get"] = editGet
 		addWrite("/api/catalog/edit-preview", "Preview local card corrections", "Read-only preview against the current revision. Does not save or acquire provider data.", editRequest{})
 		addWrite("/api/catalog/fold-plan", "Build a platform fold plan", "Uses the same fold rules and catalog region priorities as CLI. Optional games selects 2..12 exact same-platform cards for explicit identity review. Reports ready/review/blocked groups; no mutations. stream=1 returns NDJSON progress and one result/error. Plans expire after 30 minutes, maximum four retained plans; MAME may use temporary prepared files.", foldPlanRequest{})

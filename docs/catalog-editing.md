@@ -90,31 +90,86 @@ fields the current consumers do not use.
 
 ## Correct a card
 
-In **Library**, click the pencil beside a value to edit it in place. **Edit card**
-also reveals fields that are not filled yet. Save or cancel that field without
-opening another workspace. Descriptions can be corrected for one language or as
-shared text for all languages. Ctrl/Cmd+Enter saves; Escape cancels.
+In **Library**, choose **Edit card** (or a pencil beside a value). The card stays
+in place and all fields of the selected record become inputs together.
+**Editing** identifies the destination: library fields, an exact provider record,
+or a named manual variant. Common metadata has ordinary controls; **Other source
+fields** exposes saved IDs and additional values, with JSON inputs for structured
+objects. You can add or remove source fields without replacing the whole record.
 
-The labels distinguish values saved in the library from provider values. A save
-changes the existing game-wide fields in `game.yaml`, preserving original provider
-observations. **Restore source value**, followed by Save, removes the selected
-correction; the exporter resumes choosing source metadata using its profile.
-This does not modify a provider's downloaded record.
+Switching records retains their drafts. **Save changes** commits all edited
+records of this card in one atomic write; **Discard changes** discards them.
+**Finish editing** returns to the card. Leaving with unsaved changes asks before
+discarding them. Invalid or stale saves retain the drafts. Drafts are not saved
+across a page/server restart; this differs from server-owned import operations.
 
-Developer, publisher, date, genres, players and descriptions participate in the
-shared ES-DE/LaunchBox export resolver. Explicit catalog values precede provider
-candidates; a saved release-specific value can take precedence over a game-wide
-value. Language-specific descriptions apply when that language is selected.
-Shared description text applies to all languages.
+### Named manual variants
+
+Choose **New named variant**, enter your own name, then contribute the fields you
+want to curate. You can create several variants and reuse each across cards.
+Creating a variant saves its name immediately; **Save changes** saves its card
+fields. A variant stores only contributed values, never an implicit copy of the
+resolved card. **Rename variant** changes its label while retaining its stable ID.
+
+A variant can apply to the whole game or an existing release. Choose its **new
+release record** entry to add a release-specific refinement. Specific values win
+over that variant's whole-game values; other selected sources still supply missing
+fields. Explicitly scoped manual descriptions never borrow from another release,
+even when provider description scope is Whole game. Use per-language descriptions
+for translations; shared description text applies to all languages.
+
+Enable and order variants in **Export → Advanced → Metadata sources**, or save
+library defaults in **Settings → Source priorities**. New variants start disabled.
+Saved export profiles reference stable IDs, so renaming keeps their selection
+valid. Developer, publisher, date, genres, players and descriptions use the same
+resolver in the browser, CLI, ES-DE and LaunchBox.
+
+Names are stored in `config/curation.yaml`; values are ordinary
+`game.yaml` source records:
+
+```yaml
+# config/curation.yaml
+schema_version: 1
+sources:
+  manual.0123456789abcdef01234567:
+    name: Short descriptions
+```
+
+```yaml
+# Inside a card's game.yaml
+sources:
+  manual.0123456789abcdef01234567:
+    matches:
+      - descriptions:
+          en: A short description for this collection.
+      - release: Example (Japan)
+        publisher: Regional publisher
+```
+
+Use that same ID in `config/sources.yaml` under `priority.metadata`, or in an
+export profile's description/field `sources` lists. The browser's **Save profile**
+writes the selected IDs and order. No new CLI-only configuration mechanism is
+required. Provider refresh and ordinary fold preserve these source records.
+
+### Provider records and existing library fields
+
+Selecting a provider record edits its actual saved fields, including IDs.
+The selector distinguishes match records and nested release observations.
+**Source details** edits the surrounding provider stanza (for example status),
+not its matches list. Refreshing that provider may replace its block; use a named
+variant when your version should survive provider refresh.
+
+Existing explicit library/release fields retain their previous precedence.
+The editor names library fields as overrides and flags their presence when
+editing a source. Clear the relevant library value to resume source selection.
+There is no automatic migration of earlier corrections.
 
 **Library title**, aliases and alternate names describe the catalog card.
-Exported names follow the selected release and the export title settings, so a
-library title edit is not a promise to rename every regional release. Use
-**Preview export** from the inline editor to inspect the actual projection.
-
-Unknown YAML, release identities, variants, fingerprints, media and source
-observations are retained. Source refresh does not replace local corrections.
-Stale saves are rejected without discarding the typed draft.
+Provider/manual record titles and identifiers remain source evidence: exported
+names still follow release identity and export title settings. **Preview export**
+shows the actual saved projection. Editing a source title does not rename releases
+or fingerprints. Unsubmitted YAML fields, release identities, variants and media
+remain intact.
 
 ## Let fold prepare the work
 
@@ -231,7 +286,8 @@ edit ROM files, import profiles or apply frontend exports.
 ## HTTP entry points
 
 `GET /api/catalog` advertises editing capability. The editor uses
-`GET|POST /api/catalog/edit`, `POST /api/catalog/edit-preview`, and
+`GET|POST /api/catalog/edit`, `POST /api/catalog/edit-preview`,
+`GET|POST /api/catalog/curation` (named-source registry), and
 `POST /api/catalog/fold-plan`, `fold-preview`, `fold-apply`, `fold-discard`.
 See the running server's `/docs` and `/openapi.json` for request fields.
 Write actions require JSON, explicit editable mode and same-origin browser requests.

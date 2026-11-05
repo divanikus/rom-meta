@@ -15,6 +15,7 @@ import (
 	"rommeta/internal/atomicfile"
 	"rommeta/internal/catalogedit"
 	"rommeta/internal/catalogyaml"
+	"rommeta/internal/curation"
 	"rommeta/internal/exporter"
 	"rommeta/internal/platformnames"
 	"rommeta/internal/store"
@@ -120,6 +121,13 @@ func Load(root string) ([]Section, error) {
 	}
 	defaults := map[string][]string{"metadata": profile.Selection.Description.Sources, "artwork": profile.Selection.Media["cover"].Sources, "video": profile.Selection.Media["video"].Sources}
 	choices := []string{"launchbox", "screenscraper", "openvgdb", "igdb", "emumovies"}
+	registry, err := curation.Load(root)
+	if err != nil {
+		return nil, err
+	}
+	for _, source := range registry.Sources {
+		choices = append(choices, source.ID)
+	}
 	policy, _, err := read(root, "source-policies.yaml")
 	if err != nil {
 		return nil, err
@@ -145,7 +153,12 @@ func Load(root string) ([]Section, error) {
 	for _, category := range []string{"metadata", "artwork", "video"} {
 		f := textField(category, strings.ToUpper(category[:1])+category[1:], "list", "Top source first. An empty list disables automatic source selection.", "priority", category)
 		f.Value = defaults[category]
-		f.Choices = choices
+		f.Choices = nil
+		for _, choice := range choices {
+			if category == "metadata" || !curation.IsManual(choice) {
+				f.Choices = append(f.Choices, choice)
+			}
+		}
 		result[0].Fields = append(result[0].Fields, f)
 		f = textField(category, strings.ToUpper(category[:1])+category[1:], "list", "Only listed sources participate in automatic acquisition.", "fetch", category)
 		f.Choices = []string{"launchbox", "openvgdb", "hasheous", "igdb", "screenscraper", "emumovies"}

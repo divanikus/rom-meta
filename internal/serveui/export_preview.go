@@ -12,6 +12,7 @@ import (
 
 	"rommeta/internal/catalogfs"
 	"rommeta/internal/catalogyaml"
+	"rommeta/internal/curation"
 
 	"gopkg.in/yaml.v3"
 
@@ -310,11 +311,21 @@ func (s *server) exportOptions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, fmt.Errorf("read source registry: %w", err))
 		return
 	}
+	registry, err := curation.Load(s.root)
+	if err != nil {
+		writeError(w, 400, err)
+		return
+	}
+	options.Labels = registry.Labels()
+	for _, source := range registry.Sources {
+		options.Available = append(options.Available, source.ID)
+	}
 	sort.Strings(options.Available)
 	writeJSON(w, options)
 }
 
 type exportSourceOptions struct {
+	Labels     map[string]string               `json:"source_labels,omitempty"`
 	Regions    []string                        `json:"regions"`
 	Metadata   []string                        `json:"metadata_sources"`
 	Artwork    []string                        `json:"artwork_sources"`

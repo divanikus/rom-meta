@@ -234,7 +234,7 @@ async function libraryLoadSettings(reload=false){
  if(librarySettingsUI.loading)return;
  if(librarySettingsUI.sections&&!reload){libraryRenderSettings();return}
  librarySettingsUI.loading=true;
- try{librarySettingsUI.sections=await fetchJSON("/api/catalog/settings");librarySettingsUI.error="";}
+ try{librarySettingsUI.sections=await fetchJSON("/api/catalog/settings");state.sourceDefaults=await fetchJSON("/api/export-options");librarySettingsUI.error="";}
  catch(error){librarySettingsUI.error=error.message;}
  finally{librarySettingsUI.loading=false;if(state.view==="settings")libraryRenderSettings();}
 }

@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"rommeta/internal/catalogfs"
 	"rommeta/internal/catalogyaml"
+	"rommeta/internal/curation"
 	"rommeta/internal/medianames"
 	"rommeta/internal/titlematch"
 )
@@ -63,7 +64,7 @@ func resolveFields(g *game, release string, profile Profile) map[string]Value {
 		if value, ok := bestFieldCandidate(values); ok {
 			// Provider prose can retain XML/HTML entities after acquisition.
 			// Decode one display layer; explicit local overrides stay literal.
-			if key == "description" && value.source != "local" {
+			if key == "description" && value.source != "local" && !curation.IsManual(value.source) {
 				value.text = html.UnescapeString(value.text)
 			}
 			result[key] = Value{Value: value.text, Source: value.source, Language: value.language, Selection: value.selection, FromRelease: value.fromRelease}
@@ -155,6 +156,15 @@ func sourceNodes(root *yaml.Node, source, release string) []*yaml.Node {
 		}
 		return nil
 	})
+	if curation.IsManual(source) {
+		// A specific user-authored release refines that variant's whole-game values.
+		sort.SliceStable(result, func(i, j int) bool {
+			scoped := func(n *yaml.Node) bool {
+				return field(n, "release") != "" || len(catalogyaml.Strings(catalogyaml.Value(n, "releases"))) > 0
+			}
+			return scoped(result[i]) && !scoped(result[j])
+		})
+	}
 	return result
 }
 

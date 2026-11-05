@@ -21,6 +21,7 @@ import (
 	"rommeta/internal/catalogrules"
 	"rommeta/internal/catalogstate"
 	"rommeta/internal/catalogyaml"
+	"rommeta/internal/curation"
 	"rommeta/internal/dat"
 	"rommeta/internal/httpdocs"
 	"rommeta/internal/medianames"
@@ -109,6 +110,7 @@ func HandlerWithEditing(dataRoot string, allowEdit bool) (http.Handler, error) {
 	mux.HandleFunc("/api/catalog/import-dismiss", server.importDismiss)
 	mux.HandleFunc("/api/catalog", server.catalogCapabilities)
 	mux.HandleFunc("/api/catalog/settings", server.librarySettings)
+	mux.HandleFunc("/api/catalog/curation", server.curationSources)
 	mux.HandleFunc("/api/catalog/edit", server.catalogEdit)
 	mux.HandleFunc("/api/catalog/edit-preview", server.catalogEditPreview)
 	mux.HandleFunc("/api/catalog/fold-plan", server.foldPlan)
@@ -264,7 +266,9 @@ func (s *server) game(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	blocks := sourceBlocks(document, found.SourceStats)
+	registry, _ := curation.Load(s.root) // Labels are optional; malformed names must not hide the card.
 	writeJSON(w, gameResponse{
+		SourceLabels:    registry.Labels(),
 		Game:            found,
 		HasMetadata:     gameHasMetadata(found),
 		MissingMetadata: !gameHasMetadata(found),
@@ -388,6 +392,7 @@ type gameListItem struct {
 }
 
 type gameResponse struct {
+	SourceLabels    map[string]string `json:"source_labels,omitempty"`
 	CatalogFields   map[string]any    `json:"catalog_fields"`
 	CatalogYAML     string            `json:"catalog_yaml"`
 	Game            catalogcache.Game `json:"game"`

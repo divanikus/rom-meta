@@ -13,6 +13,14 @@ indexes and frontend exports are disposable and must be rebuildable from them.
 Organize by platform/game bundle, preserve curation/provenance and keep data
 editable, diffable and independent of any emulator, ROM set or provider.
 
+## Named manual sources
+
+User-authored variants use ordinary `sources.manual.<stable-id>.matches` records.
+Their display names live in `config/curation.yaml`; renaming leaves profile
+references intact. They contribute only saved fields and participate in normal
+metadata source priorities. Existing explicit catalog overrides retain precedence.
+See [card editing](catalog-editing.md#named-manual-variants) for format and scope.
+
 ## Packed platform storage
 
 Optional marked platforms with per-game metadata and source/type media TorrentZips. Logical paths

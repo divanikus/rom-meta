@@ -16,7 +16,7 @@ func (s *server) apiIndex(w http.ResponseWriter, r *http.Request) {
 		"mode": "browser", "read_only": !s.allowEdit, "documentation": "/docs", "openapi": "/openapi.json",
 		"endpoints": map[string]string{
 			"operations": "/api/operations", "dat_upload": "POST /api/catalog/import-upload", "dat_plan": "POST /api/catalog/import-plan", "dat_apply": "POST /api/catalog/import-apply", "dat_dismiss": "POST /api/catalog/import-dismiss",
-			"catalog": "/api/catalog", "settings": "GET/POST /api/catalog/settings", "edit": "GET/POST /api/catalog/edit", "fold_plan": "POST /api/catalog/fold-plan", "fold_preview": "POST /api/catalog/fold-preview", "fold_apply": "POST /api/catalog/fold-apply",
+			"catalog": "/api/catalog", "settings": "GET/POST /api/catalog/settings", "curation": "GET/POST /api/catalog/curation", "edit": "GET/POST /api/catalog/edit", "fold_plan": "POST /api/catalog/fold-plan", "fold_preview": "POST /api/catalog/fold-preview", "fold_apply": "POST /api/catalog/fold-apply",
 			"platforms": "/api/platforms", "names": "/api/games?platform=<folder>&names=1",
 			"summaries":      "/api/games?platform=<folder>&game=<folder>",
 			"game":           "/api/game?platform=<folder>&game=<folder>",

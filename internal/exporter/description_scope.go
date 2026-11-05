@@ -5,6 +5,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 	"rommeta/internal/catalogyaml"
+	"rommeta/internal/curation"
 )
 
 type descriptionNode struct {
@@ -16,10 +17,14 @@ type descriptionNode struct {
 // Description scope is a display policy over an already bound catalog card.
 // Provider match releases identify acquisition evidence, not distinct game prose.
 func descriptionNodes(g *game, source, release, scope string) []descriptionNode {
-	if scope != "game" {
+	if scope != "game" || curation.IsManual(source) {
 		var result []descriptionNode
 		for _, n := range sourceNodes(g.root, source, release) {
-			result = append(result, descriptionNode{node: n, release: release})
+			fromRelease := release
+			if curation.IsManual(source) && field(n, "release") == "" && len(catalogyaml.Strings(catalogyaml.Value(n, "releases"))) == 0 {
+				fromRelease = ""
+			}
+			result = append(result, descriptionNode{node: n, release: fromRelease})
 		}
 		return result
 	}

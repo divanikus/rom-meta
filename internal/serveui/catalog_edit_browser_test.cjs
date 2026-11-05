@@ -236,51 +236,60 @@ test('continuation failure preserves the successful receipt and offers reload wi
  assert.equal(calls.length,1);assert.equal(b.run('catalogUI.plan'),null);
 });
 
-test('inline save writes only the edited field, updates the card and preserves provider observations',async()=>{
- let sent;const provider={source:'launchbox',profile:{developer:'Provider studio'}};
- const b=browser(async(path,options)=>{sent={path,body:JSON.parse(options.body)};return json({card:{revision:'new',fields:{title:'Orbit',developer:'My studio'},profile:{title:'Orbit',developer:'My studio'},source_profile:{developer:'Provider studio'},yaml:'saved'}});});
- b.run('catalogInline.platform="Console";catalogInline.folder="One";catalogInline.card={revision:"old",fields:{title:"Orbit"}};catalogInline.field="developer";catalogInline.draft="My studio";catalogInline.dirty=true;state.game={game:{title:"Orbit"},source_blocks:'+JSON.stringify([provider])+'};state.games=[{folder:"One",title:"Orbit"}]');
- await b.run('catalogSaveInline()');
- assert.equal(sent.path,'/api/catalog/edit');assert.deepEqual(sent.body.fields,{developer:'My studio'});assert.equal(sent.body.revision,'old');
- assert.equal(b.run('state.game.profile.developer'),'My studio');assert.equal(b.run('state.game.source_blocks[0].profile.developer'),'Provider studio');
- assert.equal(b.run('catalogInline.field'),'');assert.equal(b.run('catalogInline.dirty'),false);
+test('edit mode exposes every field and names the exact destination',()=>{
+ const b=browser(async()=>json({}));b.run('catalogUI.enabled=true;Object.assign(catalogInline,{mode:true,platform:"Console",folder:"One",card:{fields:{title:"Orbit"},records:[],registry:{sources:[]}}})');
+ const html=b.run('catalogRenderEditor({}, "")');
+ for(const field of ['title','developer','publisher','release_date','genres','players'])assert.match(html,new RegExp('data-card-field="'+field+'"'));
+ assert.match(b.run('catalogInlineBanner()'),/Library fields.*explicit overrides/);
+ b.run('catalogInline.target={kind:"source",source:"launchbox",match:1}');
+ assert.match(b.run('catalogInlineBanner()'),/exact saved source record/);
 });
-test('inline save retains a failed draft and blocks navigation only while saving',async()=>{
+test('save commits drafts for multiple records and stays in edit mode',async()=>{
+ let sent;const card={revision:'new',fields:{title:'Orbit'},profile:{title:'Orbit'},records:[],registry:{sources:[]}};
+ const b=browser(async(path,options)=>{sent={path,body:JSON.parse(options.body)};return json({card});});
+ b.run('Object.assign(catalogInline,{mode:true,platform:"Console",folder:"One",card:{revision:"old",fields:{title:"Orbit"},records:[]}});catalogEditorChange("developer","My studio");catalogInline.target={kind:"source",source:"launchbox",match:1};catalogEditorChange("publisher","Corrected publisher");state.game={game:{title:"Orbit"},source_blocks:[{source:"launchbox"}]}');
+ await b.run('catalogSaveInline()');
+ assert.equal(sent.body.edits.length,2);assert.deepEqual(sent.body.edits[1],{target:{kind:'source',source:'launchbox',match:1},fields:{publisher:'Corrected publisher'}});
+ assert.equal(sent.body.revision,'old');assert.equal(b.run('catalogInline.mode'),true);assert.equal(b.run('catalogInline.dirty'),false);
+ assert.equal(b.run('catalogInline.card.revision'),'new');
+});
+test('failed saves retain all drafts and block navigation only during the request',async()=>{
  let resolve;const b=browser(()=>new Promise(r=>resolve=r));
- b.run('catalogInline.platform="Console";catalogInline.folder="One";catalogInline.card={revision:"old",fields:{}};catalogInline.field="developer";catalogInline.draft="New";catalogInline.dirty=true');
- const pending=b.run('catalogSaveInline()');
- assert.equal(b.run('catalogLeaveInline()'),false);
+ b.run('Object.assign(catalogInline,{platform:"Console",folder:"One",card:{revision:"old",fields:{}}});catalogEditorChange("developer","New")');
+ const pending=b.run('catalogSaveInline()');assert.equal(b.run('catalogLeaveInline()'),false);
  resolve({ok:false,json:async()=>({error:'Card changed; reload before saving'})});await pending;
- assert.equal(b.run('catalogInline.draft'),'New');assert.equal(b.run('catalogInline.dirty'),true);assert.match(b.run('catalogInline.error'),/Card changed/);
+ assert.equal(b.run('catalogTargetValues().developer'),'New');assert.equal(b.run('catalogInline.dirty'),true);assert.match(b.run('catalogInline.error'),/Card changed/);
  assert.equal(b.run('catalogInline.saving'),false);
 });
-test('language-specific editing and source restoration preserve the other language corrections',()=>{
- const b=browser(async()=>json({}));
- b.run('catalogInline.card={fields:{descriptions:{en:"Saved English",ru:"Saved Russian"}}};catalogInline.field="description";catalogInline.language="en";catalogInline.draft="New English"');
- assert.deepEqual(JSON.parse(b.run('JSON.stringify(catalogInlinePatch())')),{descriptions:{en:'New English',ru:'Saved Russian'}});
- b.run('catalogInline.remove=true');
- assert.deepEqual(JSON.parse(b.run('JSON.stringify(catalogInlinePatch())')),{descriptions:{ru:'Saved Russian'}});
- b.run('catalogInline.field="developer"');
- assert.deepEqual(JSON.parse(b.run('JSON.stringify(catalogInlinePatch())')),{developer:null});
+test('language changes preserve other languages and reverting a value clears its draft',()=>{
+ const b=browser(async()=>json({}));b.run('catalogInline.card={fields:{descriptions:{en:"Saved English",ru:"Saved Russian"}}};catalogEditorDescription("en","New English")');
+ assert.deepEqual(JSON.parse(b.run('JSON.stringify(catalogTargetValues().descriptions)')),{en:'New English',ru:'Saved Russian'});
+ b.run('catalogEditorDescription("en","")');
+ assert.deepEqual(JSON.parse(b.run('JSON.stringify(catalogTargetValues().descriptions)')),{ru:'Saved Russian'});
+ b.run('catalogEditorDescription("en","Saved English")');assert.equal(b.run('catalogInline.dirty'),false);
 });
-test('late inline reads never open an editor on a different game',async()=>{
- let resolve;const b=browser(async()=>json({}));
- b.run('catalogUI.enabled=true;fetchJSON=()=>new Promise(r=>state.resolveEdit=r)');
+test('invalid structured values survive rendering and keep save disabled',()=>{
+ const b=browser(async()=>json({}));b.run('catalogInline.card={fields:{}};catalogInline.target={kind:"source",source:"launchbox",match:0};catalogInline.invalid.set(catalogTargetKey(catalogInline.target)+"|media","{broken");catalogEditorChange("developer","Draft")');
+ assert.match(b.run('catalogEditorControl("media",{cover:"old"})'),/\{broken/);
+ assert.equal(b.element('catalog-inline-save').disabled,true);
+});
+test('late editor reads cannot open a different game',async()=>{
+ const b=browser(async()=>json({}));b.run('catalogUI.enabled=true;fetchJSON=()=>new Promise(r=>state.resolveEdit=r)');
  const pending=b.run('catalogStartInline("developer")');
  b.run('catalogLeaveInline();state.selectedFolder="Two";state.resolveEdit({fields:{},profile:{}})');
- await pending;assert.equal(b.run('catalogInline.field'),'');
+ await pending;assert.equal(b.run('catalogInline.mode'),false);assert.equal(b.run('catalogInline.card'),null);
 });
-test('inline labels distinguish library title, stored values and source values',()=>{
- const b=browser(async()=>json({}));
- b.run('catalogUI.enabled=true;catalogInline.mode=true;state.game={catalog_fields:{title:"Orbit",developer:"Owner"},profile:{description:"Source",source:"igdb",description_language:"en"}}');
- assert.match(b.run('catalogInlineField("developer","Developer","Owner")'),/Saved in library/);
- assert.match(b.run('catalogInlineField("publisher","Publisher","Studio")'),/From sources/);
- assert.match(b.run('catalogInlineField("description","Description","Source")'),/igdb.*EN/);
- assert.match(b.run('catalogInlineBanner()'),/Release-specific values and export title settings/);
- b.run('catalogInline.platform="Console";catalogInline.folder="One";catalogInline.card={fields:{title:"Orbit"}};catalogInline.field="title"');
- assert.match(b.run('catalogInlineTitle("Orbit")'),/Exported names follow the release and title settings/);
- b.run('state.exportMode=true');
- assert.doesNotMatch(b.run('catalogInlineTitle("Orbit")'),/input|button/);
+test('saved card remains saved if refreshing export choices fails',async()=>{
+ const b=browser(async()=>json({card:{revision:'new',fields:{title:'Orbit'},profile:{}}}));
+ b.run('Object.assign(catalogInline,{platform:"Console",folder:"One",card:{revision:"old",fields:{}}});catalogEditorChange("developer","New");fetchJSON=async()=>{throw Error("Offline")};state.game={game:{title:"Orbit"}}');
+ await b.run('catalogSaveInline()');assert.equal(b.run('catalogInline.dirty'),false);assert.match(b.run('catalogInline.message'),/Saved.*Could not refresh/);
+});
+test('creating a named variant selects it without copying fields or enabling it',async()=>{
+ let sent;const b=browser(async(path,options)=>{sent=JSON.parse(options.body);return json({source:{id:'manual.one',name:'Personal'},registry:{revision:'new',sources:[{id:'manual.one',name:'Personal'}]}})});
+ b.run('catalogInline.card={fields:{developer:"Provider"},registry:{revision:"old",sources:[]}};catalogInline.nameMode="create";$("catalog-source-name").value="Personal";state.sourceDefaults={metadata:["launchbox"]};fetchJSON=async()=>({metadata:["launchbox"],available_metadata:["launchbox","manual.one"]})');
+ await b.run('catalogSaveSourceName()');assert.deepEqual(sent,{revision:'old',id:'',name:'Personal'});
+ assert.equal(b.run('catalogInline.target.source'),'manual.one');assert.deepEqual(JSON.parse(b.run('JSON.stringify(catalogTargetValues())')),{});
+ assert.equal(b.run('catalogInline.dirty'),false);assert.equal(b.run('state.sourceDefaults.metadata.join(",")'),'launchbox');
 });
 
 test('merge, separate and skip decisions advance without applying until the final batch',async()=>{

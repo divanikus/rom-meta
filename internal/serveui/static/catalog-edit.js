@@ -427,118 +427,211 @@ $("catalog-add-compare").addEventListener("click",()=>{
 const catalogObserver=new MutationObserver(catalogUpdateTools);
 catalogObserver.observe($("detail-title"),{childList:true});catalogObserver.observe($("export-bar"),{attributes:true,attributeFilter:["class"]});catalogObserver.observe($("catalog-tools").parentElement,{attributes:true,attributeFilter:["class"]});
 
-// Inline library corrections are explicit catalog fields; provider observations stay separate.
-const catalogInline={mode:false,field:"",dirty:false,saving:false,version:0,card:null,platform:"",folder:"",draft:"",language:"all",remove:false,message:""};
+// Editing is a mode: all inputs for the selected record appear together.
+// A card revision covers every target; one Save commits all its drafts atomically.
+const catalogInline={mode:false,dirty:false,saving:false,loading:false,version:0,card:null,platform:"",folder:"",target:{kind:"library",match:-1},edits:new Map(),invalid:new Map(),extra:new Set(),preferredSource:"",message:"",error:"",nameMode:"",nameDraft:""};
+const catalogRecordLabels={title:"Title",release_date:"Release date",developer:"Developer",publisher:"Publisher",genres:"Genres",players:"Players",max_players:"Maximum players",themes:"Themes",collections:"Collections",franchises:"Franchises",rating:"Rating",aliases:"Library aliases",alternate_titles:"Alternate titles",description:"Shared description",descriptions:"Descriptions"};
+const catalogRecordLists=new Set(["aliases","alternate_titles","genres","themes","collections","franchises","platforms"]);
 function catalogInlineAvailable(){return catalogUI.enabled&&!state.exportMode&&state.view==="browse";}
 function catalogInlineCurrent(){return catalogInline.platform===state.platform&&catalogInline.folder===state.selectedFolder;}
+function catalogEditorActive(){return catalogInlineAvailable()&&catalogInline.mode&&catalogInlineCurrent();}
+function catalogTargetKey(target){return JSON.stringify(target);}
+function catalogTargetBase(target=catalogInline.target){
+ if(!target||target.kind==="library")return catalogInline.card?.fields||{};
+ return catalogInline.card?.records?.find(r=>catalogTargetKey(r.target)===catalogTargetKey(target))?.fields||{};
+}
+function catalogTargetValues(){const f=catalogInline;return {...catalogTargetBase(),...(f.edits.get(catalogTargetKey(f.target))?.fields||{})};}
 function catalogInlineFields(){return catalogInlineCurrent()&&catalogInline.card?catalogInline.card.fields:(state.game?.catalog_fields||{});}
 function catalogInlineOrigin(key){
  const fields=catalogInlineFields(),profile=state.game?.profile||{};
- if(Object.prototype.hasOwnProperty.call(fields,key)||(key==="description"&&profile.source==="local"))return key==="title"?"Library title":"Saved in library";
+ if(Object.hasOwn(fields,key)||(key==="description"&&profile.source==="local"))return key==="title"?"Library title":"Saved in library";
  if(key==="description")return profile.source?sourceLabel(profile.source)+(profile.description_language?" · "+profile.description_language.toUpperCase():""):"From sources";
  return "From sources";
 }
-function catalogInlineBanner(){
- if(!catalogInlineAvailable()||!catalogInline.mode)return "";
- return '<div class="catalog-inline-banner"><strong>Your library values</strong><span>Corrections take priority over providers when exporting. Release-specific values and export title settings still apply.</span><button class="tab-button" id="catalog-inline-export">Preview export</button>'+(catalogInline.message?'<span role="status">'+cEscape(catalogInline.message)+'</span>':"")+'</div>';
-}
 function catalogInlineField(key,label,value,body=""){
  if(!catalogInlineAvailable())return body||fact(label,value);
- if(catalogInlineCurrent()&&catalogInline.field===key)return catalogInlineEditor(key,label);
- if(!value&&!body&&!catalogInline.mode)return "";
- const shown=body||'<div class="fact-value">'+cEscape(value||"Not set")+'</div>';
- return '<div class="fact-row catalog-inline-field"><div class="catalog-inline-label"><span class="fact-label">'+cEscape(label)+'</span><button type="button" class="catalog-pencil" data-inline-edit="'+key+'" aria-label="Edit '+escapeAttr(label)+'" title="Edit '+escapeAttr(label)+'">✎</button></div>'+shown+'<small class="catalog-value-origin">'+cEscape(catalogInlineOrigin(key))+'</small></div>';
+ if(!value&&!body)return "";
+ return '<div class="fact-row catalog-inline-field"><div class="catalog-inline-label"><span class="fact-label">'+cEscape(label)+'</span><button type="button" class="catalog-pencil" data-inline-edit="'+key+'" aria-label="Edit '+escapeAttr(label)+'">✎</button></div>'+(body||'<div class="fact-value">'+cEscape(value)+'</div>')+'<small class="catalog-value-origin">'+cEscape(catalogInlineOrigin(key))+'</small></div>';
 }
 function catalogInlineTitle(value){
  if(!catalogInlineAvailable())return cEscape(value);
- if(catalogInlineCurrent()&&catalogInline.field==="title")return catalogInlineEditor("title","Library title");
- return cEscape(value)+' <button type="button" class="catalog-pencil" data-inline-edit="title" aria-label="Edit library title" title="Edit library title">✎</button>';
+ return cEscape(value)+(catalogInline.mode?"":' <button type="button" class="catalog-pencil" data-inline-edit="title" aria-label="Edit library title">✎</button>');
 }
-function catalogInlineEditor(key,label){
- const f=catalogInline,fields=f.card?.fields||{},language=key==="description",list=catalogLists.has(key),multi=language||list,has=language&&f.language!=="all"?Object.prototype.hasOwnProperty.call(fields.descriptions||{},f.language):Object.prototype.hasOwnProperty.call(fields,key);
- const disabled=f.saving?" disabled":"";
- let languages="";
- if(language){
-  const options=fields.description?{all:"Shared text · all languages"}:{all:"Shared text · all languages",...catalogLanguages};
-  languages='<label class="catalog-inline-language">Description language<select id="catalog-inline-language"'+disabled+'>'+Object.entries(options).map(([code,name])=>'<option value="'+code+'" '+(code===f.language?"selected":"")+'>'+cEscape(name)+'</option>').join("")+'</select></label>';
+function catalogEditorTargets(){
+ const f=catalogInline,result=[{target:{kind:"library",match:-1},label:"Library fields · explicit overrides"}],sources=f.card?.registry?.sources||[];
+ for(const source of sources){
+  const records=(f.card.records||[]).filter(r=>r.target.source===source.id&&r.target.match>=0);
+  for(const r of records)result.push({target:r.target,label:source.name+" · "+(r.fields.release||(r.target.release_index==null?"whole game":r.label))});
+  const scopes=["",...(f.card.releases||[])].filter(scope=>!records.some(r=>r.target.release_index==null&&(r.fields.release||"")===scope));
+  if(scopes.length)result.push({target:{kind:"manual",source:source.id,match:-1,scope:scopes[0]},label:source.name+(records.length?" · new release record":" · whole game")});
  }
- const help=key==="title"?"This names the library card. Exported names follow the release and title settings.":key==="aliases"||key==="alternate_titles"?"Library names for finding and displaying this game. Exported names follow title settings.":language?(f.language==="all"?"Shared correction for every export language.":"Correction for "+(catalogLanguages[f.language]||f.language)+" exports."):"Game-wide correction, used ahead of provider values. A saved release-specific value may take priority.";
- return '<div class="catalog-inline-editor"><div><label for="catalog-inline-value" class="fact-label">'+cEscape(label)+'</label>'+languages+(multi?'<textarea rows="'+(language?'6':'3')+'" id="catalog-inline-value" aria-label="'+escapeAttr(label)+'"'+disabled+'>'+cEscape(f.draft)+'</textarea>':'<input id="catalog-inline-value" aria-label="'+escapeAttr(label)+'" value="'+escapeAttr(f.draft)+'"'+disabled+'>')+'</div><small>'+cEscape(help)+(list?" One name per line.":"")+'</small>'+(f.remove?'<p class="secondary">The saved correction will be removed. The source value shown above will be used.</p>':"")+(f.error?'<p class="error" role="alert">'+cEscape(f.error)+'</p>':"")+'<div class="catalog-inline-actions"><button class="catalog-primary" id="catalog-inline-save" '+(!f.dirty||f.saving?"disabled":"")+'>'+(f.saving?"Saving…":"Save")+'</button><button class="tab-button" id="catalog-inline-cancel"'+disabled+'>Cancel</button>'+(has&&key!=="title"?'<button class="catalog-reset" id="catalog-inline-reset"'+disabled+'>Restore source value</button>':"")+'</div></div>';
-}
-function catalogInlineValue(key,language,source=false){
- const card=catalogInline.card,fields=source?{}:card.fields,profile=source?card.source_profile:card.profile;
- if(key==="description"&&language!=="all"){
-  if(!source&&fields.descriptions?.[language])return fields.descriptions[language];
-  return (card.source_profile?.descriptions||[]).find(d=>d.language===language)?.text||"";
+ for(const r of f.card?.records||[]){
+  if(sources.some(s=>s.id===r.target.source)&&(r.target.match>=0||!Object.keys(r.fields).length))continue;
+  result.push({target:r.target,label:sourceLabel(r.target.source)+" · "+r.label});
  }
- if(key==="description"&&language==="all")return source?(card.source_profile?.description||""):(fields.description||profile?.description||"");
- return catalogFieldValue(key,fields,profile);
+ // Keep unsaved scoped records selectable when moving between targets.
+ for(const draft of f.edits.values())if(!result.some(r=>catalogTargetKey(r.target)===catalogTargetKey(draft.target)))result.push({target:draft.target,label:sourceLabel(draft.target.source)+" · "+(draft.target.scope||"whole game")+" · draft"});
+ return result;
 }
-function catalogInlineRender(focus=false){
- const scroll=$("detail-body").scrollTop;renderDetails();$("detail-body").scrollTop=scroll;
- if(focus)$("catalog-inline-value")?.focus?.({preventScroll:true});
+function catalogInlineBanner(){
+ const f=catalogInline;if(!catalogEditorActive())return "";
+ if(f.loading)return '<div class="catalog-inline-banner" role="status">Opening editable fields…</div>';
+ if(!f.card)return '<div class="catalog-inline-banner"><span role="alert">'+cEscape(f.error)+'</span><button class="tab-button" id="catalog-editor-reload">Retry</button></div>';
+ const key=catalogTargetKey(f.target),targets=catalogEditorTargets(),source=f.card.registry?.sources?.find(s=>s.id===f.target.source),disabled=f.saving?' disabled':'';
+ const count=f.edits.size,hasOverrides=Object.keys(f.card.fields||{}).some(k=>!["title","aliases","alternate_titles"].includes(k));
+ const help=f.target.kind==="library"?"Library values override selected sources. Clear a value to resume normal source selection. Exported names still follow release/title settings.":source?"Only fields you change belong to this variant. Enable and order it in Export → Advanced → Metadata, or Settings → Source priorities.": "Editing this exact saved source record. Refreshing that provider can replace these changes; use a named variant to retain your own version.";
+ return '<div class="catalog-inline-banner catalog-editor-bar"><div class="catalog-editor-heading"><strong>Edit card</strong><span id="catalog-editor-count">'+count+' changed '+(count===1?"record":"records")+'</span></div>'+
+ '<label>Editing<select id="catalog-editor-target"'+disabled+'>'+targets.map(r=>'<option value="'+escapeAttr(catalogTargetKey(r.target))+'" '+(catalogTargetKey(r.target)===key?'selected':'')+'>'+cEscape(r.label)+(f.edits.has(catalogTargetKey(r.target))?' · edited':'')+'</option>').join("")+'</select></label>'+
+ (f.target.kind==="manual"?'<label>Applies to<select id="catalog-editor-scope"'+disabled+'><option value="">Whole game</option>'+(f.card.releases||[]).map(r=>'<option value="'+escapeAttr(r)+'" '+(f.target.scope===r?'selected':'')+'>'+cEscape(r)+'</option>').join("")+'</select></label>':"")+
+ '<div class="catalog-inline-actions"><button class="tab-button" id="catalog-new-source"'+disabled+'>New named variant</button>'+(source?'<button class="tab-button" id="catalog-rename-source"'+disabled+'>Rename variant</button>':"")+'</div>'+
+ (f.nameMode?'<div class="catalog-source-name"><label>Variant name<input id="catalog-source-name" maxlength="120" value="'+escapeAttr(f.nameDraft)+'"'+disabled+'></label><button class="tab-button" id="catalog-save-source-name"'+disabled+'>'+(f.nameMode==="rename"?"Save name":"Create variant")+'</button><button class="tab-button" id="catalog-cancel-source-name"'+disabled+'>Cancel</button></div>':"")+
+ '<p>'+cEscape(help)+'</p>'+(hasOverrides&&f.target.kind!=="library"?'<p class="catalog-editor-hint">This card also has explicit library values. They still take priority; choose Library fields to review or clear them.</p>':"")+
+ '<div class="catalog-inline-actions"><button class="catalog-primary" id="catalog-inline-save" '+(!f.dirty||f.saving||f.invalid.size?'disabled':'')+'>'+(f.saving?'Saving…':'Save changes')+'</button><button class="tab-button" id="catalog-editor-discard" '+((!f.dirty&&!f.invalid.size)||f.saving?'disabled':'')+'>Discard changes</button><button class="tab-button" id="catalog-inline-cancel"'+disabled+'>Finish editing</button><button class="tab-button" id="catalog-inline-export"'+disabled+'>Preview export</button></div>'+
+ '<span id="catalog-editor-status" role="status">'+cEscape(f.error||f.message||(f.dirty?"Unsaved changes":""))+'</span></div>';
 }
+function catalogEditorControl(key,value,label= catalogRecordLabels[key]||key){
+ const f=catalogInline,disabled=f.saving?' disabled':'',base=catalogTargetBase(),exists=Object.hasOwn(base,key)||Object.hasOwn(catalogTargetValues(),key);
+ const attr=' data-card-field="'+escapeAttr(key)+'" aria-label="'+escapeAttr(label)+'"';
+ let control,kind="text";
+ if(typeof value==="boolean"){kind="boolean";control='<select'+attr+disabled+'><option value="true" '+(value?'selected':'')+'>True</option><option value="false" '+(!value?'selected':'')+'>False</option></select>';}
+ else if(typeof value==="number"){kind="number";control='<input type="number" step="any"'+attr+' value="'+value+'"'+disabled+'>';}
+ else if((catalogRecordLists.has(key)&&(value==null||Array.isArray(value)))||(Array.isArray(value)&&value.every(v=>typeof v==="string"))){kind="list";control='<textarea rows="3"'+attr+disabled+'>'+cEscape((value||[]).join("\n"))+'</textarea>';}
+ else if((value&&typeof value==="object")||f.invalid.has(catalogTargetKey(f.target)+"|"+key)){kind="json";control='<textarea rows="5"'+attr+' spellcheck="false"'+disabled+'>'+cEscape(f.invalid.get(catalogTargetKey(f.target)+"|"+key)??JSON.stringify(value,null,2))+'</textarea>';}
+ else {const text=value??"";control=key==="description"||String(text).includes("\n")?'<textarea rows="5"'+attr+disabled+'>'+cEscape(text)+'</textarea>':'<input'+attr+' value="'+escapeAttr(text)+'"'+disabled+'>';}
+ return '<div class="catalog-record-field" data-field-kind="'+kind+'"><label><span>'+cEscape(label)+'</span>'+control+'</label>'+(kind==="json"?'<small>Structured value · JSON</small>':kind==="list"?'<small>One value per line</small>':"")+(exists&&!(f.target.kind==="library"&&key==="title")?'<button type="button" class="catalog-reset" data-card-remove="'+escapeAttr(key)+'"'+disabled+'>Remove field</button>':"")+'</div>';
+}
+function catalogRenderEditor(response,coverHTML){
+ const f=catalogInline;if(!f.card)return '<section class="game-overview">'+(f.loading?"":"<p>Reload this card to edit its fields.</p>")+'</section>';
+ const fields=catalogTargetValues(),library=f.target.kind==="library",details=f.target.kind==="source"&&f.target.match===-1;
+ const common=details?[]:["title","release_date","developer","publisher","genres",(!library&&Object.hasOwn(fields,"max_players")&&!Object.hasOwn(fields,"players")?"max_players":"players"),...(library?["aliases","alternate_titles"]:[])];
+ const metadata=common.map(k=>catalogEditorControl(k,fields[k],k==="title"&&library?"Library title":catalogRecordLabels[k])).join("");
+ const descriptions=fields.descriptions||{},langs=Array.from(new Set([...Object.keys(descriptions),"en",...f.extra])).sort();
+ const prose=details?"":'<div class="catalog-description-fields"><h3>Descriptions</h3>'+langs.map(lang=>'<label>'+cEscape(catalogLanguages[lang]||lang)+'<textarea rows="5" data-card-description="'+escapeAttr(lang)+'" aria-label="Description '+escapeAttr(lang)+'" '+(f.saving?'disabled':'')+'>'+cEscape(descriptions[lang]||"")+'</textarea></label>').join("")+'<div class="catalog-inline-actions"><input id="catalog-description-language" aria-label="Add description language" placeholder="Language code, e.g. ru"><button class="tab-button" id="catalog-add-language">Add language</button></div>'+(library?catalogEditorControl("description",fields.description,"Shared description · all languages"):"")+'</div>';
+ const omitted=new Set([...common,"descriptions",...(library?["description"]:[])]);
+ const extra=Object.keys(fields).filter(k=>!omitted.has(k)).map(k=>catalogEditorControl(k,fields[k])).join("");
+ return '<section class="game-overview catalog-record-editor"><div class="catalog-editor-layout"><div class="cover-panel">'+coverHTML+'</div><div><div class="catalog-record-grid">'+metadata+'</div>'+prose+
+ (extra?'<details class="catalog-record-extra" '+(details?'open':'')+'><summary>Other source fields ('+Object.keys(fields).filter(k=>!omitted.has(k)).length+')</summary><div class="catalog-record-grid">'+extra+'</div></details>':"")+
+ (!library?'<div class="catalog-inline-actions"><input id="catalog-extra-field" aria-label="New source field" placeholder="Additional field name"><button class="tab-button" id="catalog-add-field">Add field</button></div>':"")+
+ '<p class="secondary">Empty or removed fields fall through to other selected sources. Record titles and identifiers remain source evidence; exported names follow the selected release and title settings.</p></div></div></section>';
+}
+function catalogEqualValue(a,b){
+ const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==="object"?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
+ return JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
+}
+function catalogEditorChange(key,value){
+ const f=catalogInline,token=catalogTargetKey(f.target),draft=f.edits.get(token)||{target:{...f.target},fields:Object.create(null)},base=catalogTargetBase();
+ if(catalogEqualValue(value,base[key])||(value==null&&!Object.hasOwn(base,key)))delete draft.fields[key];else draft.fields[key]=value;
+ if(Object.keys(draft.fields).length)f.edits.set(token,draft);else f.edits.delete(token);
+ f.dirty=f.edits.size>0;f.error="";f.message="";catalogEditorActions();
+}
+function catalogEditorDescription(lang,value){
+ const descriptions={...(catalogTargetValues().descriptions||{})};
+ if(value.trim())descriptions[lang]=value;else delete descriptions[lang];
+ catalogEditorChange("descriptions",Object.keys(descriptions).length?descriptions:null);
+}
+function catalogEditorActions(){
+ const f=catalogInline;
+ if($("catalog-inline-save"))$("catalog-inline-save").disabled=!f.dirty||f.saving||f.invalid.size>0;
+ if($("catalog-editor-discard"))$("catalog-editor-discard").disabled=(!f.dirty&&!f.invalid.size)||f.saving;
+ if($("catalog-editor-count"))$("catalog-editor-count").textContent=f.edits.size+" changed "+(f.edits.size===1?"record":"records");
+ if($("catalog-editor-status"))$("catalog-editor-status").textContent=f.error||f.message||(f.invalid.size?"Check structured field values":f.dirty?"Unsaved changes":"");
+}
+function catalogInlineRender(){const scroll=$("detail-body").scrollTop;renderDetails();$("detail-body").scrollTop=scroll;catalogUpdateTools();}
 function catalogLeaveInline(){
- if(catalogInline.saving)return false;
- if(catalogInline.dirty&&!window.confirm("Discard the unsaved field change?"))return false;
- catalogInline.version++;catalogInline.mode=false;catalogInline.field="";catalogInline.dirty=false;catalogInline.card=null;catalogInline.message="";return true;
+ const f=catalogInline;if(f.saving)return false;
+ if((f.dirty||f.invalid.size)&&!window.confirm("Discard unsaved card changes?"))return false;
+ f.version++;f.mode=false;f.loading=false;f.dirty=false;f.edits=new Map();f.invalid=new Map();f.extra=new Set();f.card=null;f.error="";f.message="";f.nameMode="";return true;
 }
-function catalogEditCard(){
+async function catalogEditCard(){
  if(!catalogInlineAvailable()||catalogUI.busy)return;
- if(catalogInline.mode){if(!catalogLeaveInline())return;}else catalogInline.mode=true;
- state.detailTab="preview";catalogInlineRender();catalogUpdateTools();
+ if(catalogInline.mode){if(catalogLeaveInline())catalogInlineRender();return;}
+ await catalogStartInline();
 }
 async function catalogStartInline(key){
- if(!catalogInlineAvailable()||catalogUI.busy||!catalogLabels[key]||key==="descriptions")return;
- if(catalogInline.dirty&&!window.confirm("Discard the unsaved field change?"))return;
- const platform=state.platform,folder=state.selectedFolder,version=++catalogInline.version;
+ const f=catalogInline;if(!catalogInlineAvailable()||catalogUI.busy)return;
+ if(f.mode&&f.card&&catalogInlineCurrent()){if(key)document.querySelectorAll("[data-card-field]").forEach(e=>{if(e.dataset.cardField===key)e.focus?.();});return;}
+ const platform=state.platform,folder=state.selectedFolder,version=++f.version;
+ Object.assign(f,{mode:true,loading:true,platform,folder,error:"",message:""});state.detailTab="preview";catalogInlineRender();
  try{
   const card=await fetchJSON("/api/catalog/edit?"+new URLSearchParams({platform,game:folder}));
-  if(version!==catalogInline.version||platform!==state.platform||folder!==state.selectedFolder)return;
-  Object.assign(catalogInline,{mode:true,platform,folder,card,field:key,dirty:false,remove:false,error:"",message:""});
-  catalogInline.language=card.fields.description?"all":card.profile?.description_language||"en";
-  catalogInline.draft=catalogInlineValue(key,catalogInline.language);catalogInlineRender(true);
- }catch(error){if(version===catalogInline.version){catalogInline.mode=true;catalogInline.message=error.message;catalogInlineRender();}}
-}
-function catalogInlinePatch(){
- const f=catalogInline,key=f.field;
- if(key==="description"&&f.language!=="all"){
-  const values={...(f.card.fields.descriptions||{})};
-  if(f.remove||!f.draft.trim())delete values[f.language];else values[f.language]=f.draft;
-  return {descriptions:Object.keys(values).length?values:null};
- }
- return {[key]:f.remove?null:catalogLists.has(key)?f.draft.split("\n").map(v=>v.trim()).filter(Boolean):f.draft||null};
+  if(version!==f.version||platform!==state.platform||folder!==state.selectedFolder)return;
+  if(card.editor_error)throw new Error(card.editor_error);
+  f.card=card;f.target={kind:"library",match:-1};f.edits=new Map();f.invalid=new Map();f.extra=new Set();
+  if(f.preferredSource&&card.registry?.sources?.some(s=>s.id===f.preferredSource)){
+   f.target=card.records?.find(r=>r.target.source===f.preferredSource&&r.target.match>=0&&r.target.release_index==null)?.target||{kind:"manual",source:f.preferredSource,match:-1,scope:""};
+  }
+  if(state.sourceDefaults)state.sourceDefaults.source_labels={...(state.sourceDefaults.source_labels||{}),...Object.fromEntries((card.registry?.sources||[]).map(s=>[s.id,s.name]))};
+ }catch(error){if(version===f.version)f.error=error.message;}
+ finally{if(version===f.version){f.loading=false;catalogInlineRender();if(key)document.querySelectorAll("[data-card-field]").forEach(e=>{if(e.dataset.cardField===key)e.focus?.();});}}
 }
 async function catalogSaveInline(){
- const f=catalogInline;if(f.saving||!f.dirty||!catalogInlineCurrent())return;
- const patch=catalogInlinePatch(),platform=f.platform,folder=f.folder;f.saving=true;catalogUI.busy=true;f.error="";catalogInlineRender();
+ const f=catalogInline;if(f.saving||!f.dirty||f.invalid.size||!catalogInlineCurrent())return;
+ const platform=f.platform,folder=f.folder,target=f.target;f.saving=true;catalogUI.busy=true;f.error="";catalogInlineRender();
  try{
-  const response=await catalogPost("/api/catalog/edit",{platform,game:folder,revision:f.card.revision,fields:patch});
-  f.card=response.card;f.dirty=false;f.field="";f.message=response.warning||"Saved to your library.";
+  const response=await catalogPost("/api/catalog/edit",{platform,game:folder,revision:f.card.revision,edits:Array.from(f.edits.values())});
+  f.card=response.card;f.edits=new Map();f.invalid=new Map();f.dirty=false;f.message=response.warning||"Saved to your library.";
+  if(target.kind==="manual")f.target=f.card.records.filter(r=>r.target.source===target.source&&r.target.match>=0&&r.target.release_index==null).find(r=>(r.fields.release||"")===(target.scope||""))?.target||{kind:"library",match:-1};
   if(state.platform===platform&&state.selectedFolder===folder){
    state.game.profile=response.card.profile;state.game.catalog_fields=response.card.fields;state.game.catalog_yaml=response.card.yaml;
-   state.game.game.title=response.card.fields.title;state.game.game.aliases=response.card.fields.aliases||[];
+   if(state.game.game){state.game.game.title=response.card.fields.title;state.game.game.aliases=response.card.fields.aliases||[];}
    const row=state.games.find(g=>g.folder===folder);if(row)row.title=response.card.fields.title;
    renderGames();if(typeof resetPreviews==="function")resetPreviews();
+   try{
+    const fresh=await fetchJSON("/api/game?"+new URLSearchParams({platform,game:folder}));
+    if(fresh?.game)state.game=fresh;
+    state.sourceDefaults=await fetchJSON("/api/export-options");
+    if(typeof renderSourceControls==="function")renderSourceControls();
+   }catch(error){f.message+=" Could not refresh: "+error.message;}
   }
   catalogUI.cardsCache=new Map();
  }catch(error){f.error=error.message;}
  finally{f.saving=false;catalogUI.busy=false;catalogInlineRender();}
 }
-function catalogBindInline(){
- document.querySelectorAll("[data-inline-edit]").forEach(el=>el.addEventListener("click",()=>catalogStartInline(el.dataset.inlineEdit)));
- $("catalog-inline-export")?.addEventListener("click",()=>{if(catalogLeaveInline())setExportMode(true);});
- const input=$("catalog-inline-value");if(!input)return;
- input.addEventListener("input",()=>{catalogInline.draft=input.value;catalogInline.remove=false;catalogInline.dirty=true;$("catalog-inline-save").disabled=false;});
- input.addEventListener("keydown",event=>{if(event.key==="Escape"){event.preventDefault();catalogCancelInline();}else if(event.key==="Enter"&&(event.ctrlKey||event.metaKey)){event.preventDefault();catalogSaveInline();}});
- $("catalog-inline-save")?.addEventListener("click",catalogSaveInline);
- $("catalog-inline-cancel")?.addEventListener("click",catalogCancelInline);
- $("catalog-inline-reset")?.addEventListener("click",()=>{catalogInline.remove=true;catalogInline.dirty=true;catalogInline.draft=catalogInlineValue(catalogInline.field,catalogInline.language,true);catalogInlineRender(true);});
- $("catalog-inline-language")?.addEventListener("change",event=>{
-  if(catalogInline.dirty&&!window.confirm("Discard the unsaved description change?")){event.target.value=catalogInline.language;return;}
-  catalogInline.language=event.target.value;catalogInline.remove=false;catalogInline.dirty=false;catalogInline.draft=catalogInlineValue("description",catalogInline.language);catalogInlineRender(true);
- });
+async function catalogSaveSourceName(){
+ const f=catalogInline;if(f.saving)return;
+ const name=$("catalog-source-name").value,id=f.nameMode==="rename"?f.target.source:"";
+ f.nameDraft=name;f.saving=true;catalogUI.busy=true;f.error="";catalogInlineRender();
+ try{
+  const response=await catalogPost("/api/catalog/curation",{revision:f.card.registry.revision,id,name});
+  f.card.registry=response.registry;f.nameMode="";f.preferredSource=response.source.id;
+  if(!id){f.target={kind:"manual",source:response.source.id,match:-1,scope:""};f.extra=new Set();}
+  f.message=id?"Variant renamed. Saved profiles keep the same source.":"Variant created. Add its fields, then Save changes; enable it in your metadata priorities.";
+  if(state.sourceDefaults)state.sourceDefaults.source_labels={...(state.sourceDefaults.source_labels||{}),[response.source.id]:response.source.name};
+  try{state.sourceDefaults=await fetchJSON("/api/export-options");if(typeof renderSourceControls==="function")renderSourceControls();}catch(error){f.message+=" Could not refresh source choices: "+error.message;}
+  if(typeof librarySettingsUI!=="undefined")librarySettingsUI.sections=null;
+ }catch(error){f.error=error.message;}
+ finally{f.saving=false;catalogUI.busy=false;catalogInlineRender();}
 }
-function catalogCancelInline(){if(catalogInline.saving)return;catalogInline.field="";catalogInline.dirty=false;catalogInline.error="";catalogInlineRender();}
+function catalogBindInline(){
+ document.querySelectorAll("[data-inline-edit]").forEach(e=>e.addEventListener("click",()=>catalogStartInline(e.dataset.inlineEdit)));
+ if(!catalogEditorActive())return;
+ const f=catalogInline;
+ $("catalog-editor-reload")?.addEventListener("click",()=>{f.mode=false;catalogStartInline();});
+ $("catalog-editor-target")?.addEventListener("change",e=>{f.target=JSON.parse(e.target.value);f.extra=new Set();f.error="";f.message="";f.nameMode="";if(f.card.registry.sources.some(s=>s.id===f.target.source))f.preferredSource=f.target.source;catalogInlineRender();});
+ $("catalog-editor-scope")?.addEventListener("change",e=>{f.target={...f.target,scope:e.target.value};f.extra=new Set();catalogInlineRender();});
+ $("catalog-new-source")?.addEventListener("click",()=>{f.nameMode="create";f.nameDraft="";catalogInlineRender();$("catalog-source-name")?.focus?.();});
+ $("catalog-rename-source")?.addEventListener("click",()=>{f.nameMode="rename";f.nameDraft=f.card.registry.sources.find(s=>s.id===f.target.source)?.name||"";catalogInlineRender();$("catalog-source-name")?.focus?.();});
+ $("catalog-source-name")?.addEventListener("input",e=>{f.nameDraft=e.target.value;});
+ $("catalog-save-source-name")?.addEventListener("click",catalogSaveSourceName);
+ $("catalog-cancel-source-name")?.addEventListener("click",()=>{f.nameMode="";catalogInlineRender();});
+ $("catalog-inline-save")?.addEventListener("click",catalogSaveInline);
+ $("catalog-inline-cancel")?.addEventListener("click",()=>{if(catalogLeaveInline())catalogInlineRender();});
+ $("catalog-editor-discard")?.addEventListener("click",()=>{f.edits=new Map();f.invalid=new Map();f.dirty=false;f.error="";f.message="";catalogInlineRender();});
+ $("catalog-inline-export")?.addEventListener("click",()=>{if(catalogLeaveInline())setExportMode(true);});
+ document.querySelectorAll("[data-card-field]").forEach(input=>input.addEventListener("input",()=>{
+  if(f.saving)return;
+  const key=input.dataset.cardField,kind=input.closest("[data-field-kind]").dataset.fieldKind,token=catalogTargetKey(f.target)+"|"+key;
+  try{
+   const value=kind==="json"?(input.value.trim()?JSON.parse(input.value):null):kind==="list"?input.value.split("\n").map(v=>v.trim()).filter(Boolean):kind==="number"?(input.value===""?null:Number(input.value)):kind==="boolean"?input.value==="true":input.value||null;
+   if(kind==="number"&&value!==null&&!Number.isFinite(value))throw new Error("Invalid number");
+   f.invalid.delete(token);catalogEditorChange(key,value);
+  }catch(error){f.invalid.set(token,input.value);f.error="Check "+key+": "+error.message;catalogEditorActions();}
+ }));
+ document.querySelectorAll("[data-card-description]").forEach(input=>input.addEventListener("input",()=>{if(!f.saving)catalogEditorDescription(input.dataset.cardDescription,input.value);}));
+ document.querySelectorAll("[data-card-remove]").forEach(button=>button.addEventListener("click",()=>{if(f.saving)return;f.invalid.delete(catalogTargetKey(f.target)+"|"+button.dataset.cardRemove);catalogEditorChange(button.dataset.cardRemove,null);catalogInlineRender();}));
+ $("catalog-add-language")?.addEventListener("click",()=>{const lang=$("catalog-description-language").value.trim().toLowerCase();if(!/^[a-z]{2,3}(-[a-z0-9]{2,8})*$/.test(lang)){f.error="Use a language code such as en, ru or pt-BR.";catalogEditorActions();return;}f.extra.add(lang);catalogInlineRender();});
+ $("catalog-add-field")?.addEventListener("click",()=>{const key=$("catalog-extra-field").value.trim();if(!key||["matches","__proto__","constructor","prototype"].includes(key)||Object.hasOwn(catalogTargetValues(),key))return;catalogEditorChange(key,"");catalogInlineRender();});
+}
+window.addEventListener?.("beforeunload",event=>{if(catalogInline.dirty||catalogInline.invalid.size||catalogInline.saving){event.preventDefault();event.returnValue="";}});
 
 catalogCapabilities();

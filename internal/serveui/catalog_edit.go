@@ -13,6 +13,7 @@ import (
 	"rommeta/internal/catalogedit"
 	"rommeta/internal/catalogfold"
 	"rommeta/internal/catalogyaml"
+	"rommeta/internal/curation"
 	"rommeta/internal/exporter"
 	"rommeta/internal/platformnames"
 	"rommeta/internal/store"
@@ -21,15 +22,21 @@ import (
 )
 
 type editRequest struct {
-	Platform string            `json:"platform"`
-	Game     string            `json:"game"`
-	Revision string            `json:"revision"`
-	Fields   catalogedit.Patch `json:"fields"`
+	Platform string             `json:"platform"`
+	Game     string             `json:"game"`
+	Revision string             `json:"revision"`
+	Fields   catalogedit.Patch  `json:"fields,omitempty"`
+	Target   catalogedit.Target `json:"target,omitempty"`
+	Edits    []catalogedit.Edit `json:"edits,omitempty"`
 }
 type editorCard struct {
 	catalogedit.Card
-	Profile       gameProfile `json:"profile"`
-	SourceProfile gameProfile `json:"source_profile"`
+	Profile       gameProfile                `json:"profile"`
+	SourceProfile gameProfile                `json:"source_profile"`
+	Records       []catalogedit.SourceRecord `json:"records"`
+	Releases      []string                   `json:"releases"`
+	Registry      curation.Registry          `json:"registry"`
+	EditorError   string                     `json:"editor_error,omitempty"`
 }
 type foldPlanRequest struct {
 	Platform string   `json:"platform"`
@@ -112,7 +119,15 @@ func (s *server) editorCard(card catalogedit.Card, platform string) editorCard {
 		return editorCard{Card: card}
 	}
 	blocks := sourceBlocks(doc, nil)
-	return editorCard{Card: card, Profile: libraryProfile(doc.Root(), catalogyaml.Scalar(catalogyaml.Value(doc.Root(), "title")), platform, blocks), SourceProfile: buildGameProfile("", platform, blocks)}
+	result := editorCard{Card: card, Profile: libraryProfile(doc.Root(), catalogyaml.Scalar(catalogyaml.Value(doc.Root(), "title")), platform, blocks), SourceProfile: buildGameProfile("", platform, blocks)}
+	result.Records, result.Releases, err = catalogedit.Records([]byte(card.YAML))
+	if err == nil {
+		result.Registry, err = curation.Load(s.root)
+	}
+	if err != nil {
+		result.EditorError = err.Error()
+	}
+	return result
 }
 func (s *server) catalogEdit(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
@@ -146,7 +161,11 @@ func (s *server) catalogEdit(w http.ResponseWriter, r *http.Request) {
 	}
 	defer unlock()
 	batch := catalogchanges.Begin(exporter.RefreshPlatformIndex)
-	card, err := catalogedit.Save(s.root, request.Platform, request.Game, request.Revision, request.Fields)
+	edits := request.Edits
+	if edits == nil {
+		edits = []catalogedit.Edit{{Target: request.Target, Fields: request.Fields}}
+	}
+	card, err := catalogedit.SaveEdits(s.root, request.Platform, request.Game, request.Revision, edits)
 	indexErr := batch.Finish()
 	if err != nil {
 		writeError(w, 409, err)
@@ -176,7 +195,11 @@ func (s *server) catalogEditPreview(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 409, fmt.Errorf("card changed; reload before previewing"))
 		return
 	}
-	data, err := catalogedit.Apply([]byte(card.YAML), request.Fields)
+	edits := request.Edits
+	if edits == nil {
+		edits = []catalogedit.Edit{{Target: request.Target, Fields: request.Fields}}
+	}
+	data, err := catalogedit.ApplyEdits([]byte(card.YAML), edits)
 	if err != nil {
 		writeError(w, 400, err)
 		return

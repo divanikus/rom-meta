@@ -1208,6 +1208,8 @@
     const sourceCategories = {metadata_sources:"Metadata", artwork_sources:"Artwork", video_sources:"Video"};
     function sourceLabel(source) {
       source = String(source || "");
+      if (state.sourceDefaults?.source_labels?.[source]) return state.sourceDefaults.source_labels[source];
+      if (state.game?.source_labels?.[source]) return state.game.source_labels[source];
       return ({launchbox:"LaunchBox", screenscraper:"ScreenScraper", igdb:"IGDB", openvgdb:"OpenVGDB", emumovies:"EmuMovies", local:"Saved catalog override", catalog:"Catalog"})[source] || (source.startsWith("gamelist.") ? "Imported gamelist: " + source.slice(9) : source);
     }
     async function loadExportSources() {
@@ -1228,7 +1230,7 @@
       $("export-source-controls").innerHTML = Object.entries(sourceCategories).map(([category,label]) => {
         const selected = sourcePreference(category);
         const observed = category === "metadata_sources" ? (state.game?.source_blocks || []).map((block) => block.source) : (state.game?.local_media || []).filter((file) => file.type === (category === "video_sources" ? "video" : "image")).map((file) => file.source).filter(Boolean);
-        const choices = Array.from(new Set([...selected, ...(state.sourceDefaults[category] || []), ...(state.sourceDefaults.available_sources || []), ...state.observedSources, ...observed]));
+        const choices = Array.from(new Set([...selected, ...(state.sourceDefaults[category] || []), ...(state.sourceDefaults.available_sources || []), ...state.observedSources, ...observed])).filter(source=>category==="metadata_sources"||!source.startsWith("manual.")||selected.includes(source)||observed.includes(source));
         const custom = state.exportSettings[category] != null;
         const rows = choices.map((source) => {
           const index = selected.indexOf(source), enabled = index >= 0;
@@ -1892,6 +1894,7 @@
       const coverHTML = cover
         ? '<button class="media-open" type="button" aria-label="Open media preview" data-lightbox-type="image" data-lightbox-src="' + escapeAttr(cover.url) + '" data-lightbox-title="' + escapeAttr(cover.name) + '"><img class="cover-image" src="' + escapeAttr(cover.url) + '" alt="' + escapeAttr(cover.name) + '" loading="lazy"></button>'
         : '<div class="cover-placeholder">' + (state.exportMode && state.exportSettings.media === "none" ? "Media excluded by profile" : "No eligible cover") + '</div>';
+      if (typeof catalogEditorActive==="function" && catalogEditorActive()) return catalogRenderEditor(response, coverHTML);
       const description = profile.description ? '<div class="description">' + paragraphs(profile.description) + '</div>' : '<div class="empty">No description available.</div>';
       const chosen = response.export_preview?.fields?.description;
       const descriptionMeta = chosen ? '<div class="description-choice chips">' + chips([sourceLabel(chosen.source || "catalog"), chosen.language?.toUpperCase(), chosen.from_variant ? "Variant: " + variantLabel((game.variants || []).find((item) => item.name === chosen.from_variant) || {name:chosen.from_variant},game.variants || []) : chosen.from_release ? "Release: " + chosen.from_release : ""].filter(Boolean), '') + '</div>' : profile.source ? '<div class="description-choice chips">' + chips([sourceLabel(profile.source),profile.description_language?.toUpperCase()].filter(Boolean), '') + '</div>' : '';
@@ -1906,6 +1909,7 @@
     }
 
     function renderSourceSection(response) {
+      if(typeof catalogEditorActive==="function"&&catalogEditorActive())return "";
       const blocks = response.source_blocks || [];
       if (blocks.length === 0) {
         return '<div class="section"><h3>Sources</h3><div class="empty">No source stanzas.</div></div>';
@@ -1915,7 +1919,7 @@
         const active = i === index ? " active" : "";
         const cls = block.match_count > 0 ? " good" : " warn";
         return '<button class="tab-button' + active + '" type="button" data-source-index="' + i + '">' +
-          escapeHTML(block.source) + ' <span class="chip' + cls + '">' + formatNumber(block.match_count) + '</span>' +
+          escapeHTML(sourceLabel(block.source)) + ' <span class="chip' + cls + '">' + formatNumber(block.match_count) + '</span>' +
           '</button>';
       }).join("");
       const block = blocks[index];
