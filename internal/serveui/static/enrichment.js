@@ -96,5 +96,3 @@ function enrichmentBind(selected){
  document.querySelectorAll("[data-enrichment-follow]").forEach(b=>b.addEventListener("click",()=>{enrichmentUI.tasks.delete(selected.id);libraryRenderOperations(true);}));
  document.querySelectorAll("[data-enrichment-new]").forEach(b=>b.addEventListener("click",()=>enrichmentOpen([])));
 }
-$("platform-enrich")?.addEventListener("click",()=>{platformMenuClose();enrichmentOpen();});
-$("platform-fetch")?.addEventListener("click",()=>enrichmentOpen([]));

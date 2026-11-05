@@ -402,3 +402,14 @@ test('Raw materialization selects the newly created manual record for further fo
  b.run('catalogEditorChange("title","Revised")');
  assert.equal(b.run('catalogEditorEdits()[1].target.kind'),'source');assert.equal(b.run('catalogEditorEdits()[1].fields.title'),'Revised');
 });
+
+test('batch fold candidates and cached covers stay scoped to their platform',async()=>{
+ const b=browser(async()=>json({}));b.run('catalogUI.platform="Console";catalogUI.platforms=["Console","Other"];state.reads=[];fetchJSON=async path=>{state.reads.push(path);return {game:{folder:"One"},fields:{},profile:{}}}');
+ b.run('a={id:0,group:{Platform:"Console",Keep:{Folder:"One"},Merge:[{Folder:"Two"}]}};z={id:1,group:{Platform:"Other",Keep:{Folder:"One"},Merge:[{Folder:"Two"}]}};');
+ await b.run('catalogCandidates(a);');await b.run('catalogCandidates(z);');
+ assert.equal(b.run('state.reads.length'),8);assert.equal(b.run('state.reads.filter(x=>x.includes("platform=Other")).length'),4);
+ assert.notEqual(b.run('catalogGroupKey(a)'),b.run('catalogGroupKey(z)'));
+ b.run('catalogUI.selected=new Set([0,1]);catalogUI.plan={groups:[{...a,status:"ready"},{...z,status:"ready"}]};catalogRenderPlan()');
+ assert.match(b.element('catalog-content').innerHTML,/data-plan-platform="Other"/);
+ assert.match(b.element('catalog-content').innerHTML,/catalog-platform-label">Other/);
+});

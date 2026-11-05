@@ -29,13 +29,12 @@ function librarySyncNavigation(){
  $("library-empty")?.classList.toggle("hidden",!empty);
  if(empty)for(const id of ["platform-pane","game-pane","detail-pane"])$(id).classList.add("hidden");
  const enabled=typeof catalogUI!=="undefined"&&catalogUI.enabled;
- $("platform-enrich")?.classList.toggle("hidden",!enabled);
- $("platform-fetch-toolbar")?.classList.toggle("hidden",!enabled||!state.platforms.length);
+ librarySyncPlatformSelection();
  $("library-import")?.classList.toggle("hidden",!enabled);
  document.querySelectorAll("[data-import-new]").forEach(el=>el.classList.toggle("hidden",!enabled));
  $("empty-readonly")?.classList.toggle("hidden",enabled);
  $("card-tools")?.classList.toggle("hidden",!enabled||!state.game||view!=="library");
- if(!state.platform||!["library","stats"].includes(view))platformMenuClose();
+
 }
 function operationTitle(job){if(job.kind==="export")return "Export "+job.export.destination.name;return job.kind==="enrichment"?"Fetch metadata · "+(job.enrichment.platforms?.length>1?job.enrichment.platforms.length+" platforms":job.platform):job.filename}
 function operationLabel(job){if(job.kind==="export")return exportStates[job.state]||job.state;return job.kind==="enrichment"?(enrichmentStates[job.state]||job.state):(operationLabels[job.state]||job.state)}
@@ -293,19 +292,77 @@ $("settings-tab").addEventListener("click",()=>libraryNavigate("settings"));
 $("library-import").addEventListener("click",libraryOpenImport);
 document.querySelectorAll("[data-import-new]").forEach(b=>b.addEventListener("click",libraryOpenImport));
 
-/* Contextual platform actions; the platform name appears only in its list row. */
-document.addEventListener("click",async event=>{
- const b=event.target.closest?.("[data-platform-menu]"),menu=$("platform-workspace-actions");
- if(b){
-  const opened=b.getAttribute("aria-expanded")==="true";platformMenuClose();if(opened)return;
-  if(state.platform!==b.dataset.platformMenu)await selectPlatform(b.dataset.platformMenu);
-  const current=[...document.querySelectorAll("[data-platform-menu]")].find(x=>x.dataset.platformMenu===state.platform);
-  if(!current)return;const r=current.getBoundingClientRect();menu.style.left=Math.max(8,Math.min(r.left,window.innerWidth-230))+"px";menu.style.top=Math.min(r.bottom+4,window.innerHeight-180)+"px";
-  menu.classList.remove("hidden");current.setAttribute("aria-expanded","true");menu.querySelector("button:not(.hidden)")?.focus();
- }else if(!menu?.contains(event.target))platformMenuClose();
+/* Shared platform selection is independent of the currently browsed card. */
+function librarySelectedPlatforms(){
+ const available=new Set((state.platforms||[]).map(p=>p.platform));
+ state.platformSelection=new Set([...(state.platformSelection||[])].filter(p=>available.has(p)));
+ return [...state.platformSelection];
+}
+function librarySyncPlatformSelection(){
+ const selected=librarySelectedPlatforms(),enabled=!!catalogUI.enabled,all=state.platforms||[];
+ document.querySelectorAll("[data-platform-select]").forEach(input=>{
+  input.checked=state.platformSelection.has(input.dataset.platformSelect);
+  input.parentElement.classList.toggle("hidden",!enabled);
+ });
+ $("platform-selection-toolbar")?.classList.toggle("hidden",!enabled||!all.length);
+ const select=$("platform-select-all");if(select){select.checked=all.length>0&&selected.length===all.length;select.indeterminate=selected.length>0&&selected.length<all.length;}
+ const count=$("platform-selected-count");if(count)count.textContent=selected.length+" selected";
+ const action=$("platform-selection-commands");if(action){action.disabled=!selected.length;action.textContent=selected.length?"Commands for "+selected.length+" selected":"Select platforms";}
+}
+$("platform-list")?.addEventListener("change",event=>{
+ const input=event.target.closest?.("[data-platform-select]");if(!input)return;
+ librarySelectedPlatforms();if(input.checked)state.platformSelection.add(input.dataset.platformSelect);else state.platformSelection.delete(input.dataset.platformSelect);
+ librarySyncPlatformSelection();
 });
-document.addEventListener("keydown",event=>{if(event.key==="Escape")platformMenuClose();});
-$("stats-tab")?.addEventListener("click",platformMenuClose);
+$("platform-select-all")?.addEventListener("change",event=>{
+ state.platformSelection=new Set(event.target.checked?state.platforms.map(p=>p.platform):[]);librarySyncPlatformSelection();
+});
+const commandUI={scope:[],index:0,visible:[]};
+function libraryCommands(scope){
+ const count=scope.length,description=count===1?scope[0]:count+" selected platforms",edit=!!catalogUI.enabled;
+ return [
+  {id:"fetch",label:"Fetch metadata",search:"fetch download enrich metadata artwork video",detail:count?description:"Select platforms in the library",enabled:edit&&count>0,run:()=>enrichmentOpen(scope)},
+  {id:"fold",label:"Review duplicates",search:"merge fold duplicates compare",detail:count?description+" · one review and final batch":"Select platforms in the library",enabled:edit&&count>0,run:()=>catalogBuildPlan(false,false,scope)},
+  {id:"stats",label:"Statistics",search:"statistics stats coverage",detail:count===1?description:"Choose one platform for statistics",enabled:count===1,run:async()=>{if(state.platform!==scope[0])await selectPlatform(scope[0]);setView("stats");}},
+  {id:"import",label:"Import DAT",search:"import dat zip add platform",detail:"Add platforms to this library",enabled:edit,run:libraryOpenImport},
+  {id:"export",label:"Export",search:"export frontend es-de launchbox",detail:"Choose ROMs, destination and profile",enabled:true,run:()=>libraryNavigate("export")},
+  {id:"operations",label:"Operations",search:"operations queue progress",detail:"Return to running and queued tasks",enabled:true,run:()=>libraryNavigate("operations")},
+  {id:"settings",label:"Settings",search:"settings priorities aliases sources",detail:"Library configuration",enabled:true,run:()=>libraryNavigate("settings")}
+ ];
+}
+function commandsOpen(){
+ if($("catalog-dialog")?.open)return;
+ const selected=librarySelectedPlatforms();commandUI.scope=selected.length?selected:state.platform?[state.platform]:[];
+ commandUI.index=0;$("command-search").value="";
+ $("command-scope").textContent=selected.length?selected.length+" selected platforms":state.platform?"Current platform: "+state.platform:"Library commands";
+ commandsRender();
+ if(!$("command-palette").open)$("command-palette").showModal();
+ $("command-search").focus();
+}
+function commandsRender(){
+ const query=$("command-search").value.trim().toLowerCase();
+ commandUI.visible=libraryCommands(commandUI.scope).filter(c=>!query||query.split(/\s+/).every(word=>(c.search+" "+c.label).toLowerCase().includes(word)));
+ commandUI.index=Math.min(commandUI.index,Math.max(0,commandUI.visible.length-1));
+ $("command-results").innerHTML=commandUI.visible.length?commandUI.visible.map((c,i)=>'<button type="button" class="command-row'+(i===commandUI.index?' active':'')+'" data-command="'+i+'" '+(!c.enabled?'disabled':'')+'><span>'+escapeHTML(c.label)+'</span><small>'+escapeHTML(c.detail)+'</small></button>').join(""):'<p class="secondary">No matching commands.</p>';
+}
+async function commandsRun(index){
+ const c=commandUI.visible[index];if(!c?.enabled)return;
+ $("command-palette").close();await c.run();
+}
+$("commands-open")?.addEventListener("click",commandsOpen);
+$("platform-selection-commands")?.addEventListener("click",commandsOpen);
+$("command-search")?.addEventListener("input",()=>{commandUI.index=0;commandsRender();});
+$("command-search")?.addEventListener("keydown",event=>{
+ if(event.key==="ArrowDown"||event.key==="ArrowUp"){
+  event.preventDefault();const n=commandUI.visible.length;if(!n)return;
+  commandUI.index=(commandUI.index+(event.key==="ArrowDown"?1:-1)+n)%n;commandsRender();
+  $("command-results").querySelector?.(".command-row.active")?.scrollIntoView?.({block:"nearest"});
+ }else if(event.key==="Enter"){event.preventDefault();commandsRun(commandUI.index);}
+});
+$("command-results")?.addEventListener("click",event=>{const b=event.target.closest?.("[data-command]");if(b)commandsRun(Number(b.dataset.command));});
+$("command-close")?.addEventListener("click",()=>$("command-palette").close());
+document.addEventListener("keydown",event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==="k"){event.preventDefault();commandsOpen();}});
+
 function libraryTheme(theme){
  document.documentElement.dataset.theme=theme;
  const b=$("theme-toggle");if(b){b.title="Switch to "+(theme==="light"?"dark":"light")+" theme";b.setAttribute("aria-label","Switch to "+(theme==="light"?"dark":"light")+" theme");}

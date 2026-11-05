@@ -41,6 +41,19 @@ server-session state, expire after 24 inactive hours, and do not survive restart
 See [the import workflow and limits](catalog-editing.md#import-into-a-new-library)
 and the embedded OpenAPI reference for request shapes.
 
+### Multi-platform duplicate review
+
+`POST /api/catalog/fold-plan` accepts either `platform` or `platforms`
+(1–256 distinct catalog platforms). Explicit `games` comparisons require one
+platform. A batch returns one plan ID, its `platforms`, and globally unique
+group IDs; every group's `Platform` identifies its own catalog scope.
+Preview and Apply use those group IDs and revisions as for single-platform plans.
+All selected platforms are validated before the first write, under the shared
+writer lock. Transactions remain per platform; a later failure reports earlier
+completed work and recovery locations. Continuation rebuilds the remaining batch.
+See [fold review](catalog-editing.md#let-fold-prepare-the-work) for lifetime,
+confirmation and recovery rules.
+
 ### Library settings
 
 Editable servers expose `GET/POST /api/catalog/settings`. GET returns sections,

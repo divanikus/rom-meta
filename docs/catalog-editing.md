@@ -23,8 +23,12 @@ rom-meta serve --data-root "<catalog>" --edit
 ```
 
 **Library / Operations / Export / Settings** separate browsing, background work,
-export-profile preparation and library defaults. Platform review/statistics live
-in the ⋯ menu on each platform row; the edit pencil lives on the card. **API** and
+export-profile preparation and library defaults. Check platforms in the sidebar,
+then open **Commands for N selected**, or use **Commands / Ctrl+K** (Cmd+K on macOS).
+The palette offers Fetch metadata, Review duplicates and Statistics, with the
+selected scope shown beside each command. Without checked platforms it uses the
+currently browsed platform. Type to filter, use arrows and Enter, or click a
+command. Statistics requires one platform. The edit pencil lives on the card. **API** and
 **API docs** remain in the header across views and open in a separate tab.
 Settings edits library configuration, as described below. The sun/moon icon in the upper-right corner
 chooses a neutral dark or light palette, remembered by this browser.
@@ -62,10 +66,10 @@ cannot be cancelled/dismissed in this first workflow.
 
 ## Fetch metadata
 
-Choose **Fetch metadata…** above the Platforms list, or **Fetch metadata** in
-Operations. The wizard offers platform checkboxes and **Select all**. The ⋯ menu
-on a platform row opens the same wizard with that platform already selected.
-Select one or several platforms, then sources, data types and parallel workers.
+Check one or several platforms in the sidebar (or **Select all**), open
+**Commands**, and choose **Fetch metadata**. The wizard receives that selection
+and lets you adjust it before choosing sources, data types and parallel workers.
+**Fetch metadata** in Operations opens the same wizard.
 
 1. Select sources and data types: metadata, artwork and video. Defaults come from
    the library's acquisition settings. Unavailable choices explain missing
@@ -297,14 +301,16 @@ A renamed/removed release must not leave a registered fingerprint dangling.
 A newly added `manual.*` source needs an existing named variant in the registry.
 Invalid or stale input stays in the editor for correction; it is never written.
 
-Review duplicates and Statistics are in the **⋯** menu on each row in the Platforms
-pane. **Compare (N)** appears beside card comparison controls after adding cards,
+Review duplicates and Statistics are in the **Commands** palette.
+**Compare (N)** appears beside card comparison controls after adding cards,
 and becomes available with at least two selected cards.
 
 ## Let fold prepare the work
 
-Select a platform and choose **Review duplicates**. The server runs the existing
-fold rules and proposes groups, primary cards and merged results automatically.
+Select one or several platforms and choose **Review duplicates** in Commands.
+The server runs the existing fold rules and proposes groups, primary cards and
+merged results automatically. Multiple platforms share one review and final Apply;
+each group shows its platform and never merges cards across platforms.
 The overview has three columns with counts and local cover previews:
 
 - **Ready to merge**: identity, content, files and saved fields pass validation.
@@ -379,7 +385,8 @@ loading overlay replaces it. Queued choices are held for this page session,
 and closing the workspace asks before discarding them.
 
 Only the final apply writes catalog data. It rechecks the chosen revisions and
-input files, applies the batch using the existing transaction, then builds a fresh
+input files across all selected platforms before any write, applies each platform
+using its existing transaction, then builds a fresh
 remaining plan. The completion screen appears only when no groups remain.
 Unresolved/skipped groups remain available afterward. If saving succeeds but
 preparing the remaining plan fails, **Continue review** reloads remaining work
@@ -399,9 +406,10 @@ catalog writers and the editor share `.rommeta/catalog-write.lock`; older tools 
 manual YAML edits do not participate. A leftover lock is never stolen: remove it
 only after verifying that its writer has stopped.
 
-Ordinary selected groups use one existing platform staging/swap. MAME uses its
-binding-aware transaction. Recovery paths are shown after apply. If an ordinary
-Arcade batch completes and a subsequent MAME batch fails, completed work and recovery
+Ordinary selected groups use one staging/swap per platform. MAME uses its
+binding-aware transaction. This is not an all-platform atomic transaction: if a
+later platform or MAME transaction fails, earlier completed changes remain saved.
+Recovery paths are shown after apply. Completed work and recovery
 locations are reported; build a fresh plan for remaining cases. An apply attempt
 consumes its plan even on failure. The browser requests `continue: true` after a
 successful apply; the response contains `next_plan` with a new ID, or a separate

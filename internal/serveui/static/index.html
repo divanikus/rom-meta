@@ -934,7 +934,7 @@
         <button class="tab-button" id="settings-tab" type="button">Settings</button>
       </nav>
       <div class="library-header-actions">
-        <small id="operations-status" role="status"></small>
+        <small id="operations-status" role="status"></small><button class="command-launcher" id="commands-open" type="button" title="Commands (Ctrl+K)">Commands <kbd>Ctrl K</kbd></button>
         <nav class="api-links" aria-label="API resources">
           <a class="tab-button" href="/api" target="_blank" rel="noopener">API</a>
           <a class="tab-button" href="/docs" target="_blank" rel="noopener">API docs</a>
@@ -976,9 +976,9 @@
           <span class="platform-heading-actions"><span id="platform-count">0</span><button class="tab-button platform-add hidden" id="library-import" type="button" title="Import DAT" aria-label="Add platform — import DAT">＋</button></span>
         </div>
       </div>
-      <div class="platform-fetch-toolbar hidden" id="platform-fetch-toolbar"><button type="button" id="platform-fetch">Fetch metadata…</button></div>
+      <div class="platform-selection-toolbar hidden" id="platform-selection-toolbar"><div><label><input type="checkbox" id="platform-select-all"> Select all</label><span id="platform-selected-count">0 selected</span></div><button class="tab-button" id="platform-selection-commands" type="button" disabled>Select platforms</button></div>
       <div class="scroll" id="platform-list"></div>
-      <div class="platform-workspace-head hidden" id="platform-workspace-actions" aria-label="Platform actions"><div class="platform-actions-menu"><div class="catalog-tools hidden" id="catalog-tools"><button class="tab-button hidden" id="platform-enrich" type="button">Fetch metadata…</button><button class="tab-button" id="catalog-build-plan" type="button">Review duplicates</button></div><button class="tab-button" id="stats-tab" type="button">Statistics</button></div></div>
+
     </aside>
 
     <main class="games" id="game-pane">
@@ -1034,6 +1034,7 @@
       <p><button class="tab-button" id="profile-close" type="button">Close</button></p>
     </div>
   </div>
+<dialog id="command-palette" class="command-palette" aria-labelledby="command-title"><div class="command-head"><strong id="command-title">Commands</strong><button class="tab-button" id="command-close" type="button" aria-label="Close commands">Esc</button></div><p id="command-scope"></p><input type="search" id="command-search" autocomplete="off" placeholder="Search commands…" aria-label="Search commands"><div id="command-results"></div><small>↑ ↓ to choose · Enter to run</small></dialog>
 <dialog class="catalog-dialog" id="catalog-dialog" aria-labelledby="catalog-title"><div class="catalog-head"><div><h2 id="catalog-title">Catalog workspace</h2><p id="catalog-subtitle"></p></div><button class="tab-button" id="catalog-close" type="button" aria-label="Close catalog workspace">Close</button></div><div class="catalog-content" id="catalog-content"></div></dialog>
   <script>
     const state = {
@@ -1370,7 +1371,7 @@
     }
 
     $("browse-tab").addEventListener("click", () => typeof libraryNavigate==="function"?libraryNavigate("library"):setView("browse"));
-    $("stats-tab").addEventListener("click", () => setView("stats"));
+
     $("stats-pane").addEventListener("click", (event) => {
       const button = event.target.closest("[data-stats-all], [data-stats-selected]");
       if (button) loadStats(button.hasAttribute("data-stats-all"));
@@ -1422,7 +1423,7 @@
       state.view = view;
       $("export-bar").classList.toggle("hidden", view !== "browse");
       $("browse-tab").classList.toggle("active", view === "browse");
-      $("stats-tab").classList.toggle("active", view === "stats");
+
       $("platform-pane").classList.toggle("hidden", view !== "browse");
       $("game-pane").classList.toggle("hidden", view !== "browse");
       $("detail-pane").classList.toggle("hidden", view !== "browse");
@@ -1669,11 +1670,6 @@
       }
     }
 
-function platformMenuClose(){
- $("platform-workspace-actions")?.classList.add("hidden");
- document.querySelectorAll("[data-platform-menu]").forEach(b=>b.setAttribute("aria-expanded","false"));
-}
-
     function renderPlatforms() {
       const items = state.platforms.map((item) => {
         const active = item.platform === state.platform ? " active" : "";
@@ -1682,17 +1678,17 @@ function platformMenuClose(){
         const coverage = hasCoverage
           ? '<span class="chips"><span class="chip good">' + formatNumber(item.matched_game_count) + ' matched</span><span class="chip bad">' + formatNumber(item.missing_metadata_count) + ' missing</span></span>'
           : '';
-        return '<div class="platform-row' + active + '"><button class="platform-item' + active + '" type="button" data-platform="' + escapeAttr(item.platform) + '">' +
+        return '<div class="platform-row' + active + '"><label class="platform-select hidden"><input type="checkbox" data-platform-select="'+escapeAttr(item.platform)+'" aria-label="'+escapeAttr("Select "+item.platform)+'" '+(state.platformSelection?.has(item.platform)?'checked':'')+'></label><button class="platform-item' + active + '" type="button" data-platform="' + escapeAttr(item.platform) + '">' +
           '<span class="primary">' + escapeHTML(item.platform) + '</span>' +
           '<span class="secondary">' + summary + '</span>' +
           coverage +
-          '</button><button class="platform-menu-button" data-platform-menu="'+escapeAttr(item.platform)+'" aria-label="'+escapeAttr("Actions for "+item.platform)+'" aria-expanded="false" title="Platform actions">⋯</button></div>';
+          '</button></div>';
       }).join("");
-      platformMenuClose();
       $("platform-list").innerHTML = items || '<div class="empty">No platform folders found.</div>';
       $("platform-list").querySelectorAll("[data-platform]").forEach((button) => {
-        button.addEventListener("click", () => {platformMenuClose();selectPlatform(button.dataset.platform);});
+        button.addEventListener("click", () => selectPlatform(button.dataset.platform));
       });
+      if(typeof librarySyncPlatformSelection==="function")librarySyncPlatformSelection();
     }
 
     function renderGames() {

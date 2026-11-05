@@ -252,3 +252,21 @@ test('inspecting a profile cannot leak UI-only fields into export requests',asyn
  const b=browser();b.run('nativeExportUI.draft={...exportDraft(),name:"Test",inspected_profile:"yaml",inspected_policy:{selection:{}},profile_mode:"defaults"};exportCapture=()=>{}');
  const input=await b.run('exportDestinationInput()');assert.equal(input.name,'Test');assert.equal('inspected_profile' in input,false);assert.equal('inspected_policy' in input,false);assert.equal('profile_mode' in input,false);
 });
+
+test('platform selection feeds both palette actions and survives browsing',async()=>{
+ const b=browser();b.run('state.platforms=[{platform:"Console"},{platform:"Other"}];state.platformSelection=new Set(["Console","Other","Gone"]);librarySyncPlatformSelection();');
+ assert.equal(b.run('librarySelectedPlatforms().join(",")'),'Console,Other');
+ assert.equal(b.element('platform-selected-count').textContent,'2 selected');
+ b.run('enrichmentOpen=scope=>{state.fetchScope=scope};catalogBuildPlan=(manual,resume,scope)=>{state.foldScope=scope};');
+ await b.run('libraryCommands(librarySelectedPlatforms()).find(c=>c.id==="fetch").run()');
+ await b.run('libraryCommands(librarySelectedPlatforms()).find(c=>c.id==="fold").run()');
+ assert.equal(b.run('state.fetchScope.join(",")'),'Console,Other');assert.equal(b.run('state.foldScope.join(",")'),'Console,Other');
+ b.run('state.platform="Other";librarySyncPlatformSelection()');assert.equal(b.run('librarySelectedPlatforms().length'),2);
+});
+test('palette falls back to current platform and filters commands without running them',()=>{
+ const b=browser();b.element('catalog-dialog').open=false;b.element('command-palette').showModal=function(){this.open=true};
+ b.run('commandsOpen()');assert.equal(b.run('commandUI.scope.join(",")'),'Console');
+ b.element('command-search').value='merge';b.run('commandsRender()');assert.equal(b.run('commandUI.visible.length'),1);assert.equal(b.run('commandUI.visible[0].id'),'fold');
+ assert.equal(b.calls.filter(x=>x[0]==='POST').length,0);
+ b.run('catalogUI.enabled=false');assert.equal(b.run('libraryCommands(["Console"]).find(c=>c.id==="fold").enabled'),false);
+});

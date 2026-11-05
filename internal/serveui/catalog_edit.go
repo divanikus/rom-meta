@@ -39,8 +39,9 @@ type editorCard struct {
 	EditorError   string                     `json:"editor_error,omitempty"`
 }
 type foldPlanRequest struct {
-	Platform string   `json:"platform"`
-	Games    []string `json:"games,omitempty"`
+	Platforms []string `json:"platforms,omitempty"`
+	Platform  string   `json:"platform,omitempty"`
+	Games     []string `json:"games,omitempty"`
 }
 type foldPreviewRequest struct {
 	Plan  string             `json:"plan"`
@@ -53,13 +54,14 @@ type foldApplyRequest struct {
 	Decisions []catalogfold.Decision `json:"decisions"`
 }
 type storedPlan struct {
-	plan    *catalogfold.Plan
+	plan    *foldBatch
 	created time.Time
 }
 type foldPlanResponse struct {
-	ID       string                     `json:"id"`
-	Platform string                     `json:"platform"`
-	Groups   []catalogfold.PlannedGroup `json:"groups"`
+	Platforms []string                   `json:"platforms"`
+	ID        string                     `json:"id"`
+	Platform  string                     `json:"platform"`
+	Groups    []catalogfold.PlannedGroup `json:"groups"`
 }
 
 func (s *server) catalogCapabilities(w http.ResponseWriter, r *http.Request) {
@@ -225,10 +227,26 @@ func (s *server) foldPlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer s.editMu.Unlock()
-	request.Platform = s.resolvePlatform(request.Platform)
-	if !safeCatalogName(request.Platform) {
-		writeError(w, 400, fmt.Errorf("choose a platform"))
+	platforms := request.Platforms
+	if len(platforms) == 0 {
+		platforms = []string{request.Platform}
+	} else if request.Platform != "" {
+		writeError(w, 400, fmt.Errorf("use platform or platforms, not both"))
 		return
+	}
+	if len(platforms) > 256 || (len(platforms) > 1 && len(request.Games) > 0) {
+		writeError(w, 400, fmt.Errorf("choose up to 256 platforms; manual card comparisons require one platform"))
+		return
+	}
+	seen := map[string]bool{}
+	for i, name := range platforms {
+		name = s.resolvePlatform(name)
+		if !safeCatalogName(name) || seen[name] {
+			writeError(w, 400, fmt.Errorf("choose distinct valid platforms"))
+			return
+		}
+		platforms[i] = name
+		seen[name] = true
 	}
 	config, err := store.LoadCatalogConfig(s.root)
 	if err != nil {
@@ -240,7 +258,7 @@ func (s *server) foldPlan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, err)
 		return
 	}
-	options := catalogfold.Options{DataRoot: s.root, Platform: request.Platform, Context: r.Context(), RegionPriority: config.Fold.RegionPriority, RegionGroups: config.Fold.RegionGroups, PlatformRegionPriority: map[string][]string{}}
+	options := catalogfold.Options{DataRoot: s.root, Context: r.Context(), RegionPriority: config.Fold.RegionPriority, RegionGroups: config.Fold.RegionGroups, PlatformRegionPriority: map[string][]string{}}
 	for name, value := range config.Fold.Platforms {
 		options.PlatformRegionPriority[registry.ResolveCLI(name)] = value.RegionPriority
 	}
@@ -261,8 +279,20 @@ func (s *server) foldPlan(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	plan, err := catalogfold.BuildPlan(options, request.Games)
+	plan := &foldBatch{Groups: []catalogfold.PlannedGroup{}}
+	for i, platform := range platforms {
+		options.Platform = platform
+		options.Progress.Update("Planning platforms", i+1, len(platforms), platform)
+		var child *catalogfold.Plan
+		child, err = catalogfold.BuildPlan(options, request.Games)
+		if err != nil {
+			err = fmt.Errorf("%s: %w", platform, err)
+			break
+		}
+		plan.add(child)
+	}
 	if err != nil {
+		plan.Close()
 		if streaming {
 			_ = encode.Encode(map[string]any{"error": err.Error()})
 		} else {
@@ -291,7 +321,7 @@ func (s *server) foldPlan(w http.ResponseWriter, r *http.Request) {
 }
 
 // registerFoldPlan requires editMu. Each continuation receives a new, expiring ID.
-func (s *server) registerFoldPlan(plan *catalogfold.Plan) (foldPlanResponse, error) {
+func (s *server) registerFoldPlan(plan *foldBatch) (foldPlanResponse, error) {
 	if s.plans == nil {
 		s.plans = map[string]storedPlan{}
 	}
@@ -332,7 +362,7 @@ func (s *server) registerFoldPlan(plan *catalogfold.Plan) (foldPlanResponse, err
 	for i := range groups {
 		groups[i].Result = nil
 	}
-	return foldPlanResponse{ID: id, Platform: plan.Platform, Groups: groups}, nil
+	return foldPlanResponse{ID: id, Platform: plan.Platform, Platforms: plan.Platforms, Groups: groups}, nil
 }
 func (s *server) foldPreview(w http.ResponseWriter, r *http.Request) {
 	var request foldPreviewRequest
@@ -359,7 +389,7 @@ func (s *server) foldPreview(w http.ResponseWriter, r *http.Request) {
 	}
 	response := map[string]any{"group": group, "draft": catalogfold.Draft{Primary: group.Group.Keep.Folder, Fields: group.Group.Edits, Confirm: group.Group.ReviewAccepted, Reason: group.Group.ReviewReason}}
 	if group.Result != nil {
-		response["preview"] = s.editorCard(*group.Result, stored.plan.Platform)
+		response["preview"] = s.editorCard(*group.Result, group.Group.Platform)
 	}
 	writeJSON(w, response)
 }

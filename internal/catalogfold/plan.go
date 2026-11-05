@@ -406,45 +406,59 @@ func (p *Plan) Preview(id int, draft Draft) (PlannedGroup, error) {
 	p.Groups[id] = pg
 	return pg, nil
 }
+
+// Validate checks selected revisions, files and actions without writing.
+func (p *Plan) Validate(ctx context.Context, decisions []Decision) error {
+	if len(decisions) == 0 {
+		return fmt.Errorf("select groups to apply")
+	}
+	seen := map[int]bool{}
+	for _, d := range decisions {
+		if d.ID < 0 || d.ID >= len(p.Groups) || seen[d.ID] {
+			return fmt.Errorf("invalid or duplicate group")
+		}
+		seen[d.ID] = true
+		pg := p.Groups[d.ID]
+		if d.Revision != pg.Revision {
+			return fmt.Errorf("preview changed; review the current result")
+		}
+		if err := p.verify(pg); err != nil {
+			return err
+		}
+		if d.Action == "merge" {
+			if pg.Status != "ready" {
+				return fmt.Errorf("group is not ready: %s", pg.Reason)
+			}
+		} else if d.Action == "separate" {
+			if pg.Group.NativeDigest != "" || len(evidenceTokens(pg.Group.Evidence)) == 0 {
+				return fmt.Errorf("no fold evidence to reject; leave this case unresolved")
+			}
+		} else {
+			return fmt.Errorf("unknown decision")
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return nil
+}
 func (p *Plan) Apply(ctx context.Context, decisions []Decision) (AppliedPlan, error) {
 	result := AppliedPlan{}
 	if len(decisions) == 0 {
 		return result, fmt.Errorf("select groups to apply")
 	}
-	seen := map[int]bool{}
+	if err := p.Validate(ctx, decisions); err != nil {
+		return result, err
+	}
 	var ordinary []Decision
 	var targets []string
 	for _, d := range decisions {
-		if d.ID < 0 || d.ID >= len(p.Groups) || seen[d.ID] {
-			return result, fmt.Errorf("invalid or duplicate group")
-		}
-		seen[d.ID] = true
 		pg := p.Groups[d.ID]
-		if d.Revision != pg.Revision {
-			return result, fmt.Errorf("preview changed; review the current result")
-		}
-		if err := p.verify(pg); err != nil {
-			return result, err
-		}
-		if d.Action == "merge" {
-			if pg.Status != "ready" {
-				return result, fmt.Errorf("group is not ready: %s", pg.Reason)
-			}
-		} else if d.Action == "separate" {
-			if pg.Group.NativeDigest != "" || len(evidenceTokens(pg.Group.Evidence)) == 0 {
-				return result, fmt.Errorf("no fold evidence to reject; leave this case unresolved")
-			}
-		} else {
-			return result, fmt.Errorf("unknown decision")
-		}
 		if pg.Group.NativeDigest != "" {
 			targets = append(targets, pg.Group.TargetFolder)
 		} else {
 			ordinary = append(ordinary, d)
 		}
-	}
-	if err := ctx.Err(); err != nil {
-		return result, err
 	}
 	// Ordinary groups share one existing platform transaction, with an external
 	// writer/stale check before the swap. MAME retains its binding-aware transaction.
