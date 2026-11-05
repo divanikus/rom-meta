@@ -451,7 +451,7 @@ function catalogInlineOrigin(key){
 function catalogInlineField(key,label,value,body=""){
  if(!catalogInlineAvailable())return body||fact(label,value);
  if(!value&&!body)return "";
- return '<div class="fact-row catalog-inline-field"><div class="catalog-inline-label"><span class="fact-label">'+cEscape(label)+'</span><button type="button" class="catalog-pencil" data-inline-edit="'+key+'" aria-label="Edit '+escapeAttr(label)+'">✎</button></div>'+(body||'<div class="fact-value">'+cEscape(value)+'</div>')+'<small class="catalog-value-origin">'+cEscape(catalogInlineOrigin(key))+'</small></div>';
+ return '<div class="'+(body?'catalog-inline-block':'fact-row catalog-inline-field')+'"><div class="catalog-inline-label"><span class="fact-label">'+cEscape(label)+'</span><button type="button" class="catalog-pencil" data-inline-edit="'+key+'" aria-label="Edit '+escapeAttr(label)+'">✎</button></div>'+(body||'<div class="fact-value">'+cEscape(value)+'</div>')+'<small class="catalog-value-origin">'+cEscape(catalogInlineOrigin(key))+'</small></div>';
 }
 function catalogInlineTitle(value){
  if(!catalogInlineAvailable())return cEscape(value);
@@ -487,18 +487,26 @@ function catalogSelectSource(id){
  if(f.card.registry.sources.some(s=>s.id===id))f.preferredSource=id;
  catalogInlineRender();
 }
+function catalogEditorTargetLabel(entry){
+ const record=catalogInline.card?.records?.find(r=>catalogTargetKey(r.target)===catalogTargetKey(entry.target)),t=entry.target;
+ if(t.kind==="library")return "Card fields";
+ if(t.match===-1&&t.kind==="source")return "Service details";
+ return record?.fields.release||t.scope||(t.kind==="manual"?"New whole-game entry":"Game details"+(t.match>0?" "+(t.match+1):""));
+}
 function catalogInlineBanner(){
  const f=catalogInline;if(!catalogEditorActive())return "";
- if(f.loading)return '<div class="catalog-inline-banner"><span role="status">Opening editable fields…</span><button class="tab-button" id="catalog-inline-cancel">Finish editing</button></div>';
- if(!f.card)return '<div class="catalog-inline-banner"><span role="alert">'+cEscape(f.error)+'</span><button class="tab-button" id="catalog-editor-reload">Retry</button><button class="tab-button" id="catalog-inline-cancel">Finish editing</button></div>';
- const key=catalogTargetKey(f.target),targets=catalogEditorTargets().filter(r=>(r.target.source||"")===(f.target.source||"")),source=f.card.registry?.sources?.find(s=>s.id===f.target.source),disabled=f.saving?' disabled':'',raw=state.detailTab==="raw";
- const help=raw?"Edit game.yaml directly. Validate checks the draft; Save changes validates again before writing.":f.target.kind==="library"?"Card identity and explicit metadata overrides. Choose a source tab to edit its values.":source?"Your named variant. Select it in export metadata priorities to use these values, including Title.":"Saved "+sourceLabel(f.target.source)+" values. A provider refresh may replace them.";
- return '<div class="catalog-inline-banner catalog-editor-bar"><div class="catalog-inline-actions"><button class="catalog-primary" id="catalog-inline-save" '+(!f.dirty||f.saving||f.invalid.size?'disabled':'')+'>'+(f.saving?'Working…':'Save changes')+'</button><button class="tab-button" id="catalog-editor-discard" '+((!f.dirty&&!f.invalid.size)||f.saving?'disabled':'')+'>Discard</button><button class="tab-button" id="catalog-inline-cancel"'+disabled+'>Finish editing</button><button class="tab-button" id="catalog-inline-export"'+disabled+'>Preview export</button><details class="catalog-editor-help"><summary>Help</summary><p>'+cEscape(help)+'</p></details></div>'+
- (!raw?'<nav class="catalog-source-tabs" aria-label="Edit source">'+catalogEditorSources().map(s=>'<button type="button" class="tab-button'+((f.target.source||"")===s.id?' active':'')+'" data-editor-source="'+escapeAttr(s.id)+'" aria-pressed="'+((f.target.source||"")===s.id)+'"'+disabled+'>'+cEscape(s.name)+'</button>').join("")+'<button class="tab-button" id="catalog-new-source" aria-label="Add named variant" title="Add named variant"'+disabled+'>＋</button></nav>'+
+ if(f.loading)return '<div class="catalog-inline-banner"><span role="status">Opening editable fields…</span><button class="tab-button" id="catalog-inline-cancel">Done</button></div>';
+ if(!f.card)return '<div class="catalog-inline-banner"><span role="alert">'+cEscape(f.error)+'</span><button class="tab-button" id="catalog-editor-reload">Retry</button><button class="tab-button" id="catalog-inline-cancel">Done</button></div>';
+ const key=catalogTargetKey(f.target),targets=catalogEditorTargets().filter(r=>(r.target.source||"")===(f.target.source||"")).filter(r=>r.target.match!==-1||r.target.kind!=="source"||Object.keys(f.card.records.find(v=>catalogTargetKey(v.target)===catalogTargetKey(r.target))?.fields||{}).length),
+ source=f.card.registry?.sources?.find(s=>s.id===f.target.source),disabled=f.saving?' disabled':'',raw=state.detailTab==="raw";
+ const hint=raw?"Edit the complete card YAML. Save validates it before writing.":f.target.kind==="library"?"Card fields · values saved directly in this card. Blank fields use source data.":source?'Your variant “'+source.name+'” · choose it in export priorities to use these values.':sourceLabel(f.target.source)+" · editing its saved values. Fetching this source again may replace them.";
+ return '<div class="catalog-inline-banner catalog-editor-bar"><div class="catalog-editor-top"><strong>Edit card</strong><div class="catalog-inline-actions"><button class="catalog-primary" id="catalog-inline-save" '+(!f.dirty||f.saving||f.invalid.size?'disabled':'')+'>'+(f.saving?'Saving…':'Save changes')+'</button><button class="tab-button" id="catalog-editor-discard" '+((!f.dirty&&!f.invalid.size)||f.saving?'disabled':'')+'>Discard</button><button class="tab-button" id="catalog-inline-cancel"'+disabled+'>Done</button></div></div>'+
+ (!raw?'<nav class="catalog-source-tabs" aria-label="Edit source">'+catalogEditorSources().map(s=>'<button type="button" class="tab-button'+((f.target.source||"")===s.id?' active':'')+'" data-editor-source="'+escapeAttr(s.id)+'" aria-pressed="'+((f.target.source||"")===s.id)+'"'+disabled+'>'+cEscape(s.name)+'</button>').join("")+'<button class="tab-button" id="catalog-new-source" aria-label="Add named variant"'+disabled+'>+ My variant</button></nav>'+
  ((targets.length>1||source||f.target.kind==="manual")?'<div class="catalog-record-choice">'+
- (targets.length>1?'<label>Record<select id="catalog-editor-target"'+disabled+'>'+targets.map(r=>'<option value="'+escapeAttr(catalogTargetKey(r.target))+'" '+(catalogTargetKey(r.target)===key?'selected':'')+'>'+cEscape(r.label.replace(/^[^·]+ · /,""))+(f.edits.has(catalogTargetKey(r.target))?' · edited':'')+'</option>').join("")+'</select></label>':"")+
+ (targets.length>1?'<label>Entry<select id="catalog-editor-target"'+disabled+'>'+targets.map(r=>'<option value="'+escapeAttr(catalogTargetKey(r.target))+'" '+(catalogTargetKey(r.target)===key?'selected':'')+'>'+cEscape(catalogEditorTargetLabel(r))+(f.edits.has(catalogTargetKey(r.target))?' · edited':'')+'</option>').join("")+'</select></label>':"")+
  (f.target.kind==="manual"?'<label>Applies to<select id="catalog-editor-scope"'+disabled+'><option value="" '+(catalogScopeExists("")?'disabled':'')+'>Whole game</option>'+(f.card.releases||[]).map(r=>'<option value="'+escapeAttr(r)+'" '+(f.target.scope===r?'selected':'')+' '+(catalogScopeExists(r)?'disabled':'')+'>'+cEscape(r)+'</option>').join("")+'</select></label>':"")+
- (source?'<button class="tab-button" id="catalog-rename-source"'+disabled+'>Rename variant</button>':"")+'</div>':""):"")+
+ (source?'<button class="tab-button" id="catalog-rename-source"'+disabled+'>Rename</button>':"")+'</div>':""):"")+
+ '<p class="catalog-edit-context">'+cEscape(hint)+'</p>'+
  (f.nameMode?'<div class="catalog-source-name"><label>Variant name<input id="catalog-source-name" maxlength="120" value="'+escapeAttr(f.nameDraft)+'"'+disabled+'></label><button class="tab-button" id="catalog-save-source-name"'+disabled+'>'+(f.nameMode==="rename"?"Save name":"Create variant")+'</button><button class="tab-button" id="catalog-cancel-source-name"'+disabled+'>Cancel</button></div>':"")+
  '<span id="catalog-editor-status" role="status">'+cEscape(f.error||f.message||(f.dirty?"Unsaved changes":""))+'</span></div>';
 }
@@ -539,21 +547,41 @@ function catalogEditorControl(key,value,label= catalogRecordLabels[key]||key){
  else if((catalogRecordLists.has(key)&&(value==null||Array.isArray(value)))||(Array.isArray(value)&&value.every(v=>typeof v==="string"))){kind="list";control='<textarea rows="3"'+attr+disabled+'>'+cEscape((value||[]).join("\n"))+'</textarea>';}
  else if((value&&typeof value==="object")||f.invalid.has(catalogTargetKey(f.target)+"|"+key)){kind="json";control='<textarea rows="5"'+attr+' spellcheck="false"'+disabled+'>'+cEscape(f.invalid.get(catalogTargetKey(f.target)+"|"+key)??JSON.stringify(value,null,2))+'</textarea>';}
  else {const text=value??"";control=key==="description"||String(text).includes("\n")?'<textarea rows="5"'+attr+disabled+'>'+cEscape(text)+'</textarea>':'<input'+attr+' value="'+escapeAttr(text)+'"'+disabled+'>';}
- return '<div class="catalog-record-field" data-field-kind="'+kind+'"><label><span>'+cEscape(label)+'</span>'+control+'</label>'+(kind==="json"?'<small>Structured value · JSON</small>':kind==="list"?'<small>One value per line</small>':"")+(exists&&!(f.target.kind==="library"&&key==="title")?'<button type="button" class="catalog-reset" data-card-remove="'+escapeAttr(key)+'"'+disabled+'>Remove field</button>':"")+'</div>';
+ return '<div class="catalog-record-field" data-field-kind="'+kind+'"><label><span>'+cEscape(label)+'</span>'+control+'</label>'+(kind==="json"?'<small>Structured value · JSON</small>':kind==="list"?'<small>One value per line</small>':"")+(exists&&!(f.target.kind==="library"&&key==="title")?'<button type="button" class="catalog-reset" data-card-remove="'+escapeAttr(key)+'" title="Remove field" aria-label="Remove '+escapeAttr(label)+'"'+disabled+'>×</button>':"")+'</div>';
 }
 function catalogRenderEditor(response,coverHTML){
  const f=catalogInline;if(!f.card)return '<section class="game-overview">'+(f.loading?"":"<p>Reload this card to edit its fields.</p>")+'</section>';
  const fields=catalogTargetValues(),library=f.target.kind==="library",details=f.target.kind==="source"&&f.target.match===-1;
- const common=details?[]:["title","release_date","developer","publisher","genres",(!library&&Object.hasOwn(fields,"max_players")&&!Object.hasOwn(fields,"players")?"max_players":"players"),...(library?["aliases","alternate_titles"]:[])];
- const metadata=common.map(k=>catalogEditorControl(k,fields[k],k==="title"&&library?"Library title":catalogRecordLabels[k])).join("");
- const descriptions=fields.descriptions||{},langs=Array.from(new Set([...Object.keys(descriptions),"en",...f.extra])).sort();
- const prose=details?"":'<div class="catalog-description-fields"><h3>Descriptions</h3>'+langs.map(lang=>'<label>'+cEscape(catalogLanguages[lang]||lang)+'<textarea rows="5" data-card-description="'+escapeAttr(lang)+'" aria-label="Description '+escapeAttr(lang)+'" '+(f.saving?'disabled':'')+'>'+cEscape(descriptions[lang]||"")+'</textarea></label>').join("")+'<div class="catalog-inline-actions"><input id="catalog-description-language" aria-label="Add description language" placeholder="Language code, e.g. ru"><button class="tab-button" id="catalog-add-language">Add language</button></div>'+(library?catalogEditorControl("description",fields.description,"Shared description · all languages"):"")+'</div>';
- const omitted=new Set([...common,"descriptions",...(library?["description"]:[])]);
- const extra=Object.keys(fields).filter(k=>!omitted.has(k)).map(k=>catalogEditorControl(k,fields[k])).join("");
- return '<section class="game-overview catalog-record-editor"><div class="catalog-editor-layout"><div class="cover-panel">'+coverHTML+'</div><div><div class="catalog-record-grid">'+metadata+'</div>'+prose+
- (extra?'<details class="catalog-record-extra" '+(details?'open':'')+'><summary>Other source fields ('+Object.keys(fields).filter(k=>!omitted.has(k)).length+')</summary><div class="catalog-record-grid">'+extra+'</div></details>':"")+
- (!library?'<div class="catalog-inline-actions"><input id="catalog-extra-field" aria-label="New source field" placeholder="Additional field name"><button class="tab-button" id="catalog-add-field">Add field</button></div>':"")+
- '<p class="secondary">Empty or removed fields fall through to other selected sources. Title follows metadata priorities in Regional title mode; release and filename modes remain available.</p></div></div></section>';
+ const common=details?[]:["release_date","developer","publisher","genres",(!library&&Object.hasOwn(fields,"max_players")&&!Object.hasOwn(fields,"players")?"max_players":"players")];
+ const metadata=common.map(k=>catalogEditorControl(k,fields[k])).join("");
+ const descriptions=fields.descriptions&&!Array.isArray(fields.descriptions)?fields.descriptions:{},langs=Array.from(new Set([...Object.keys(descriptions),...f.extra])).sort();
+ if(!langs.length&&!Object.hasOwn(fields,"description"))langs.push("en");
+ const prose=details?"":'<div class="catalog-description-fields">'+
+ (Object.hasOwn(fields,"description")?catalogEditorControl("description",fields.description,"Description"):"")+
+ langs.map(lang=>'<label><span>Description · '+cEscape(catalogLanguages[lang]||lang)+'</span><textarea rows="9" data-card-description="'+escapeAttr(lang)+'" aria-label="Description '+escapeAttr(lang)+'" '+(f.saving?'disabled':'')+'>'+cEscape(descriptions[lang]||"")+'</textarea></label>').join("")+
+ '<details class="catalog-translation-tools"><summary>Add a translation</summary><div class="catalog-inline-actions"><input id="catalog-description-language" aria-label="Add description language" placeholder="Language code, e.g. ru"><button class="tab-button" id="catalog-add-language">Add language</button></div></details></div>';
+ const omitted=new Set([...common,"title","descriptions","description",...(library?["aliases","alternate_titles"]:[])]);
+ const keys=Object.keys(fields).filter(k=>!omitted.has(k));
+ const extra=keys.map(k=>catalogEditorControl(k,fields[k])).join("");
+ const additional='<details class="catalog-record-extra" '+(details?'open':'')+'><summary>Other fields'+(keys.length?' ('+keys.length+')':'')+'</summary><div class="catalog-record-grid">'+extra+'</div>'+
+ (!library?'<div class="catalog-inline-actions"><input id="catalog-extra-field" aria-label="New source field" placeholder="Field name"><button class="tab-button" id="catalog-add-field">Add field</button></div>':"")+'</details>';
+ return '<section class="game-overview catalog-record-editor"><div class="profile-layout"><div class="cover-panel">'+coverHTML+'</div>'+
+ '<aside class="profile-facts catalog-editor-facts">'+metadata+'</aside><div class="profile-content">'+
+ (details?"":catalogEditorControl("title",fields.title,library?"Library title":"Title"))+prose+
+ (library?'<details class="catalog-record-extra"><summary>Alternative names</summary>'+catalogEditorControl("aliases",fields.aliases)+catalogEditorControl("alternate_titles",fields.alternate_titles)+'</details>':"")+additional+'</div></div></section>';
+}
+function catalogInitialTarget(card,key){
+ if(key&&(["title","aliases","alternate_titles"].includes(key)||Object.hasOwn(card.fields||{},key)))return {kind:"library",match:-1};
+ const records=(card.records||[]).filter(r=>r.target.match>=0&&r.target.release_index==null);
+ const shown=state.game?.profile||{},matches=records.filter(r=>!key||Object.hasOwn(r.fields,key)||(key==="description"&&Object.hasOwn(r.fields,"descriptions")));
+ const record=(key&&key!=="description"?matches.find(r=>catalogEqualValue(r.fields[key],shown[key])):null)||matches.find(r=>r.target.source===shown.source)||matches[0];
+ return record?.target||{kind:"library",match:-1};
+}
+function catalogDiscardInline(){
+ const f=catalogInline,target=f.target;
+ f.card=f.savedCard||f.card;f.raw=null;f.edits=new Map();f.invalid=new Map();f.extra=new Set();
+ const valid=target.kind==="library"||(target.kind==="manual"?(f.card.registry?.sources||[]).some(s=>s.id===target.source):(f.card.records||[]).some(r=>catalogTargetKey(r.target)===catalogTargetKey(target)));
+ f.target=valid?target:catalogInitialTarget(f.card);f.dirty=false;f.error="";f.message="";f.nameMode="";catalogInlineRender();
 }
 function catalogEqualValue(a,b){
  const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==="object"?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
@@ -598,8 +626,8 @@ async function catalogStartInline(key){
   const card=await fetchJSON("/api/catalog/edit?"+new URLSearchParams({platform,game:folder}));
   if(version!==f.version||platform!==state.platform||folder!==state.selectedFolder)return;
   if(card.editor_error)throw new Error(card.editor_error);
-  f.card=card;f.savedCard=card;f.baseRevision=card.revision;f.raw=null;f.dirty=false;f.target={kind:"library",match:-1};f.edits=new Map();f.invalid=new Map();f.extra=new Set();
-  if(f.preferredSource&&card.registry?.sources?.some(s=>s.id===f.preferredSource)){
+  f.card=card;f.savedCard=card;f.baseRevision=card.revision;f.raw=null;f.dirty=false;f.target=catalogInitialTarget(card,key);f.edits=new Map();f.invalid=new Map();f.extra=new Set();
+  if(!key&&f.preferredSource&&card.registry?.sources?.some(s=>s.id===f.preferredSource)){
    f.target=card.records?.find(r=>r.target.source===f.preferredSource&&r.target.match>=0&&r.target.release_index==null)?.target||{kind:"manual",source:f.preferredSource,match:-1,scope:""};
   }
   if(state.sourceDefaults)state.sourceDefaults.source_labels={...(state.sourceDefaults.source_labels||{}),...Object.fromEntries((card.registry?.sources||[]).map(s=>[s.id,s.name]))};
@@ -661,8 +689,7 @@ function catalogBindInline(){
  $("catalog-cancel-source-name")?.addEventListener("click",()=>{f.nameMode="";catalogInlineRender();});
  $("catalog-inline-save")?.addEventListener("click",catalogSaveInline);
  $("catalog-inline-cancel")?.addEventListener("click",()=>{if(catalogLeaveInline())catalogInlineRender();});
- $("catalog-editor-discard")?.addEventListener("click",()=>{f.card=f.savedCard||f.card;f.raw=null;f.target={kind:"library",match:-1};f.edits=new Map();f.invalid=new Map();f.dirty=false;f.error="";f.message="";catalogInlineRender();});
- $("catalog-inline-export")?.addEventListener("click",()=>{if(catalogLeaveInline())setExportMode(true);});
+ $("catalog-editor-discard")?.addEventListener("click",catalogDiscardInline);
  document.querySelectorAll("[data-card-field]").forEach(input=>input.addEventListener("input",()=>{
   if(f.saving)return;
   const key=input.dataset.cardField,kind=input.closest("[data-field-kind]").dataset.fieldKind,token=catalogTargetKey(f.target)+"|"+key;

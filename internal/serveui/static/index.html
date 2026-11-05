@@ -934,7 +934,7 @@
         <button class="tab-button" id="settings-tab" type="button">Settings</button>
       </nav>
       <div class="library-header-actions">
-        <small id="operations-status" role="status"></small><button class="command-launcher" id="commands-open" type="button" title="Commands (Ctrl+K)">Commands <kbd>Ctrl K</kbd></button>
+        <small id="operations-status" role="status"></small>
         <nav class="api-links" aria-label="API resources">
           <a class="tab-button" href="/api" target="_blank" rel="noopener">API</a>
           <a class="tab-button" href="/docs" target="_blank" rel="noopener">API docs</a>
@@ -943,7 +943,7 @@
       </div>
       <div class="export-bar" id="export-bar">
         <button class="hidden" id="library-mode" type="button" aria-pressed="true" tabindex="-1">Library</button>
-<div class="export-options hidden" id="export-controls">
+<div class="export-options hidden" id="export-controls"><strong class="export-preview-title">Export preview</strong>
           <label>Frontend <select id="export-target"><option value="es-de">ES-DE</option><option value="launchbox">LaunchBox</option></select></label>
           <label>Description <select id="export-language"><option value="en">English</option><option value="ru">Русский → English</option><option value="ja">日本語 → English</option><option value="fr">Français → English</option><option value="de">Deutsch → English</option><option value="es">Español → English</option><option value="it">Italiano → English</option><option value="pt">Português → English</option><option value="zh">中文 → English</option><option value="ko">한국어 → English</option></select></label>
           <label>Media <select id="export-media"><option value="all">Images + video</option><option value="images">Images</option><option value="cover">Cover only</option><option value="none">None</option><option value="expanded">All supported media</option><option value="custom" disabled>Custom selection</option></select></label>
@@ -961,9 +961,9 @@
             <div class="secondary source-help">Choose sources with checkboxes. Move a source up to prefer it. Saved catalog overrides take priority.</div>
             <div id="export-source-controls">Loading source choices…</div>
           </div></details>
-          <button class="tab-button" id="save-profile" type="button">Save profile</button>
+          <button class="tab-button" id="save-profile" type="button">Save profile</button><button class="catalog-primary" type="button" onclick="libraryNavigate('export')">Use this profile →</button>
         </div>
-        <div class="export-notice hidden" id="export-notice">Preview across the library: one selected description and media per role. <button class="tab-button" type="button" onclick="libraryNavigate('export')">Continue to export</button> Save profile also downloads YAML for CLI use.</div>
+        <div class="export-notice hidden" id="export-notice"></div>
         <div class="error hidden" id="export-error" role="status"></div>
       </div>
       <div class="top-status" id="top-status">Loading...</div>
@@ -976,7 +976,7 @@
           <span class="platform-heading-actions"><span id="platform-count">0</span><button class="tab-button platform-add hidden" id="library-import" type="button" title="Import DAT" aria-label="Add platform — import DAT">＋</button></span>
         </div>
       </div>
-      <div class="platform-selection-toolbar hidden" id="platform-selection-toolbar"><div><label><input type="checkbox" id="platform-select-all"> Select all</label><span id="platform-selected-count">0 selected</span></div><button class="tab-button" id="platform-selection-commands" type="button" disabled>Select platforms</button></div>
+      <div class="platform-selection-toolbar hidden" id="platform-selection-toolbar"><div class="platform-selection-options" id="platform-selection-options"><label><input type="checkbox" id="platform-select-all"> Select all</label><span id="platform-selected-count">Current platform</span></div><div class="platform-action-bar" role="group" aria-label="Platform actions"><button id="platform-action-fetch" type="button" class="platform-fetch-action">Fetch metadata</button><button id="platform-action-fold" type="button">Merge</button><button id="platform-action-stats" type="button" aria-label="Statistics"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 17V9m7 8V3m7 14v-6"/></svg></button></div></div>
       <div class="scroll" id="platform-list"></div>
 
     </aside>
@@ -1034,7 +1034,6 @@
       <p><button class="tab-button" id="profile-close" type="button">Close</button></p>
     </div>
   </div>
-<dialog id="command-palette" class="command-palette" aria-labelledby="command-title"><div class="command-head"><strong id="command-title">Commands</strong><button class="tab-button" id="command-close" type="button" aria-label="Close commands">Esc</button></div><p id="command-scope"></p><input type="search" id="command-search" autocomplete="off" placeholder="Search commands…" aria-label="Search commands"><div id="command-results"></div><small>↑ ↓ to choose · Enter to run</small></dialog>
 <dialog class="catalog-dialog" id="catalog-dialog" aria-labelledby="catalog-title"><div class="catalog-head"><div><h2 id="catalog-title">Catalog workspace</h2><p id="catalog-subtitle"></p></div><button class="tab-button" id="catalog-close" type="button" aria-label="Close catalog workspace">Close</button></div><div class="catalog-content" id="catalog-content"></div></dialog>
   <script>
     const state = {
@@ -1895,7 +1894,7 @@
       const descriptionMeta = chosen ? '<div class="description-choice chips">' + chips([sourceLabel(chosen.source || "catalog"), chosen.language?.toUpperCase(), chosen.from_variant ? "Variant: " + variantLabel((game.variants || []).find((item) => item.name === chosen.from_variant) || {name:chosen.from_variant},game.variants || []) : chosen.from_release ? "Release: " + chosen.from_release : ""].filter(Boolean), '') + '</div>' : profile.source ? '<div class="description-choice chips">' + chips([sourceLabel(profile.source),profile.description_language?.toUpperCase()].filter(Boolean), '') + '</div>' : '';
       const viewFact=(key,label,value)=>typeof catalogInlineField==="function"?catalogInlineField(key,label,value):fact(label,value);
       const factRows = [viewFact("release_date","Release date",profile.release_date),viewFact("developer","Developer",profile.developer),viewFact("publisher","Publisher",profile.publisher),viewFact("genres","Genres",listText(profile.genres)),fact("Themes",listText(profile.themes)),viewFact("players","Players",profile.players),fact("Rating",ratingText(profile)),fact("Collections",listText(profile.collections)),fact("Franchises",listText(profile.franchises)),fact(state.exportMode ? "Metadata release" : "Default release",state.exportMode ? response.export_preview?.release : game.default_release)].filter(Boolean).join("");
-      const aliases = state.exportMode ? "" : typeof catalogInlineField==="function"&&catalogInlineAvailable()?catalogInlineField("alternate_titles","Alternate titles",(profile.alternate_titles||[]).map(v=>v.title).join(", "),renderTitleVariants(profile.alternate_titles||[],[]))+catalogInlineField("aliases","Library aliases",listText(game.aliases)):renderTitleVariants(profile.alternate_titles || [], game.aliases || []);
+      const aliases = state.exportMode ? "" : typeof catalogInlineField==="function"&&catalogInlineAvailable()?catalogInlineField("alternate_titles","Alternate titles",(profile.alternate_titles||[]).map(v=>v.title).join(", "),renderTitleVariants(profile.alternate_titles||[],[],false))+catalogInlineField("aliases","Library aliases",listText(game.aliases)):renderTitleVariants(profile.alternate_titles || [], game.aliases || []);
       const overview=typeof catalogInlineField==="function"&&catalogInlineAvailable()?catalogInlineField("description","Description",profile.description,description):'<h3>Overview</h3>'+descriptionMeta+description;
       return '<section class="game-overview"><div class="profile-layout">' +
         '<div class="cover-panel">' + coverHTML + '</div>' +
@@ -1992,7 +1991,7 @@
       $("lightbox-title").textContent = "";
     }
 
-    function renderTitleVariants(variants, aliases) {
+    function renderTitleVariants(variants, aliases, heading=true) {
       const items = [];
       const seen = new Set();
       for (const variant of variants) {
@@ -2015,7 +2014,7 @@
       if (items.length === 0) {
         return "";
       }
-      return '<div class="section"><h3>Alternate Names</h3><div class="title-list">' + items.join("") + '</div></div>';
+      return '<div class="section">'+(heading?'<h3>Alternate Names</h3>':'')+'<div class="title-list">' + items.join("") + '</div></div>';
     }
 
     function renderReleases(releases) {
@@ -2174,7 +2173,8 @@
     }
 
     function ratingText(profile) {
-      const rating = profile.rating || "";
+      const rawRating = profile.rating || "";
+      const numeric = Number(rawRating), rating = rawRating !== "" && Number.isFinite(numeric) ? String(Math.round(numeric*100)/100) : rawRating;
       if (!rating) return "";
       return rating + (profile.rating_count ? " (" + profile.rating_count + ")" : "");
     }

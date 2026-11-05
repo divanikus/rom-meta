@@ -242,7 +242,7 @@ test('edit mode exposes every field and names the exact destination',()=>{
  for(const field of ['title','developer','publisher','release_date','genres','players'])assert.match(html,new RegExp('data-card-field="'+field+'"'));
  assert.match(b.run('catalogInlineBanner()'),/Card fields/);
  b.run('catalogInline.target={kind:"source",source:"launchbox",match:1}');
- assert.match(b.run('catalogInlineBanner()'),/Saved launchbox values/);
+ assert.match(b.run('catalogInlineBanner()'),/launchbox · editing its saved values/);
 });
 test('the toolbar can finish editing while a card is loading or failed to load',async()=>{
  for(const failed of [false,true]){
@@ -250,7 +250,7 @@ test('the toolbar can finish editing while a card is loading or failed to load',
   b.run('catalogUI.enabled=true;fetchJSON=()=>new Promise((resolve,reject)=>{state.resolveEdit=resolve;state.rejectEdit=reject})');
   const pending=b.run('catalogStartInline()');
   if(failed){b.run('state.rejectEdit(new Error("Unavailable"))');await pending;}
-  assert.equal((b.run('catalogInlineBanner()').match(/>Finish editing</g)||[]).length,1);
+  assert.equal((b.run('catalogInlineBanner()').match(/>Done</g)||[]).length,1);
   let finish;b.element('catalog-inline-cancel').addEventListener=(type,listener)=>{if(type==='click')finish=listener};
   b.run('catalogBindInline()');finish();
   assert.equal(b.run('catalogInline.mode'),false);
@@ -371,7 +371,7 @@ test('source navigation shows names once and keeps each record draft',()=>{
  assert.equal(b.run('catalogInline.target.match'),0);assert.equal(b.run('catalogTargetValues().title'),'Corrected');
  assert.equal(b.run('catalogInline.edits.size'),2);
  const html=b.run('catalogInlineBanner()');assert.equal((html.match(/data-editor-source="launchbox"/g)||[]).length,1);
- assert.match(html,/Record<select/);assert.doesNotMatch(html,/>Editing<select/);
+ assert.match(html,/Entry<select/);assert.doesNotMatch(html,/>Editing<select/);
 });
 test('form to raw to form saves against original revision with all drafts',async()=>{
  const requests=[];const card={revision:'draft',yaml:'title: Draft\n',fields:{title:'Draft'},records:[],registry:{sources:[]}};
@@ -412,4 +412,33 @@ test('batch fold candidates and cached covers stay scoped to their platform',asy
  b.run('catalogUI.selected=new Set([0,1]);catalogUI.plan={groups:[{...a,status:"ready"},{...z,status:"ready"}]};catalogRenderPlan()');
  assert.match(b.element('catalog-content').innerHTML,/data-plan-platform="Other"/);
  assert.match(b.element('catalog-content').innerHTML,/catalog-platform-label">Other/);
+});
+
+test('discard restores saved values while retaining the selected source',()=>{
+ const b=browser(async()=>json({}));
+ b.run('catalogInlineRender=()=>{};catalogInline.savedCard={fields:{title:"Orbit"},registry:{sources:[]},records:[{target:{kind:"source",source:"launchbox",match:0},fields:{title:"Provider"}}]};catalogInline.card=catalogInline.savedCard;catalogInline.target={kind:"source",source:"launchbox",match:0};catalogEditorChange("title","Draft");catalogInline.extra.add("publisher");catalogDiscardInline()');
+ assert.equal(b.run('catalogInline.target.source'),'launchbox');
+ assert.equal(b.run('catalogTargetValues().title'),'Provider');
+ assert.equal(b.run('catalogInline.dirty'),false);assert.equal(b.run('catalogInline.extra.size'),0);
+ b.run('catalogInline.target={kind:"source",source:"launchbox",match:99};catalogDiscardInline()');
+ assert.equal(b.run('catalogInline.target.match'),0);
+});
+
+test('opening an editor uses displayed source values without copying them to library overrides',async()=>{
+ const b=browser(async()=>json({}));
+ b.run('catalogUI.enabled=true;state.game={profile:{source:"launchbox",developer:"Studio"}};state.editorCard={fields:{title:"Orbit"},registry:{sources:[]},records:[{target:{kind:"source",source:"launchbox",match:0},fields:{title:"Orbit",developer:"Studio",descriptions:{en:"Text"}}}]};fetchJSON=async()=>state.editorCard;');
+ await b.run('catalogStartInline()');
+ assert.equal(b.run('catalogInline.target.source'),'launchbox');
+ assert.equal(b.run('catalogTargetValues().developer'),'Studio');
+ assert.equal(b.run('catalogInline.dirty'),false);
+ assert.equal(b.run('catalogInline.edits.size'),0);
+ assert.equal(b.run('catalogInitialTarget(state.editorCard,"description").source'),'launchbox');
+ b.run('state.editorCard.records.push({target:{kind:"source",source:"other",match:0},fields:{developer:"Different"}});state.game.profile.developer="Different"');
+ assert.equal(b.run('catalogInitialTarget(state.editorCard,"developer").source'),'other');
+ b.run('catalogEditorChange("developer","Changed")');
+ assert.equal(b.run('catalogEditorEdits()[0].target.source'),'launchbox');
+ b.run('catalogLeaveInline()');await b.run('catalogStartInline("title")');
+ assert.equal(b.run('catalogInline.target.kind'),'library');
+ b.run('catalogLeaveInline();state.editorCard.fields.developer="Override"');await b.run('catalogStartInline("developer")');
+ assert.equal(b.run('catalogInline.target.kind'),'library');
 });

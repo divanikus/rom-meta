@@ -24,11 +24,10 @@ rom-meta serve --data-root "<catalog>" --edit
 
 **Library / Operations / Export / Settings** separate browsing, background work,
 export-profile preparation and library defaults. Check platforms in the sidebar,
-then open **Commands for N selected**, or use **Commands / Ctrl+K** (Cmd+K on macOS).
-The palette offers Fetch metadata, Review duplicates and Statistics, with the
-selected scope shown beside each command. Without checked platforms it uses the
-currently browsed platform. Type to filter, use arrows and Enter, or click a
-command. Statistics requires one platform. The edit pencil lives on the card. **API** and
+then use the **Fetch metadata**, **Merge** or **Statistics** buttons above the
+platform list. The action strip stays in that column and shows the selection
+count. Without checked platforms it uses the currently browsed platform.
+Statistics requires one platform. The edit pencil lives on the card. **API** and
 **API docs** remain in the header across views and open in a separate tab.
 Settings edits library configuration, as described below. The sun/moon icon in the upper-right corner
 chooses a neutral dark or light palette, remembered by this browser.
@@ -66,8 +65,8 @@ cannot be cancelled/dismissed in this first workflow.
 
 ## Fetch metadata
 
-Check one or several platforms in the sidebar (or **Select all**), open
-**Commands**, and choose **Fetch metadata**. The wizard receives that selection
+Check one or several platforms in the sidebar (or **Select all**), then choose
+**Fetch metadata** in the same column. The wizard receives that selection
 and lets you adjust it before choosing sources, data types and parallel workers.
 **Fetch metadata** in Operations opens the same wizard.
 
@@ -125,7 +124,7 @@ LaunchBox. The CLI remains available through the same exporter.
    browser**, or upload a YAML profile (up to 1 MiB). **View effective profile**
    shows resolved title/language/source/media rules and the complete YAML.
    **Edit browser profile** opens the existing catalog
-   preview and source/language/media controls; **Continue to export** returns to
+   preview and source/language/media controls; **Use this profile →** returns to
    setup using those settings. YAML profiles retain the ordinary CLI validation.
 4. **Save destination** stores the paths and selected profile policy in
    `config/export-destinations.yaml`. Saved entries survive server restarts.
@@ -196,24 +195,29 @@ fields the current consumers do not use.
 ## Correct a card
 
 In **Library**, choose **Edit card** (or a pencil beside a value). The card stays
-in place and all fields of the selected record become inputs together.
+in place: its cover and facts stay on the left, with title and description on the
+right. Edit card initially selects a saved source contributing to the displayed
+card, or the last chosen manual variant. A field pencil selects an explicit card
+override when present, otherwise a contributing source. Opening the editor never
+copies resolved values into overrides.
+
 **Source tabs** identify the destination: Card fields, a provider, or your named
-variant. After choosing a source, **Record** appears only when it has several
-records or scopes; unrelated sources are not mixed into that list. Common metadata has ordinary controls; **Other source
-fields** exposes saved IDs and additional values, with JSON inputs for structured
-objects. You can add or remove source fields without replacing the whole record.
+variant. **Entry** appears only when that source has several records or scopes.
+A short caption identifies what you are editing. Existing description languages
+have text areas; **Add a translation** adds another. **Other fields** keeps IDs,
+service details and structured values out of the common form until needed.
+You can add or remove source fields without replacing the whole record.
 
 Switching records retains their drafts. **Save changes** commits all edited
-records of this card in one atomic write; **Discard** discards them.
-The compact editor toolbar contains the only **Finish editing** action; browsing
-and comparison controls return when editing ends. **Help** expands guidance for
-the selected source or Raw mode. Leaving with unsaved changes asks before
+records of this card in one atomic write; **Discard** restores saved values while
+keeping the current valid source selected. **Done** ends editing; browsing and
+comparison controls then return. Leaving with unsaved changes asks before
 discarding them. Invalid or stale saves retain the drafts. Drafts are not saved
 across a page/server restart; this differs from server-owned import operations.
 
 ### Named manual variants
 
-Choose **+** (**Add named variant**) beside the source tabs, enter your own name,
+Choose **+ My variant** beside the source tabs, enter your own name,
 then contribute the fields you want to curate. You can create several variants and reuse each across cards.
 Creating a variant saves its name immediately; **Save changes** saves its card
 fields. A variant stores only contributed values, never an implicit copy of the
@@ -282,7 +286,11 @@ choices. Prepared derivative titles retain their own identity; ordinary version
 disambiguation still adds region/revision/language where needed. LaunchBox uses
 the selected primary version's source title for its parent game.
 
-**Preview export** shows the saved projection. Changing a source title never
+Open **Export → Edit browser profile** to preview the saved projection. The
+compact preview bar groups frontend, language and media choices; **Advanced**
+contains source priorities. **Use this profile →** returns to export setup with
+those choices. The card editor has no separate export-preview action.
+Changing a source title never
 renames release keys, ROMs, fingerprints, launch paths or native game/version IDs.
 
 ### Edit Raw YAML
@@ -301,13 +309,13 @@ A renamed/removed release must not leave a registered fingerprint dangling.
 A newly added `manual.*` source needs an existing named variant in the registry.
 Invalid or stale input stays in the editor for correction; it is never written.
 
-Review duplicates and Statistics are in the **Commands** palette.
+**Merge** and **Statistics** are in the platform action strip.
 **Compare (N)** appears beside card comparison controls after adding cards,
 and becomes available with at least two selected cards.
 
 ## Let fold prepare the work
 
-Select one or several platforms and choose **Review duplicates** in Commands.
+Select one or several platforms and choose **Merge** to review duplicates.
 The server runs the existing fold rules and proposes groups, primary cards and
 merged results automatically. Multiple platforms share one review and final Apply;
 each group shows its platform and never merges cards across platforms.

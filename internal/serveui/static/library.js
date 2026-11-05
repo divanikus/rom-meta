@@ -17,6 +17,7 @@ function librarySyncNavigation(){
  if(typeof libraryUI==="undefined")return;
  const view=state.view==="browse"?(state.exportMode?"export":"library"):state.view;
  libraryUI.view=view;
+ $("app")?.classList.toggle("export-preview",state.exportMode&&state.view==="browse");
  $("top-status")?.classList.toggle("hidden",state.view!=="browse");
  for(const [id,target] of [["browse-tab","library"],["operations-tab","operations"],["export-mode","export"],["settings-tab","settings"]]){
   $(id)?.classList.toggle("active",view===target);$(id)?.setAttribute("aria-current",view===target?"page":"false");
@@ -292,22 +293,27 @@ $("settings-tab").addEventListener("click",()=>libraryNavigate("settings"));
 $("library-import").addEventListener("click",libraryOpenImport);
 document.querySelectorAll("[data-import-new]").forEach(b=>b.addEventListener("click",libraryOpenImport));
 
-/* Shared platform selection is independent of the currently browsed card. */
+/* Platform actions stay beside the selection they affect. */
 function librarySelectedPlatforms(){
  const available=new Set((state.platforms||[]).map(p=>p.platform));
  state.platformSelection=new Set([...(state.platformSelection||[])].filter(p=>available.has(p)));
  return [...state.platformSelection];
 }
+function libraryPlatformScope(){const selected=librarySelectedPlatforms();return selected.length?selected:state.platform?[state.platform]:[];}
 function librarySyncPlatformSelection(){
- const selected=librarySelectedPlatforms(),enabled=!!catalogUI.enabled,all=state.platforms||[];
+ const selected=librarySelectedPlatforms(),enabled=!!catalogUI.enabled,all=state.platforms||[],scope=libraryPlatformScope();
  document.querySelectorAll("[data-platform-select]").forEach(input=>{
   input.checked=state.platformSelection.has(input.dataset.platformSelect);
-  input.parentElement.classList.toggle("hidden",!enabled);
+  input.parentElement.classList.toggle("hidden",!enabled||state.exportMode);
  });
- $("platform-selection-toolbar")?.classList.toggle("hidden",!enabled||!all.length);
+ $("platform-selection-toolbar")?.classList.toggle("hidden",!all.length||state.exportMode);
+ $("platform-selection-options")?.classList.toggle("hidden",!enabled);
  const select=$("platform-select-all");if(select){select.checked=all.length>0&&selected.length===all.length;select.indeterminate=selected.length>0&&selected.length<all.length;}
- const count=$("platform-selected-count");if(count)count.textContent=selected.length+" selected";
- const action=$("platform-selection-commands");if(action){action.disabled=!selected.length;action.textContent=selected.length?"Commands for "+selected.length+" selected":"Select platforms";}
+ const count=$("platform-selected-count");if(count)count.textContent=selected.length?selected.length+" selected":"Current platform";
+ for(const action of libraryPlatformActions(scope)){
+  const button=$("platform-action-"+action.id);if(!button)continue;
+  button.disabled=!action.enabled;button.title=action.detail;
+ }
 }
 $("platform-list")?.addEventListener("change",event=>{
  const input=event.target.closest?.("[data-platform-select]");if(!input)return;
@@ -317,51 +323,17 @@ $("platform-list")?.addEventListener("change",event=>{
 $("platform-select-all")?.addEventListener("change",event=>{
  state.platformSelection=new Set(event.target.checked?state.platforms.map(p=>p.platform):[]);librarySyncPlatformSelection();
 });
-const commandUI={scope:[],index:0,visible:[]};
-function libraryCommands(scope){
+function libraryPlatformActions(scope){
  const count=scope.length,description=count===1?scope[0]:count+" selected platforms",edit=!!catalogUI.enabled;
  return [
-  {id:"fetch",label:"Fetch metadata",search:"fetch download enrich metadata artwork video",detail:count?description:"Select platforms in the library",enabled:edit&&count>0,run:()=>enrichmentOpen(scope)},
-  {id:"fold",label:"Review duplicates",search:"merge fold duplicates compare",detail:count?description+" · one review and final batch":"Select platforms in the library",enabled:edit&&count>0,run:()=>catalogBuildPlan(false,false,scope)},
-  {id:"stats",label:"Statistics",search:"statistics stats coverage",detail:count===1?description:"Choose one platform for statistics",enabled:count===1,run:async()=>{if(state.platform!==scope[0])await selectPlatform(scope[0]);setView("stats");}},
-  {id:"import",label:"Import DAT",search:"import dat zip add platform",detail:"Add platforms to this library",enabled:edit,run:libraryOpenImport},
-  {id:"export",label:"Export",search:"export frontend es-de launchbox",detail:"Choose ROMs, destination and profile",enabled:true,run:()=>libraryNavigate("export")},
-  {id:"operations",label:"Operations",search:"operations queue progress",detail:"Return to running and queued tasks",enabled:true,run:()=>libraryNavigate("operations")},
-  {id:"settings",label:"Settings",search:"settings priorities aliases sources",detail:"Library configuration",enabled:true,run:()=>libraryNavigate("settings")}
+  {id:"fetch",detail:edit?"Fetch metadata · "+description:"Read-only server",enabled:edit&&count>0,run:()=>enrichmentOpen(scope)},
+  {id:"fold",detail:edit?"Review duplicates · "+description:"Read-only server",enabled:edit&&count>0,run:()=>catalogBuildPlan(false,false,scope)},
+  {id:"stats",detail:count===1?"Statistics · "+description:"Choose one platform for statistics",enabled:count===1,run:async()=>{if(!catalogLeaveInline())return;if(state.platform!==scope[0])await selectPlatform(scope[0]);setView("stats");}}
  ];
 }
-function commandsOpen(){
- if($("catalog-dialog")?.open)return;
- const selected=librarySelectedPlatforms();commandUI.scope=selected.length?selected:state.platform?[state.platform]:[];
- commandUI.index=0;$("command-search").value="";
- $("command-scope").textContent=selected.length?selected.length+" selected platforms":state.platform?"Current platform: "+state.platform:"Library commands";
- commandsRender();
- if(!$("command-palette").open)$("command-palette").showModal();
- $("command-search").focus();
-}
-function commandsRender(){
- const query=$("command-search").value.trim().toLowerCase();
- commandUI.visible=libraryCommands(commandUI.scope).filter(c=>!query||query.split(/\s+/).every(word=>(c.search+" "+c.label).toLowerCase().includes(word)));
- commandUI.index=Math.min(commandUI.index,Math.max(0,commandUI.visible.length-1));
- $("command-results").innerHTML=commandUI.visible.length?commandUI.visible.map((c,i)=>'<button type="button" class="command-row'+(i===commandUI.index?' active':'')+'" data-command="'+i+'" '+(!c.enabled?'disabled':'')+'><span>'+escapeHTML(c.label)+'</span><small>'+escapeHTML(c.detail)+'</small></button>').join(""):'<p class="secondary">No matching commands.</p>';
-}
-async function commandsRun(index){
- const c=commandUI.visible[index];if(!c?.enabled)return;
- $("command-palette").close();await c.run();
-}
-$("commands-open")?.addEventListener("click",commandsOpen);
-$("platform-selection-commands")?.addEventListener("click",commandsOpen);
-$("command-search")?.addEventListener("input",()=>{commandUI.index=0;commandsRender();});
-$("command-search")?.addEventListener("keydown",event=>{
- if(event.key==="ArrowDown"||event.key==="ArrowUp"){
-  event.preventDefault();const n=commandUI.visible.length;if(!n)return;
-  commandUI.index=(commandUI.index+(event.key==="ArrowDown"?1:-1)+n)%n;commandsRender();
-  $("command-results").querySelector?.(".command-row.active")?.scrollIntoView?.({block:"nearest"});
- }else if(event.key==="Enter"){event.preventDefault();commandsRun(commandUI.index);}
+for(const id of ["fetch","fold","stats"])$("platform-action-"+id)?.addEventListener("click",async()=>{
+ const action=libraryPlatformActions(libraryPlatformScope()).find(a=>a.id===id);if(action?.enabled)await action.run();
 });
-$("command-results")?.addEventListener("click",event=>{const b=event.target.closest?.("[data-command]");if(b)commandsRun(Number(b.dataset.command));});
-$("command-close")?.addEventListener("click",()=>$("command-palette").close());
-document.addEventListener("keydown",event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==="k"){event.preventDefault();commandsOpen();}});
 
 function libraryTheme(theme){
  document.documentElement.dataset.theme=theme;
