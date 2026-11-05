@@ -916,6 +916,7 @@
     .export-xml { white-space:pre; overflow:auto; max-height:65vh; font-size:12px; }
   </style>
 <link rel="stylesheet" href="/catalog-edit.css">
+<script src="/catalog-register.js" defer></script>
 <script src="/catalog-edit.js" defer></script>
 <link rel="stylesheet" href="/library.css">
 <script src="/enrichment.js" defer></script>
@@ -1811,7 +1812,7 @@
       state.detailTab = tab;
       $("detail-body").scrollTop = 0;
       renderDetails();
-      if (tab === "files" && !state.fingerprints && !state.fingerprintLoading) loadFingerprints();
+      if (tab === "files" && !(typeof catalogEditorActive==="function"&&catalogEditorActive()) && !state.fingerprints && !state.fingerprintLoading) loadFingerprints();
     }
 
     function renderDetails() {
@@ -1839,7 +1840,7 @@
       const sections = [["preview","Overview"],["files","Releases & fingerprints"],["raw","Raw"]];
       const tabs = '<nav class="card-tabs" aria-label="Card sections">' + sections.map(([id,label]) => '<button type="button" class="tab-button' + (state.detailTab === id ? ' active' : '') + '" data-detail-tab="' + id + '" aria-pressed="' + (state.detailTab === id) + '">' + escapeHTML(label) + '</button>').join("") + '</nav>';
       let content;
-      if (state.detailTab === "files") content = renderFingerprintSection(stored.game);
+      if (state.detailTab === "files") content = typeof catalogEditorActive==="function" && catalogEditorActive() ? catalogRenderRegister() : renderFingerprintSection(stored.game);
       else if (state.exportMode && !ready) content = '<div class="' + (state.detailPreviewError ? 'error' : 'loading') + '">' + escapeHTML(state.detailPreviewError || 'Selecting export metadata…') + '</div>';
       else if (state.detailTab === "raw") {
         content = !state.exportMode && typeof catalogEditorActive==="function" && catalogEditorActive() ? catalogRenderRaw() : state.exportMode ? renderExportRaw() + renderExportProvenance(response) : '<section class="section"><h3>Stored catalog YAML</h3><pre class="export-xml">' + escapeHTML(stored.catalog_yaml || '') + '</pre></section>';

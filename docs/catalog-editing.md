@@ -221,7 +221,7 @@ service details and structured values out of the common form until needed.
 You can add or remove source fields without replacing the whole record.
 
 Switching records retains their drafts. **Save changes** commits all edited
-records of this card in one atomic write; **Discard** restores saved values while
+records of this card together; **Discard** restores saved values while
 keeping the current valid source selected. **Done** ends editing; browsing and
 comparison controls then return. Leaving with unsaved changes asks before
 discarding them. Invalid or stale saves retain the drafts. Drafts are not saved
@@ -310,7 +310,7 @@ renames release keys, ROMs, fingerprints, launch paths or native game/version ID
 In edit mode, **Raw** exposes the complete `game.yaml` as an editable text area.
 Form changes are included when switching to Raw; returning to Overview validates
 the YAML and restores source forms from that draft. **Validate YAML** changes no
-catalog data. **Save changes** always validates again before one atomic write.
+catalog data. **Save changes** always validates again before writing.
 
 Validation checks one mapping document, duplicate keys, known field types,
 default/source release references, derivative relationships and existing
@@ -328,10 +328,40 @@ side-by-side merge review. The count includes that card, without duplicates.
 This compares game cards from the same platform, not ROM bytes or export output;
 opening it does not merge anything.
 
-**Releases & fingerprints** is a read-only register of releases, files and hashes.
-Raw can add or edit release definitions, and remove releases only when source,
-default-release and fingerprint references remain valid. The browser does not
-write `fingerprints.yaml`; register new fingerprints through supported imports.
+### Edit releases and fingerprints
+
+Enter **Edit card**, then open **Releases & fingerprints**. The source chooser is
+replaced by release/file forms. You can also enter editing while already on this tab.
+
+- **Add release** creates a draft definition. Edit its name, title, regions,
+  languages and date; choose the card's default release separately.
+- Renaming updates this card's default, source scopes, variant bases and fingerprint
+  references. Original DAT/provider provenance and media paths remain unchanged.
+- **Add fingerprint** records a filename, size in bytes, a release or existing
+  variant, and one or more CRC32/MD5/SHA1/SHA256 hashes. Existing fingerprints can
+  be edited or removed. This registers an identity; it does not hash or alter ROMs.
+- **Remove** marks a record for deletion; **Undo removal** restores it.
+  For a referenced release, choose a surviving release in **Reassign its references
+  to**, or remove/reassign the dependent records yourself. Source evidence is
+  retained when its scope moves; release fields are not copied into the replacement.
+- **Validate changes** checks the complete draft without writing. **Save changes**
+  validates again and saves all card/source/release/fingerprint changes. **Discard**
+  restores both documents. File search and paging retain edits to other records.
+
+Validation rejects duplicate release names, broken source/default/variant/file
+references, invalid dates, fractional/negative sizes and malformed hashes.
+Changed/new identities require a filename, size and at least one hash; explicitly
+undumped records may omit hashes. Existing legacy records remain unchanged unless
+edited. Unknown fields, source provenance and YAML comments are retained.
+Forms do not create derived variants; use the existing variant workflow or Raw
+for those definitions.
+
+Both document revisions are checked, including a missing fingerprint file.
+Packed catalogs replace their shared metadata ZIP atomically. Loose catalogs stage
+both files before replacement and restore the originals after ordinary write errors;
+they do not provide a two-file transaction across a process crash or power loss.
+No persistent backup or snapshot is created. Save refreshes recognition indexes,
+browser summaries and the visible fingerprint list.
 
 ## Let fold prepare the work
 

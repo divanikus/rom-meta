@@ -77,6 +77,8 @@ The card has three tabs in both Library and Export preview:
   sizes, formats, payload kinds, CRC32, MD5, SHA-1 and SHA-256 when available.
   Expand a file to see complete selectable hashes and derivative IDs. Filter by
   exact release/variant or search filenames/hashes; Show more loads another page.
+  With **Edit card**, this tab provides release/fingerprint forms with Add, Remove,
+  reference reassignment and validation before Save; see [editing](catalog-editing.md#edit-releases-and-fingerprints).
 - **Raw**: stored catalog YAML in Library; native XML template, media destinations
   and selected-field provenance in Export preview.
 

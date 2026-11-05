@@ -155,3 +155,20 @@
 .catalog-record-field .catalog-reset{position:absolute;right:0;top:0;line-height:1;padding:0 4px;margin:0;border:0;background:transparent;color:var(--muted);font-size:16px;cursor:pointer}.catalog-record-field label>span{padding-right:18px}.catalog-record-field small{font-size:10px}.catalog-description-fields{margin-top:0;gap:16px}.catalog-description-fields textarea{font-size:14px}.catalog-translation-tools{font-size:12px;color:var(--muted)}.catalog-translation-tools summary{cursor:pointer}
 .catalog-record-extra{margin-top:6px;border-top:1px solid var(--line);padding-top:12px;font-size:12px}.catalog-record-extra summary{margin:0;cursor:pointer}.catalog-record-extra[open] summary{margin-bottom:12px}.catalog-record-extra .catalog-record-grid{gap:16px}.catalog-record-extra>.catalog-record-field{margin-top:12px}
 @container card (max-width:560px){.catalog-editor-top{align-items:flex-start}.catalog-editor-top .catalog-inline-actions{flex-wrap:wrap;justify-content:flex-end}.catalog-record-grid{grid-template-columns:1fr}}
+
+/* Release and fingerprint drafts keep file identities separate from source metadata. */
+.register-editor{display:grid;gap:28px;max-width:1300px}
+.register-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px}
+.register-heading h3,.register-heading p{margin:0}.register-heading h3 span{color:var(--muted);font-size:13px;font-weight:400}
+.register-heading strong{overflow-wrap:anywhere;min-width:0}.register-heading button{flex-shrink:0}
+.register-editor label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted)}
+.register-editor input,.register-editor select{width:100%;min-width:0;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:4px;padding:9px 10px;font:inherit;font-size:13px}
+.register-editor input:focus,.register-editor select:focus{outline:2px solid var(--accent);outline-offset:1px}
+.register-default{max-width:520px;margin-bottom:16px}.register-search{flex:1;max-width:520px}
+.register-release-list,.register-fingerprint-list{display:grid;gap:12px}
+.register-record{min-width:0;margin:0;padding:16px;background:var(--inset,var(--bg));border:1px solid var(--line);border-radius:5px}
+.register-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 20px}
+.register-record .register-delete{color:var(--bad,var(--warn))}
+.register-hint{font-size:11px;margin:12px 0 0}.register-removal{color:var(--warn);font-size:13px}
+.register-pages{justify-content:center;margin-top:16px}
+@container card (max-width:600px){.register-fields{grid-template-columns:1fr}.register-heading{flex-wrap:wrap}}

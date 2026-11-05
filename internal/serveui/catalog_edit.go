@@ -22,12 +22,13 @@ import (
 )
 
 type editRequest struct {
-	Platform string             `json:"platform"`
-	Game     string             `json:"game"`
-	Revision string             `json:"revision"`
-	Fields   catalogedit.Patch  `json:"fields,omitempty"`
-	Target   catalogedit.Target `json:"target,omitempty"`
-	Edits    []catalogedit.Edit `json:"edits,omitempty"`
+	Platform string                    `json:"platform"`
+	Game     string                    `json:"game"`
+	Revision string                    `json:"revision"`
+	Fields   catalogedit.Patch         `json:"fields,omitempty"`
+	Target   catalogedit.Target        `json:"target,omitempty"`
+	Edits    []catalogedit.Edit        `json:"edits,omitempty"`
+	Register *catalogedit.DocumentEdit `json:"register,omitempty"`
 }
 type editorCard struct {
 	catalogedit.Card
@@ -37,6 +38,7 @@ type editorCard struct {
 	Releases      []string                   `json:"releases"`
 	Registry      curation.Registry          `json:"registry"`
 	EditorError   string                     `json:"editor_error,omitempty"`
+	Register      *catalogedit.Register      `json:"register,omitempty"`
 }
 type foldPlanRequest struct {
 	Platforms []string `json:"platforms,omitempty"`
@@ -143,7 +145,16 @@ func (s *server) catalogEdit(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 400, err)
 			return
 		}
-		writeJSON(w, s.editorCard(card, platform))
+		result := s.editorCard(card, platform)
+		if r.URL.Query().Get("register") == "1" {
+			register, e := catalogedit.ReadRegister(s.root, platform, r.URL.Query().Get("game"), []byte(card.YAML))
+			if e != nil {
+				writeError(w, 400, e)
+				return
+			}
+			result.Register = &register
+		}
+		writeJSON(w, result)
 		return
 	}
 	var request editRequest
@@ -167,7 +178,16 @@ func (s *server) catalogEdit(w http.ResponseWriter, r *http.Request) {
 	if edits == nil {
 		edits = []catalogedit.Edit{{Target: request.Target, Fields: request.Fields}}
 	}
-	card, err := catalogedit.SaveEdits(s.root, request.Platform, request.Game, request.Revision, edits)
+	var card catalogedit.Card
+	var register *catalogedit.Register
+	if request.Register != nil {
+		var documents catalogedit.PreparedDocuments
+		documents, err = catalogedit.SaveDocuments(s.root, request.Platform, request.Game, request.Revision, edits, *request.Register)
+		card = documents.Card
+		register = &documents.Register
+	} else {
+		card, err = catalogedit.SaveEdits(s.root, request.Platform, request.Game, request.Revision, edits)
+	}
 	indexErr := batch.Finish()
 	if err != nil {
 		writeError(w, 409, err)
@@ -176,7 +196,9 @@ func (s *server) catalogEdit(w http.ResponseWriter, r *http.Request) {
 	s.summaryMu.Lock()
 	s.summaries = nil
 	s.summaryMu.Unlock()
-	result := map[string]any{"card": s.editorCard(card, request.Platform), "saved": true}
+	editor := s.editorCard(card, request.Platform)
+	editor.Register = register
+	result := map[string]any{"card": editor, "saved": true}
 	if indexErr != nil {
 		result["warning"] = indexErr.Error()
 	}
@@ -200,6 +222,17 @@ func (s *server) catalogEditPreview(w http.ResponseWriter, r *http.Request) {
 	edits := request.Edits
 	if edits == nil {
 		edits = []catalogedit.Edit{{Target: request.Target, Fields: request.Fields}}
+	}
+	if request.Register != nil {
+		documents, e := catalogedit.PrepareDocuments(s.root, request.Platform, request.Game, request.Revision, edits, *request.Register)
+		if e != nil {
+			writeError(w, 400, e)
+			return
+		}
+		result := s.editorCard(documents.Card, request.Platform)
+		result.Register = &documents.Register
+		writeJSON(w, result)
+		return
 	}
 	data, err := catalogedit.ApplyEdits([]byte(card.YAML), edits)
 	if err != nil {

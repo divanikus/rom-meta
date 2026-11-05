@@ -9,6 +9,7 @@ function browser(fetch){
  const context=vm.createContext({fetch,AbortController,URLSearchParams,TextDecoder,console,MutationObserver:class{observe(){}},window:{confirm:()=>true},$:element,
  document:{querySelectorAll:()=>[],createTextNode:s=>s},escapeHTML:s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;'),escapeAttr:s=>String(s),
  state:{platform:'Console',games:[],game:{},selectedFolder:'One',view:'browse'},renderDetails(){},sourceLabel:s=>s,fact:(l,v)=>l+":"+v,renderGames(){},renderPlatforms(){},selectGame:async()=>{},selectPlatform(){},fetchJSON:async()=>({}),bestCover:()=>null,renderReleases:()=>'',renderSourceSection:()=>'',renderMediaSection:()=>''});
+ vm.runInContext(readFileSync(require("node:path").join(__dirname,"static/catalog-register.js"),"utf8"),context);
  vm.runInContext(script,context);return{run:code=>vm.runInContext(code,context),element};
 }
 const json=value=>({ok:true,json:async()=>value});
@@ -488,4 +489,65 @@ test('closing a comparison restores its entry action for the same selection',asy
  assert.equal(b.element('catalog-compare').disabled,true);
  await b.run('catalogClose()');
  assert.equal(b.element('catalog-compare').disabled,false);assert.equal(b.element('catalog-compare').textContent,'Compare for merge (2)');
+});
+
+test('release rename updates visible fingerprint/default references and all changes remain a draft',()=>{
+ const b=browser(async()=>json({}));
+ b.run('catalogInline.mode=true;catalogInline.platform="Console";catalogInline.folder="One";catalogRegisterInstall({revision:"fp0",releases:[{name:"USA",fields:{title:"Orbit",custom:"keep"}}],fingerprints:[{index:0,fields:{release:"USA",file:{name:"orbit.bin",size:4,crc32:"1234abcd",custom:"keep"}}}],default_release:"USA"},true);catalogRegisterChange("release",0,"name","Europe");');
+ const patch=JSON.parse(b.run('JSON.stringify(catalogRegisterPayload())'));
+ assert.equal(patch.register.revision,'fp0');
+ assert.equal(patch.register.patch.releases[0].original,'USA');
+ assert.equal(patch.register.patch.fingerprints[0].fields.release,'Europe');
+ assert.equal(patch.register.patch.default_release,'Europe');
+ assert.equal(b.run('catalogRegister.fingerprints[0].fields.file.custom'),'keep');
+ assert.equal(b.run('catalogInline.dirty'),true);
+ b.run('catalogInline.card={fields:{},records:[],registry:{sources:[]}};catalogDiscardInline()');
+ assert.equal(b.run('catalogRegister.releases[0].name'),'USA');
+ assert.equal(b.run('catalogInline.dirty'),false);
+});
+test('removal is reversible and unsaved new records leave no deletion operation',()=>{
+ const b=browser(async()=>json({}));
+ b.run('catalogRegisterInstall({revision:"fp0",releases:[],fingerprints:[]},true);catalogRegisterAdd("release");catalogRegisterChange("release",0,"name","USA");catalogRegisterAdd("fingerprint");catalogRegisterDelete("fingerprint",0);');
+ assert.equal(b.run('catalogRegisterPatch().fingerprints'),undefined);
+ b.run('catalogRegisterDelete("fingerprint",0)');
+ assert.equal(b.run('catalogRegisterPatch().fingerprints[0].index'),-1);
+});
+test('register materialization carries fingerprint draft but keeps both original revision guards',async()=>{
+ let request;
+ const b=browser(async(path,options)=>{request=JSON.parse(options.body);return json({revision:"gameDraft",yaml:"title: Orbit\n",fields:{title:"Orbit"},records:[],register:{revision:"fpDraft",yaml:"items: []\n",releases:[{name:"Europe",fields:{}}],fingerprints:[],default_release:"Europe"}})});
+ b.run('catalogInline.card={revision:"game0"};catalogInline.baseRevision="game0";catalogRegisterInstall({revision:"fp0",releases:[{name:"USA",fields:{}}],fingerprints:[],default_release:"USA"},true);catalogRegisterChange("release",0,"name","Europe")');
+ assert.equal(await b.run('catalogMaterializeDraft()'),true);
+ assert.equal(request.register.revision,'fp0');
+ assert.equal(b.run('catalogInline.baseRevision'),'game0');
+ assert.equal(b.run('catalogRegisterPayload().register.revision'),'fp0');
+ assert.equal(b.run('catalogRegisterPayload().register.yaml'),'items: []\n');
+ b.run('catalogRegisterChange("release",0,"name","World")');
+ assert.equal(b.run('catalogRegisterPatch().releases[0].original'),'Europe');
+});
+test('register paging keeps unrendered drafts and rejects invalid file sizes',()=>{
+ const b=browser(async()=>json({}));
+ b.run('catalogRegisterInstall({revision:"fp",releases:[],fingerprints:Array.from({length:42},(_,index)=>({index,fields:{file:{name:"File "+index,size:1,crc32:"12345678"}}}))},true);catalogRegisterChange("fingerprint",41,"file.name","Last edited");catalogRegister.page=2;');
+ assert.match(b.run('catalogRenderRegister()'),/Last edited/);
+ assert.doesNotMatch(b.run('catalogRenderRegister()'),/>File 0</);
+ b.run('catalogRegisterChange("fingerprint",41,"file.size","1.5")');
+ assert.equal(b.run('catalogInline.invalid.size'),1);
+ b.run('catalogRegisterDelete("fingerprint",41)');
+ assert.equal(b.run('catalogInline.invalid.size'),0);
+});
+test('release editing has its own compact context instead of provider tabs',()=>{
+ const b=browser(async()=>json({}));
+ b.run('catalogUI.enabled=true;catalogInline.mode=true;catalogInline.platform="Console";catalogInline.folder="One";state.detailTab="files";catalogInline.card={fields:{},records:[],registry:{sources:[]}}');
+ const html=b.run('catalogInlineBanner()');
+ assert.match(html,/Releases &amp; fingerprints|Releases & fingerprints/);
+ assert.doesNotMatch(html,/catalog-source-tabs/);
+});
+
+
+test('saving release changes updates the game-list count and default immediately',async()=>{
+ const card={revision:"next",yaml:"title: Orbit",fields:{title:"Orbit"},profile:{},records:[],register:{revision:"fpNext",yaml:"items: []",releases:[{name:"World",fields:{}}],fingerprints:[],default_release:"World"}};
+ const b=browser(async()=>json({card,saved:true}));
+ b.run('catalogUI.enabled=true;Object.assign(catalogInline,{mode:true,dirty:true,platform:"Console",folder:"One",card:{revision:"old"},baseRevision:"old"});state.games=[{folder:"One",title:"Orbit",release_count:2,default_release:"USA"}];fetchJSON=async()=>({})');
+ await b.run('catalogSaveInline()');
+ assert.equal(b.run('state.games[0].release_count'),1);
+ assert.equal(b.run('state.games[0].default_release'),'World');
 });

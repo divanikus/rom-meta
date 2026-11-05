@@ -153,14 +153,14 @@ func validateRawNode(n *yaml.Node, path string, depth int) error {
 	return nil
 }
 
-// CheckRawReferences checks other files only for whole-card edits. Form edits
-// cannot rename release/variant keys and retain their existing behavior.
-func CheckRawReferences(root, platform, folder string, edits []Edit, data []byte) error {
+// CheckRawReferences validates whole-card edits and optional paired-document
+// drafts. Ordinary source-field edits retain their existing behavior.
+func CheckRawReferences(root, platform, folder string, edits []Edit, data []byte, suppliedFingerprints ...[]byte) error {
 	raw := false
 	for _, e := range edits {
 		raw = raw || e.Target.Kind == "raw"
 	}
-	if !raw {
+	if !raw && len(suppliedFingerprints) == 0 {
 		return nil
 	}
 	path, err := GamePath(root, platform, folder)
@@ -194,12 +194,20 @@ func CheckRawReferences(root, platform, folder string, edits []Edit, data []byte
 	}); err != nil {
 		return err
 	}
-	fp, err := catalogfs.ReadFile(filepath.Join(path, "fingerprints.yaml"))
+	var fp []byte
+	if len(suppliedFingerprints) > 0 {
+		fp = suppliedFingerprints[0]
+	} else {
+		fp, err = catalogfs.ReadFile(filepath.Join(path, "fingerprints.yaml"))
+	}
 	if os.IsNotExist(err) {
 		return nil
 	}
 	if err != nil {
 		return err
+	}
+	if len(fp) == 0 {
+		return nil
 	}
 	fingerprints, err := catalogyaml.Parse(fp)
 	if err != nil {

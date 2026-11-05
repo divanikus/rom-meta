@@ -40,6 +40,9 @@ var indexHTML string
 //go:embed static/catalog-edit.js
 var catalogEditJS string
 
+//go:embed static/catalog-register.js
+var catalogRegisterJS string
+
 //go:embed static/catalog-edit.css
 var catalogEditCSS string
 
@@ -81,6 +84,14 @@ func HandlerWithEditing(dataRoot string, allowEdit bool) (http.Handler, error) {
 		}
 		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 		_, _ = w.Write([]byte(catalogEditJS))
+	})
+	mux.HandleFunc("/catalog-register.js", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		_, _ = w.Write([]byte(catalogRegisterJS))
 	})
 	mux.HandleFunc("/catalog-edit.css", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

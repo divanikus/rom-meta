@@ -49,7 +49,7 @@ func browserOpenAPI() any {
 		}
 
 		paths["/api/catalog"] = httpdocs.Schema{"get": op("Catalog editing capability", "Reports whether serve --edit enables catalog actions; no writes.", nil, httpdocs.Schema{"type": "object", "additionalProperties": true})}
-		editGet := op("Read editable card and source records", "Returns library fields, exact source record targets, named-source registry, current SHA256 revision, preserved YAML and browser profile.", []httpdocs.Schema{platform, httpdocs.Query("game", "Exact game folder.", true, str)}, s.Ref(editorCard{}))
+		editGet := op("Read editable card and source records", "Returns library fields, exact source record targets, named-source registry, current SHA256 revision, preserved YAML and browser profile.", []httpdocs.Schema{platform, httpdocs.Query("game", "Exact game folder.", true, str), httpdocs.Query("register", "Use 1 to include editable releases and fingerprints with their own revision.", false, str)}, s.Ref(editorCard{}))
 		addWrite := func(path, summary, description string, request any) {
 			action := op(summary, description, nil, httpdocs.Schema{"type": "object", "additionalProperties": true})
 			action["operationId"] = "browser" + strings.NewReplacer("/", "_", "-", "_").Replace(path) + "_post"
@@ -87,7 +87,7 @@ func browserOpenAPI() any {
 			delete(responses, "200")
 			responses["202"] = httpdocs.Response("Accepted operation snapshot; poll GET /api/operations.", s.Ref(libraryOperation{}))
 		}
-		addWrite("/api/catalog/edit", "Save card and source fields", "Requires serve --edit, JSON and same-origin requests. Revision covers the entire stored card. Send edits with exact targets and changed fields for one atomic save; legacy fields/target is a single edit. Null removes a field. New manual targets require a registered source ID and optional existing release scope. Unsubmitted values are preserved. saved=true remains success if index refresh reports a warning.", editRequest{})
+		addWrite("/api/catalog/edit", "Save card and source fields", "Requires serve --edit, JSON and same-origin requests. Revision covers game.yaml. Optional register requires its own fingerprint revision, release/fingerprint patches and optional materialized YAML. Both documents are validated before writing; packed files share one atomic replacement, loose files roll back ordinary write errors. Send edits with exact targets and changed fields; legacy fields/target is a single edit. Null removes a field. New manual targets require a registered source ID and optional existing release scope. Unsubmitted values are preserved. saved=true remains success if index refresh reports a warning.", editRequest{})
 		paths["/api/catalog/edit"].(httpdocs.Schema)["get"] = editGet
 		addWrite("/api/catalog/edit-preview", "Preview local card corrections", "Read-only preview against the current revision. Does not save or acquire provider data.", editRequest{})
 		addWrite("/api/catalog/fold-plan", "Build a fold plan for selected platforms", "Choose platform or platforms (1..256 distinct names). Groups stay within their owning platform and share one review ID and final apply. Uses the same fold rules and catalog region priorities as CLI. Optional games selects 2..12 exact same-platform cards for explicit identity review. Reports ready/review/blocked groups; no mutations. stream=1 returns NDJSON progress and one result/error. Plans expire after 30 minutes, maximum four retained plans; MAME may use temporary prepared files.", foldPlanRequest{})
