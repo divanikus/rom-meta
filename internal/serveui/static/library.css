@@ -65,10 +65,10 @@
 @media(max-width:650px){.export-inline{grid-template-columns:1fr;gap:0}.export-prepare-bar{align-items:flex-start;flex-direction:column}.export-folder-dialog{padding:10px}.export-folder-box{padding:16px}}
 
 /* Shared neutral surfaces. Themes are local to this browser. */
-:root{color-scheme:dark;--bg:#282c34;--panel:#21252b;--panel2:#2c313a;--line:#3e4552;--text:#c4c9d2;--muted:#9da5b4;--accent:#61afef;--accent2:#98c379;--warn:#e5c07b;--bad:#e06c75;--selected:#303e51;--success-bg:#2d3830;--warn-bg:#3d372c;--bad-bg:#402e34;--button-text:#20252c}
-:root[data-theme="light"]{color-scheme:light;--bg:#d6dbe0;--panel:#e1e5e9;--panel2:#cfd5dc;--line:#b6bec8;--text:#35404e;--muted:#566475;--accent:#365e8a;--accent2:#416846;--warn:#805d22;--bad:#9d404d;--selected:#c3d2e2;--success-bg:#cedccd;--warn-bg:#e3d9c2;--bad-bg:#e4cdd0;--button-text:#f0f2f5}
+:root{color-scheme:dark;--bg:#282c34;--panel:#21252b;--panel2:#2c313a;--line:#3e4552;--text:#c4c9d2;--muted:#9da5b4;--accent:#61afef;--accent2:#98c379;--warn:#e5c07b;--bad:#e06c75;--selected:#303e51;--success-bg:#2d3830;--warn-bg:#3d372c;--bad-bg:#402e34;--button-text:#20252c;--header:#293d52;--header-line:#455c74}
+:root[data-theme="light"]{color-scheme:light;--bg:#d6dbe0;--panel:#e1e5e9;--panel2:#cfd5dc;--line:#b6bec8;--text:#35404e;--muted:#566475;--accent:#365e8a;--accent2:#416846;--warn:#805d22;--bad:#9d404d;--selected:#c3d2e2;--success-bg:#cedccd;--warn-bg:#e3d9c2;--bad-bg:#e4cdd0;--button-text:#f0f2f5;--header:#b9cadd;--header-line:#98aec5}
 body{font-size:14px}button,input,select,textarea{accent-color:var(--accent)}
-.app>header{background:var(--panel);box-shadow:none;padding:10px 16px;gap:12px}
+.app>header{background:var(--header);border-bottom-color:var(--header-line);box-shadow:none;padding:10px 16px;gap:12px}
 .nav .active,.operation-row.active{background:var(--selected);border-color:var(--line);color:var(--text)}
 .management-page{background:var(--bg);padding:24px max(20px,calc((100% - 1440px)/2))}
 .management-heading{margin-bottom:20px}.management-heading h1{font-size:24px;letter-spacing:0;font-weight:600}.management-heading .operation-actions{margin:0}
