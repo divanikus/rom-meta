@@ -243,7 +243,7 @@ test('effective profile inspector uses library policy instead of browser preview
  await b.run('exportInspectProfile()');assert.equal(b.run('nativeExportUI.draft.inspected_profile'),'selection: saved-priorities');
 });
 test('theme toggle applies both themes to the document',()=>{
- const b=browser();b.run('libraryTheme("light")');assert.equal(b.context.document.documentElement.dataset.theme,'light');assert.equal(b.element('theme-toggle').textContent,'Dark theme');
+ const b=browser();b.run('libraryTheme("light")');assert.equal(b.context.document.documentElement.dataset.theme,'light');assert.equal(b.element('theme-toggle').title,'Switch to dark theme');
  b.run('libraryTheme("dark")');assert.equal(b.context.document.documentElement.dataset.theme,'dark');
 });
 

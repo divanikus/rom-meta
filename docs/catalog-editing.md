@@ -26,7 +26,7 @@ rom-meta serve --data-root "<catalog>" --edit
 export-profile preparation and library defaults. Platform review/statistics live
 in the ⋯ menu on each platform row; the edit pencil lives on the card. **API** and
 **API docs** remain in the header across views and open in a separate tab.
-Settings edits library configuration, as described below. The header theme switch
+Settings edits library configuration, as described below. The sun/moon icon in the upper-right corner
 chooses a neutral dark or light palette, remembered by this browser.
 
 1. Choose **Import your first DAT** in an empty library or the **+** beside
@@ -60,10 +60,12 @@ An interrupted server can leave its `.rommeta/web-import-*` upload directories;
 remove those only after ensuring their owning server is stopped. A running import
 cannot be cancelled/dismissed in this first workflow.
 
-## Enrich platforms
+## Fetch metadata
 
-Use the ⋯ menu on a platform row → **Enrich platform**, or **Enrich platforms**
-in Operations. Select one or several platforms, or use **Select all**.
+Choose **Fetch metadata…** above the Platforms list, or **Fetch metadata** in
+Operations. The wizard offers platform checkboxes and **Select all**. The ⋯ menu
+on a platform row opens the same wizard with that platform already selected.
+Select one or several platforms, then sources, data types and parallel workers.
 
 1. Select sources and data types: metadata, artwork and video. Defaults come from
    the library's acquisition settings. Unavailable choices explain missing

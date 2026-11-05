@@ -934,11 +934,12 @@
         <button class="tab-button" id="settings-tab" type="button">Settings</button>
       </nav>
       <div class="library-header-actions">
-        <small id="operations-status" role="status"></small><button class="tab-button" id="theme-toggle" type="button" aria-label="Switch to light theme">Light theme</button>
+        <small id="operations-status" role="status"></small>
         <nav class="api-links" aria-label="API resources">
           <a class="tab-button" href="/api" target="_blank" rel="noopener">API</a>
           <a class="tab-button" href="/docs" target="_blank" rel="noopener">API docs</a>
         </nav>
+        <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch to light theme" title="Switch to light theme"><svg class="theme-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4L19 5"/></svg><svg class="theme-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.7 13.3A9 9 0 0 1 10.7 3.3 9 9 0 1 0 20.7 13.3Z"/></svg></button>
       </div>
       <div class="export-bar" id="export-bar">
         <button class="hidden" id="library-mode" type="button" aria-pressed="true" tabindex="-1">Library</button>
@@ -975,8 +976,9 @@
           <span class="platform-heading-actions"><span id="platform-count">0</span><button class="tab-button platform-add hidden" id="library-import" type="button" title="Import DAT" aria-label="Add platform — import DAT">＋</button></span>
         </div>
       </div>
+      <div class="platform-fetch-toolbar hidden" id="platform-fetch-toolbar"><button type="button" id="platform-fetch">Fetch metadata…</button></div>
       <div class="scroll" id="platform-list"></div>
-      <div class="platform-workspace-head hidden" id="platform-workspace-actions" aria-label="Platform actions"><div class="platform-actions-menu"><div class="catalog-tools hidden" id="catalog-tools"><button class="tab-button hidden" id="platform-enrich" type="button">Enrich platform</button><button class="tab-button" id="catalog-build-plan" type="button">Review duplicates</button></div><button class="tab-button" id="stats-tab" type="button">Statistics</button></div></div>
+      <div class="platform-workspace-head hidden" id="platform-workspace-actions" aria-label="Platform actions"><div class="platform-actions-menu"><div class="catalog-tools hidden" id="catalog-tools"><button class="tab-button hidden" id="platform-enrich" type="button">Fetch metadata…</button><button class="tab-button" id="catalog-build-plan" type="button">Review duplicates</button></div><button class="tab-button" id="stats-tab" type="button">Statistics</button></div></div>
     </aside>
 
     <main class="games" id="game-pane">

@@ -1,7 +1,7 @@
 /* Operations and the FIFO enrichment queue belong to the server. */
 const enrichmentUI={draft:null,version:0,busy:false,error:"",tasks:new Map()};
 const enrichmentTypes={metadata:"Metadata",artwork:"Artwork",video:"Video"};
-const enrichmentStates={pending:"Waiting",queued:"Queued",running:"Running",ready:"Ready to enrich",needs_review:"Review settings",enriching:"Enriching",succeeded:"Complete",incomplete:"Finished with issues",failed:"Could not finish",skipped:"Skipped"};
+const enrichmentStates={pending:"Waiting",queued:"Queued",running:"Running",ready:"Ready to fetch",needs_review:"Review settings",enriching:"Fetching metadata",succeeded:"Complete",incomplete:"Finished with issues",failed:"Could not finish",skipped:"Skipped"};
 const enrichmentStages={starting:"Starting source",matching:"Matching games",scanning:"Reading catalog",reading:"Reading catalog",downloading:"Downloading",files:"Downloading files",indexing:"Updating library index",complete:"Complete"};
 function enrichmentKey(job){return job.source+":"+job.type}
 function enrichmentSelected(){return enrichmentUI.draft?.choices.filter(c=>c.available&&enrichmentUI.draft.selected.has(enrichmentKey(c)))||[]}
@@ -32,7 +32,7 @@ async function enrichmentLoadChoices(defaults=false){
 function enrichmentWizard(){
  const f=enrichmentUI.draft,selected=enrichmentSelected();if(!f)return "";
  const names=[...new Set(f.choices.map(c=>c.source))],platforms=state.platforms||[];
- return '<section class="operation-detail enrichment-wizard"><h2>Enrich platforms</h2><p>Choose platforms and sources. Tasks run in order; downloads within each task can run in parallel.</p>'+
+ return '<section class="operation-detail enrichment-wizard"><h2>Fetch metadata</h2><p>Choose platforms and sources. Tasks run in order; downloads within each task can run in parallel.</p>'+
  (enrichmentUI.error?'<p class="operation-error" role="alert">'+escapeHTML(enrichmentUI.error)+'</p>':"")+
  '<form id="enrichment-plan-form"><fieldset '+(enrichmentUI.busy?'disabled':'')+'><legend>Platforms ('+f.platforms.length+')</legend><div class="operation-actions"><button type="button" class="tab-button" data-enrichment-platforms="all">Select all</button><button type="button" class="tab-button" data-enrichment-platforms="none">Clear</button></div><div class="enrichment-platforms">'+platforms.map(p=>'<label><input type="checkbox" data-enrichment-platform="'+escapeAttr(p.platform)+'" '+(f.platforms.includes(p.platform)?'checked':'')+'> '+escapeHTML(p.platform)+'</label>').join("")+'</div></fieldset>'+
  '<fieldset '+(enrichmentUI.busy||f.loading?'disabled':'')+'><legend>Sources and data</legend>'+
@@ -57,7 +57,7 @@ function enrichmentProgress(job){
  const bytes=n=>formatNumber(Math.round(Number(n||0)/104857.6)/10)+" MiB";
  const total=t?t.Queued:p.Total,current=t?t.Downloaded+t.Failed:p.Current;
  return '<div class="operation-progress" role="status"><strong>'+escapeHTML(enrichmentStages[p.Stage]||p.Stage||"Starting")+'</strong>'+
- (total>0?'<progress aria-label="Current stage" value="'+Math.min(total,Math.max(0,current||0))+'" max="'+total+'"></progress>':'<progress aria-label="Enrichment in progress"></progress>')+
+ (total>0?'<progress aria-label="Current stage" value="'+Math.min(total,Math.max(0,current||0))+'" max="'+total+'"></progress>':'<progress aria-label="Fetch in progress"></progress>')+
  (t?'<span>'+formatNumber(t.Downloaded)+' downloaded · '+formatNumber(t.Existing)+' existing · '+formatNumber(t.Failed)+' failed · '+formatNumber(Math.max(0,t.Queued-t.Downloaded-t.Failed))+' pending</span><small>'+bytes(t.Bytes)+' transferred · '+formatNumber(t.Queued)+' files discovered; total may grow while scanning</small>':p.Total>0?'<span>'+formatNumber(p.Current)+' / '+formatNumber(p.Total)+' games</span>':p.BytesTotal>0?'<span>'+bytes(p.BytesCurrent)+' / '+bytes(p.BytesTotal)+'</span>':"")+
  (p.Item?'<span class="secondary">'+escapeHTML(p.Item)+'</span>':"")+
  '<div class="enrichment-transfers">'+Object.entries(e.workers||{}).map(([id,w])=>'<div><span>Worker '+Number(id)+'</span><span>'+escapeHTML(w.Item||"Working")+'</span>'+(w.BytesTotal>0?'<progress aria-label="Worker '+Number(id)+' download" value="'+Math.max(0,w.BytesCurrent||0)+'" max="'+w.BytesTotal+'"></progress><small>'+bytes(w.BytesCurrent)+' / '+bytes(w.BytesTotal)+'</small>':'')+'</div>').join("")+'</div><small>Up to '+(task?.workers||1)+' worker'+((task?.workers||1)===1?'':'s')+' for this task.</small></div>';
@@ -73,10 +73,10 @@ function enrichmentDetail(job){
  const index=enrichmentUI.tasks.has(job.id)?enrichmentUI.tasks.get(job.id):Math.max(0,e.current||0),task=e.jobs[index]||e.jobs[0];
  const finished=e.jobs.filter(t=>!["pending","running"].includes(t.state)).length;
  const queue=libraryUI.jobs.filter(j=>j.state==="queued").sort((a,b)=>(a.queued_at||"").localeCompare(b.queued_at||""));
- return '<article class="operation-detail enrichment-detail"><div class="operation-eyebrow">ENRICHMENT · '+escapeHTML(enrichmentStates[job.state]||job.state)+'</div><h2>'+escapeHTML(platforms.length===1?platforms[0]:platforms.length+" platforms")+'</h2>'+
+ return '<article class="operation-detail enrichment-detail"><div class="operation-eyebrow">FETCH METADATA · '+escapeHTML(enrichmentStates[job.state]||job.state)+'</div><h2>'+escapeHTML(platforms.length===1?platforms[0]:platforms.length+" platforms")+'</h2>'+
  (platforms.length>1?'<details><summary>Selected platforms</summary><ul>'+platforms.map(p=>'<li>'+escapeHTML(p)+'</li>').join("")+'</ul></details>':"")+
  (queued?'<p class="queue-status" role="status">Queue position '+Math.max(1,queue.findIndex(j=>j.id===job.id)+1)+'. Starts automatically when the current library operation finishes. You can close the browser.</p>':ready?'<p>Review the tasks, then add them to the server queue. No downloads have started.</p>':'<p>'+finished+' / '+e.jobs.length+' tasks finished. Progress remains available in Operations.</p>')+
- '<div class="enrichment-layout"><nav aria-label="Enrichment stages"><ol class="enrichment-tasks">'+e.jobs.map((t,i)=>'<li><button class="enrichment-stage '+(i===index?'active':'')+'" data-enrichment-task="'+i+'"><span>'+escapeHTML(sourceLabel(t.source))+' · '+enrichmentTypes[t.type]+'</span>'+(platforms.length>1?'<small>'+escapeHTML(t.platform)+'</small>':"")+'<small>'+escapeHTML(enrichmentStates[t.state]||t.state)+'</small></button></li>').join("")+'</ol></nav><section class="enrichment-stage-detail"><h3>'+escapeHTML(task?sourceLabel(task.source)+" · "+enrichmentTypes[task.type]:"Tasks")+'</h3>'+
+ '<div class="enrichment-layout"><nav aria-label="Fetch stages"><ol class="enrichment-tasks">'+e.jobs.map((t,i)=>'<li><button class="enrichment-stage '+(i===index?'active':'')+'" data-enrichment-task="'+i+'"><span>'+escapeHTML(sourceLabel(t.source))+' · '+enrichmentTypes[t.type]+'</span>'+(platforms.length>1?'<small>'+escapeHTML(t.platform)+'</small>':"")+'<small>'+escapeHTML(enrichmentStates[t.state]||t.state)+'</small></button></li>').join("")+'</ol></nav><section class="enrichment-stage-detail"><h3>'+escapeHTML(task?sourceLabel(task.source)+" · "+enrichmentTypes[task.type]:"Tasks")+'</h3>'+
  (task?'<p class="secondary">'+escapeHTML(task.platform||job.platform)+' · '+(task.workers||1)+' worker'+((task.workers||1)===1?'':'s')+'</p>'+((job.state==="enriching"&&index===e.current)?enrichmentProgress(job):enrichmentTaskResult(task)):"")+
  (job.state==="enriching"&&index!==e.current?'<button class="tab-button" data-enrichment-follow>Show current task</button>':"")+'</section></div>'+
  (job.error?'<p class="operation-error" role="alert">'+escapeHTML(job.error)+'</p>':"")+(job.warning?'<p class="operation-error">'+escapeHTML(job.warning)+'</p>':"")+
@@ -97,3 +97,4 @@ function enrichmentBind(selected){
  document.querySelectorAll("[data-enrichment-new]").forEach(b=>b.addEventListener("click",()=>enrichmentOpen([])));
 }
 $("platform-enrich")?.addEventListener("click",()=>{platformMenuClose();enrichmentOpen();});
+$("platform-fetch")?.addEventListener("click",()=>enrichmentOpen([]));

@@ -30,13 +30,14 @@ function librarySyncNavigation(){
  if(empty)for(const id of ["platform-pane","game-pane","detail-pane"])$(id).classList.add("hidden");
  const enabled=typeof catalogUI!=="undefined"&&catalogUI.enabled;
  $("platform-enrich")?.classList.toggle("hidden",!enabled);
+ $("platform-fetch-toolbar")?.classList.toggle("hidden",!enabled||!state.platforms.length);
  $("library-import")?.classList.toggle("hidden",!enabled);
  document.querySelectorAll("[data-import-new]").forEach(el=>el.classList.toggle("hidden",!enabled));
  $("empty-readonly")?.classList.toggle("hidden",enabled);
  $("card-tools")?.classList.toggle("hidden",!enabled||!state.game||view!=="library");
  if(!state.platform||!["library","stats"].includes(view))platformMenuClose();
 }
-function operationTitle(job){if(job.kind==="export")return "Export "+job.export.destination.name;return job.kind==="enrichment"?"Enrich "+(job.enrichment.platforms?.length>1?job.enrichment.platforms.length+" platforms":job.platform):job.filename}
+function operationTitle(job){if(job.kind==="export")return "Export "+job.export.destination.name;return job.kind==="enrichment"?"Fetch metadata · "+(job.enrichment.platforms?.length>1?job.enrichment.platforms.length+" platforms":job.platform):job.filename}
 function operationLabel(job){if(job.kind==="export")return exportStates[job.state]||job.state;return job.kind==="enrichment"?(enrichmentStates[job.state]||job.state):(operationLabels[job.state]||job.state)}
 function operationBusy(job){return job.state==="queued"||job.state==="planning"||job.state==="importing"||job.state==="enriching"||job.state==="exporting"}
 async function libraryPollOperations(){
@@ -112,7 +113,7 @@ function libraryRenderOperations(force=false){
  const focused=document.activeElement;
  if(!force&&focused&&pane.contains?.(focused)&&["INPUT","SELECT"].includes(focused.tagName))return;
  const selected=libraryUI.jobs.find(j=>j.id===libraryUI.selected);
- pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">YOUR LIBRARY</span><h1>Operations</h1><p>Import, enrich, export — return whenever you are ready.</p></div>'+'<div class="operation-actions">'+(state.platforms?.length?'<button class="tab-button" data-enrichment-new>Enrich platforms</button>':'')+(selected?'<button class="tab-button" data-import-new>＋ Import DAT</button>':'')+'</div>'+'</div>'+
+ pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">YOUR LIBRARY</span><h1>Operations</h1><p>Import, fetch metadata, export — return whenever you are ready.</p></div>'+'<div class="operation-actions">'+(catalogUI.enabled&&state.platforms?.length&&(selected||!enrichmentUI.draft)?'<button class="tab-button" data-enrichment-new>Fetch metadata</button>':'')+(selected?'<button class="tab-button" data-import-new>＋ Import DAT</button>':'')+'</div>'+'</div>'+
  (libraryUI.error?'<p class="operation-error" role="alert">'+escapeHTML(libraryUI.error)+'</p>':"")+
  '<div class="operations-layout"><aside class="operations-list" aria-label="Library operations">'+
  (libraryUI.jobs.length?libraryUI.jobs.map(j=>'<button class="operation-row '+(j.id===libraryUI.selected?"active":"")+'" data-operation-select="'+j.id+'"><strong>'+escapeHTML(operationTitle(j))+'</strong><span>'+escapeHTML(operationLabel(j))+'</span><small>'+escapeHTML(j.platform||j.summary?.platform||j.member||"DAT import")+'</small></button>').join(""):'<p class="secondary">Your operations will appear here.</p>')+
@@ -307,7 +308,7 @@ document.addEventListener("keydown",event=>{if(event.key==="Escape")platformMenu
 $("stats-tab")?.addEventListener("click",platformMenuClose);
 function libraryTheme(theme){
  document.documentElement.dataset.theme=theme;
- const b=$("theme-toggle");if(b){b.textContent=theme==="light"?"Dark theme":"Light theme";b.setAttribute("aria-label","Switch to "+(theme==="light"?"dark":"light")+" theme");}
+ const b=$("theme-toggle");if(b){b.title="Switch to "+(theme==="light"?"dark":"light")+" theme";b.setAttribute("aria-label","Switch to "+(theme==="light"?"dark":"light")+" theme");}
  try{localStorage.setItem("rommeta-theme",theme);}catch{}
 }
 $("theme-toggle")?.addEventListener("click",()=>libraryTheme(document.documentElement.dataset.theme==="light"?"dark":"light"));
