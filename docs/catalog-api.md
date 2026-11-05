@@ -577,9 +577,9 @@ assets/notices are vendored; no CDN or external validator is used.
 
 Editable serve uses server-owned operations: closing the browser does not cancel
 accepted work. Operations and queues are held in memory until server restart.
-`POST /api/enrichment/plan` accepts either `platform` or `platforms`, selected
+`POST /api/catalog/enrichment-plan` accepts either `platform` or `platforms`, selected
 source/type jobs and optional `concurrency` (0 for configured defaults, 1–32 for
-an override subject to provider limits). `POST /api/enrichment/apply` accepts the
+an override subject to provider limits). `POST /api/catalog/enrichment-start` accepts the
 reviewed operation/revision into a FIFO queue. Queued tasks wait for web or CLI
 writers, revalidate source settings, and start automatically. Catalog changes
 from earlier acquisition do not invalidate them. A queued operation can be dismissed;
