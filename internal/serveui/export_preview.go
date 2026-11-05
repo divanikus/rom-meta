@@ -58,6 +58,7 @@ type previewGame struct {
 }
 
 type exportPreviewResponse struct {
+	Profile     any           `json:"profile"`
 	Target      string        `json:"target"`
 	ProfileYAML string        `json:"profile_yaml"`
 	Games       []previewGame `json:"games"`
@@ -247,7 +248,7 @@ func (s *server) exportPreview(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	response := exportPreviewResponse{Target: target, ProfileYAML: content, Games: []previewGame{}}
+	response := exportPreviewResponse{Profile: p, Target: target, ProfileYAML: content, Games: []previewGame{}}
 	platform := s.resolvePlatform(request.Platform)
 	for _, input := range request.Games {
 		if err := r.Context().Err(); err != nil {

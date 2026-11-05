@@ -1,87 +1,99 @@
-/* Platform enrichment uses server-owned operations; reconnect only reads state. */
-const enrichmentUI={draft:null,version:0,busy:false,error:""};
+/* Operations and the FIFO enrichment queue belong to the server. */
+const enrichmentUI={draft:null,version:0,busy:false,error:"",tasks:new Map()};
 const enrichmentTypes={metadata:"Metadata",artwork:"Artwork",video:"Video"};
-const enrichmentStates={pending:"Waiting",running:"Running",ready:"Ready to enrich",enriching:"Enriching",succeeded:"Complete",incomplete:"Finished with issues",failed:"Could not finish",skipped:"Skipped"};
+const enrichmentStates={pending:"Waiting",queued:"Queued",running:"Running",ready:"Ready to enrich",needs_review:"Review settings",enriching:"Enriching",succeeded:"Complete",incomplete:"Finished with issues",failed:"Could not finish",skipped:"Skipped"};
 const enrichmentStages={starting:"Starting source",matching:"Matching games",scanning:"Reading catalog",reading:"Reading catalog",downloading:"Downloading",files:"Downloading files",indexing:"Updating library index",complete:"Complete"};
 function enrichmentKey(job){return job.source+":"+job.type}
 function enrichmentSelected(){return enrichmentUI.draft?.choices.filter(c=>c.available&&enrichmentUI.draft.selected.has(enrichmentKey(c)))||[]}
-async function enrichmentOpen(platform=state.platform,previous){
- if(!platform||!catalogUI.enabled)return;
+async function enrichmentOpen(platform=state.platform,previous,concurrency=0){
+ if(!catalogUI.enabled)return;
  if(typeof catalogLeaveInline==="function"&&!catalogLeaveInline())return;
- const version=++enrichmentUI.version;
- enrichmentUI.draft={platform,loading:true,choices:[],selected:new Set()};enrichmentUI.error="";
- libraryUI.selected="";libraryNavigate("operations");libraryRenderOperations();
+ const platforms=Array.isArray(platform)?platform:platform?[platform]:[];
+ enrichmentUI.draft={platform:platforms[0]||"",platforms,concurrency,loading:false,choices:[],selected:new Set(previous?.map(enrichmentKey)||[])};
+ enrichmentUI.error="";libraryUI.selected="";libraryNavigate("operations");
+ await enrichmentLoadChoices(!previous);
+}
+async function enrichmentLoadChoices(defaults=false){
+ const f=enrichmentUI.draft;if(!f)return;
+ const version=++enrichmentUI.version;f.loading=true;enrichmentUI.error="";libraryRenderOperations(true);
  try{
-  const options=await fetchJSON("/api/catalog/enrichment-options?"+new URLSearchParams({platform}));
+  const options=await Promise.all(f.platforms.map(platform=>fetchJSON("/api/catalog/enrichment-options?"+new URLSearchParams({platform}))));
   if(version!==enrichmentUI.version)return;
-  const wanted=previous?new Set(previous.map(enrichmentKey)):null;
-  enrichmentUI.draft={...options,loading:false,selected:new Set(options.choices.filter(c=>c.available&&(wanted?wanted.has(enrichmentKey(c)):c.default)).map(enrichmentKey))};
- }catch(error){if(version===enrichmentUI.version){enrichmentUI.draft.loading=false;enrichmentUI.error=error.message;}}
- if(version===enrichmentUI.version&&state.view==="operations")libraryRenderOperations();
+  f.revision=options[0]?.revision||"";f.choices=[];
+  const keys=[...new Set(options.flatMap(o=>o.choices.map(enrichmentKey)))];
+  for(const key of keys){
+   const choices=options.map(o=>o.choices.find(c=>enrichmentKey(c)===key)).filter(Boolean),base=choices[0],available=choices.filter(c=>c.available).length;
+   f.choices.push({...base,available:available>0,platform_count:available,reason:[...new Set(choices.filter(c=>!c.available).map(c=>c.reason))].join("; ")});
+  }
+  if(defaults)f.selected=new Set(f.choices.filter(c=>c.available&&c.default).map(enrichmentKey));
+ }catch(error){if(version===enrichmentUI.version)enrichmentUI.error=error.message;}
+ finally{if(version===enrichmentUI.version){f.loading=false;if(state.view==="operations")libraryRenderOperations(true);}}
 }
 function enrichmentWizard(){
- const f=enrichmentUI.draft,selected=enrichmentSelected();
- if(!f)return "";
- const names=[...new Set(f.choices.map(c=>c.source))];
- return '<section class="operation-detail enrichment-wizard"><div class="operation-eyebrow">PLATFORM ENRICHMENT</div><h2>'+escapeHTML(f.platform)+'</h2><p>Choose where to get metadata, artwork and videos. The selected tasks run in order, with metadata first.</p>'+
+ const f=enrichmentUI.draft,selected=enrichmentSelected();if(!f)return "";
+ const names=[...new Set(f.choices.map(c=>c.source))],platforms=state.platforms||[];
+ return '<section class="operation-detail enrichment-wizard"><h2>Enrich platforms</h2><p>Choose platforms and sources. Tasks run in order; downloads within each task can run in parallel.</p>'+
  (enrichmentUI.error?'<p class="operation-error" role="alert">'+escapeHTML(enrichmentUI.error)+'</p>':"")+
- (f.loading?'<p role="status">Reading source settings…</p>':'<form id="enrichment-plan-form"><fieldset '+(enrichmentUI.busy?'disabled':'')+'><legend>Sources and data</legend><div class="enrichment-choices">'+names.map(name=>{
-  const choices=f.choices.filter(c=>c.source===name);
-  return '<div class="enrichment-source"><strong>'+escapeHTML(sourceLabel(name))+'</strong><div>'+choices.map(c=>'<label title="'+escapeAttr(c.reason||"")+'"><input type="checkbox" data-enrichment-choice="'+escapeAttr(enrichmentKey(c))+'" '+(f.selected.has(enrichmentKey(c))?'checked ':'')+(!c.available?'disabled ':'')+'aria-label="'+escapeAttr(sourceLabel(name)+" "+enrichmentTypes[c.type])+'"> '+enrichmentTypes[c.type]+'</label>').join("")+'</div>'+
-  (name==="hasheous"?'<small>Identity links from ROM hashes; does not provide descriptions.</small>':"")+
-  (choices.some(c=>!c.available)?'<small>'+escapeHTML([...new Set(choices.filter(c=>!c.available).map(c=>c.reason))].map(reason=>{const types=choices.filter(c=>c.reason===reason);return (types.length===choices.length?"":types.map(c=>enrichmentTypes[c.type]).join(", ")+": ")+reason}).join(" "))+'</small>':"")+'</div>';
- }).join("")+'</div><p class="secondary">Defaults come from Settings → Enrichment. Credentials stay on the server. Saved source matches and existing media are kept; failed or unstarted work can be attempted again.</p><div class="operation-actions"><button type="submit" class="catalog-primary" id="enrichment-prepare" '+(!selected.length?'disabled':'')+'>'+(enrichmentUI.busy?'Preparing…':'Review tasks ('+selected.length+')')+'</button><button type="button" class="tab-button" id="enrichment-defaults">Use library defaults</button><button type="button" class="tab-button" id="enrichment-reload">Reload choices</button></div></fieldset></form>')+
- '<p class="secondary">Only this platform will change. Starting may download provider databases and media. After starting, you can close the browser and return to Operations.</p></section>';
+ '<form id="enrichment-plan-form"><fieldset '+(enrichmentUI.busy?'disabled':'')+'><legend>Platforms ('+f.platforms.length+')</legend><div class="operation-actions"><button type="button" class="tab-button" data-enrichment-platforms="all">Select all</button><button type="button" class="tab-button" data-enrichment-platforms="none">Clear</button></div><div class="enrichment-platforms">'+platforms.map(p=>'<label><input type="checkbox" data-enrichment-platform="'+escapeAttr(p.platform)+'" '+(f.platforms.includes(p.platform)?'checked':'')+'> '+escapeHTML(p.platform)+'</label>').join("")+'</div></fieldset>'+
+ '<fieldset '+(enrichmentUI.busy||f.loading?'disabled':'')+'><legend>Sources and data</legend>'+
+ (f.loading?'<p role="status">Reading source settings…</p>':!f.platforms.length?'<p>Select at least one platform.</p>':'<div class="enrichment-choices">'+names.map(name=>{
+ const choices=f.choices.filter(c=>c.source===name);
+ return '<div class="enrichment-source"><strong>'+escapeHTML(sourceLabel(name))+'</strong><div>'+choices.map(c=>'<label title="'+escapeAttr(c.reason||"")+'"><input type="checkbox" data-enrichment-choice="'+escapeAttr(enrichmentKey(c))+'" '+(f.selected.has(enrichmentKey(c))?'checked ':'')+(!c.available?'disabled ':'')+'> '+enrichmentTypes[c.type]+(f.platforms.length>1?' <small>('+c.platform_count+'/'+f.platforms.length+')</small>':'')+'</label>').join("")+'</div>'+
+ (choices.some(c=>c.reason)?'<small>'+escapeHTML([...new Set(choices.map(c=>c.reason).filter(Boolean))].join(" "))+'</small>':"")+'</div>';
+ }).join("")+'</div>')+
+ '<label class="enrichment-workers">Parallel requests / downloads<select id="enrichment-concurrency">'+[0,1,2,4,8,16,32].map(n=>'<option value="'+n+'" '+(f.concurrency===n?'selected':'')+'>'+(n?n+' worker'+(n===1?'':'s'):'Library / provider defaults')+'</option>').join("")+'</select><small>Applied within each source task. Provider limits still apply.</small></label>'+
+ '<p class="secondary">Saved matches and existing media are kept. Unavailable sources are skipped for the affected platforms.</p><div class="operation-actions"><button type="submit" class="catalog-primary" id="enrichment-prepare" '+(!selected.length||f.loading?'disabled':'')+'>'+(enrichmentUI.busy?'Preparing…':'Review tasks')+'</button><button type="button" class="tab-button" id="enrichment-defaults">Use library defaults</button></div></fieldset></form><p class="secondary">Once queued, work continues on this server after the browser is closed.</p></section>';
 }
 async function enrichmentPrepare(event){
- event?.preventDefault();if(enrichmentUI.busy||!enrichmentSelected().length)return;
+ event?.preventDefault();if(enrichmentUI.busy||enrichmentUI.draft.loading||!enrichmentSelected().length)return;
  const f=enrichmentUI.draft,jobs=enrichmentSelected().map(c=>({source:c.source,type:c.type}));
- enrichmentUI.busy=true;enrichmentUI.error="";libraryRenderOperations();
- try{
-  const op=await catalogPost("/api/catalog/enrichment-plan",{platform:f.platform,revision:f.revision,jobs});
-  enrichmentUI.draft=null;libraryRememberJob(op);
- }catch(error){enrichmentUI.error=error.message;}
- finally{enrichmentUI.busy=false;libraryRenderOperations();libraryPollOperations();}
+ enrichmentUI.busy=true;enrichmentUI.error="";libraryRenderOperations(true);
+ try{const op=await catalogPost("/api/catalog/enrichment-plan",{platform:f.platforms[0],platforms:f.platforms,revision:f.revision,concurrency:f.concurrency,jobs});enrichmentUI.draft=null;libraryRememberJob(op);}
+ catch(error){enrichmentUI.error=error.message;}
+ finally{enrichmentUI.busy=false;libraryRenderOperations(true);libraryPollOperations();}
 }
 function enrichmentProgress(job){
  const e=job.enrichment,p=e.progress||{},task=e.jobs[e.current],t=p.Transfers;
- const finished=e.jobs.filter(j=>["succeeded","incomplete","failed","skipped"].includes(j.state)).length;
  const bytes=n=>formatNumber(Math.round(Number(n||0)/104857.6)/10)+" MiB";
- return '<div class="operation-progress" role="status"><strong>'+escapeHTML(task?sourceLabel(task.source)+" · "+enrichmentTypes[task.type]:"Enriching platform")+'</strong><span>'+finished+' / '+e.jobs.length+' tasks finished · '+escapeHTML(enrichmentStages[p.Stage]||p.Stage||"Starting")+'</span>'+
+ const total=t?t.Queued:p.Total,current=t?t.Downloaded+t.Failed:p.Current;
+ return '<div class="operation-progress" role="status"><strong>'+escapeHTML(enrichmentStages[p.Stage]||p.Stage||"Starting")+'</strong>'+
+ (total>0?'<progress aria-label="Current stage" value="'+Math.min(total,Math.max(0,current||0))+'" max="'+total+'"></progress>':'<progress aria-label="Enrichment in progress"></progress>')+
+ (t?'<span>'+formatNumber(t.Downloaded)+' downloaded · '+formatNumber(t.Existing)+' existing · '+formatNumber(t.Failed)+' failed · '+formatNumber(Math.max(0,t.Queued-t.Downloaded-t.Failed))+' pending</span><small>'+bytes(t.Bytes)+' transferred · '+formatNumber(t.Queued)+' files discovered; total may grow while scanning</small>':p.Total>0?'<span>'+formatNumber(p.Current)+' / '+formatNumber(p.Total)+' games</span>':p.BytesTotal>0?'<span>'+bytes(p.BytesCurrent)+' / '+bytes(p.BytesTotal)+'</span>':"")+
  (p.Item?'<span class="secondary">'+escapeHTML(p.Item)+'</span>':"")+
- (p.Total>0?'<progress aria-label="Current stage" value="'+Math.min(p.Total,Math.max(0,p.Current||0))+'" max="'+p.Total+'"></progress><span>'+formatNumber(p.Current)+' / '+formatNumber(p.Total)+' in this stage</span>':p.BytesTotal>0?'<progress aria-label="Current download" value="'+Math.min(p.BytesTotal,Math.max(0,p.BytesCurrent||0))+'" max="'+p.BytesTotal+'"></progress>':'<progress aria-label="Enrichment in progress"></progress>')+
- (t?'<span>'+formatNumber(t.Downloaded)+' downloaded · '+formatNumber(t.Existing)+' existing · '+formatNumber(t.Failed)+' failed · '+formatNumber(Math.max(0,t.Queued-t.Downloaded-t.Failed))+' pending</span><span>'+bytes(t.Bytes)+' transferred</span>':p.BytesTotal>0?'<span>'+bytes(p.BytesCurrent)+' / '+bytes(p.BytesTotal)+'</span>':p.BytesCurrent>0?'<span>'+bytes(p.BytesCurrent)+' transferred</span>':"")+
- '<p>You can close your browser. Return to Operations to see this same task.</p></div>';
+ '<div class="enrichment-transfers">'+Object.entries(e.workers||{}).map(([id,w])=>'<div><span>Worker '+Number(id)+'</span><span>'+escapeHTML(w.Item||"Working")+'</span>'+(w.BytesTotal>0?'<progress aria-label="Worker '+Number(id)+' download" value="'+Math.max(0,w.BytesCurrent||0)+'" max="'+w.BytesTotal+'"></progress><small>'+bytes(w.BytesCurrent)+' / '+bytes(w.BytesTotal)+'</small>':'')+'</div>').join("")+'</div><small>Up to '+(task?.workers||1)+' worker'+((task?.workers||1)===1?'':'s')+' for this task.</small></div>';
+}
+function enrichmentTaskResult(t){
+ const c=t.counts||{};
+ return '<p>'+escapeHTML(enrichmentStates[t.state]||t.state)+'</p>'+
+ (["pending","running","skipped"].includes(t.state)?"":'<dl class="operation-facts">'+(t.type==="metadata"?'<dt>Matched</dt><dd>'+formatNumber(c.matched||0)+'</dd><dt>Not found</dt><dd>'+formatNumber(c.not_found||0)+'</dd><dt>Files written</dt><dd>'+formatNumber(c.written||0)+'</dd>':'<dt>Downloaded</dt><dd>'+formatNumber(c.downloaded||0)+'</dd>')+'<dt>Existing</dt><dd>'+formatNumber(c.existing||0)+'</dd><dt>Failed</dt><dd>'+formatNumber(c.failed||0)+'</dd></dl>')+
+ (t.error?'<p class="operation-error">'+escapeHTML(t.error)+'</p>':"");
 }
 function enrichmentDetail(job){
- const busy=operationBusy(job),ready=job.state==="ready";
- return '<article class="operation-detail"><div class="operation-eyebrow">PLATFORM ENRICHMENT · '+escapeHTML(enrichmentStates[job.state]||job.state)+'</div><h2>'+escapeHTML(job.platform)+'</h2>'+
- (ready?'<p>These tasks use the library’s source settings. Saved source matches and existing media are kept. No provider requests or card changes have been made by this plan.</p>':busy?enrichmentProgress(job):'<p>'+(job.state==="succeeded"?'Selected tasks have finished.':'Some tasks could not finish; successful downloads and source matches remain saved.')+'</p>')+
- '<ol class="enrichment-tasks">'+job.enrichment.jobs.map(t=>{
-  const c=t.counts||{},terminal=!["pending","running"].includes(t.state);
-  return '<li><div><strong>'+escapeHTML(sourceLabel(t.source))+' · '+enrichmentTypes[t.type]+'</strong><span class="enrichment-task-state">'+escapeHTML(enrichmentStates[t.state]||t.state)+'</span></div>'+
-  (terminal&&t.state!=="skipped"&&(t.state!=="failed"||Object.values(c).some(v=>v>0))?'<p class="secondary">'+(t.type==="metadata"?formatNumber(c.written||0)+' files written · '+formatNumber(c.matched||0)+' matched · '+formatNumber(c.not_found||0)+' not found · '+formatNumber(c.existing||0)+' existing'+(c.skipped?' · '+formatNumber(c.skipped)+' without lookup evidence':""):formatNumber(c.downloaded||0)+' downloads · '+formatNumber(c.existing||0)+' existing'+(c.written?' · '+formatNumber(c.written)+' artwork files written':""))+' · '+formatNumber(c.failed||0)+' failed</p>':"")+
-  (t.error?'<p class="operation-error">'+escapeHTML(t.error)+'</p>':"")+'</li>';
- }).join("")+'</ol>'+
- (job.error?'<p class="operation-error" role="alert">'+escapeHTML(job.error)+'</p>':"")+
- (job.warning?'<p class="operation-error" role="status">'+escapeHTML(job.warning)+'</p>':"")+
- '<div class="operation-actions">'+(ready?'<button class="catalog-primary" data-enrichment-start="'+job.id+'">Start enrichment</button><button class="tab-button" data-enrichment-retry>Change selection</button>':!busy?'<button class="catalog-primary" data-import-open="'+job.id+'">Open platform</button><button class="tab-button" data-enrichment-retry>Prepare another pass</button>':"")+
- (!busy?'<button class="tab-button" data-import-dismiss="'+job.id+'">'+(ready?'Discard plan':'Dismiss result')+'</button>':"")+'</div></article>';
+ const e=job.enrichment,busy=operationBusy(job),ready=job.state==="ready",queued=job.state==="queued",platforms=e.platforms||[job.platform];
+ const index=enrichmentUI.tasks.has(job.id)?enrichmentUI.tasks.get(job.id):Math.max(0,e.current||0),task=e.jobs[index]||e.jobs[0];
+ const finished=e.jobs.filter(t=>!["pending","running"].includes(t.state)).length;
+ const queue=libraryUI.jobs.filter(j=>j.state==="queued").sort((a,b)=>(a.queued_at||"").localeCompare(b.queued_at||""));
+ return '<article class="operation-detail enrichment-detail"><div class="operation-eyebrow">ENRICHMENT · '+escapeHTML(enrichmentStates[job.state]||job.state)+'</div><h2>'+escapeHTML(platforms.length===1?platforms[0]:platforms.length+" platforms")+'</h2>'+
+ (platforms.length>1?'<details><summary>Selected platforms</summary><ul>'+platforms.map(p=>'<li>'+escapeHTML(p)+'</li>').join("")+'</ul></details>':"")+
+ (queued?'<p class="queue-status" role="status">Queue position '+Math.max(1,queue.findIndex(j=>j.id===job.id)+1)+'. Starts automatically when the current library operation finishes. You can close the browser.</p>':ready?'<p>Review the tasks, then add them to the server queue. No downloads have started.</p>':'<p>'+finished+' / '+e.jobs.length+' tasks finished. Progress remains available in Operations.</p>')+
+ '<div class="enrichment-layout"><nav aria-label="Enrichment stages"><ol class="enrichment-tasks">'+e.jobs.map((t,i)=>'<li><button class="enrichment-stage '+(i===index?'active':'')+'" data-enrichment-task="'+i+'"><span>'+escapeHTML(sourceLabel(t.source))+' · '+enrichmentTypes[t.type]+'</span>'+(platforms.length>1?'<small>'+escapeHTML(t.platform)+'</small>':"")+'<small>'+escapeHTML(enrichmentStates[t.state]||t.state)+'</small></button></li>').join("")+'</ol></nav><section class="enrichment-stage-detail"><h3>'+escapeHTML(task?sourceLabel(task.source)+" · "+enrichmentTypes[task.type]:"Tasks")+'</h3>'+
+ (task?'<p class="secondary">'+escapeHTML(task.platform||job.platform)+' · '+(task.workers||1)+' worker'+((task.workers||1)===1?'':'s')+'</p>'+((job.state==="enriching"&&index===e.current)?enrichmentProgress(job):enrichmentTaskResult(task)):"")+
+ (job.state==="enriching"&&index!==e.current?'<button class="tab-button" data-enrichment-follow>Show current task</button>':"")+'</section></div>'+
+ (job.error?'<p class="operation-error" role="alert">'+escapeHTML(job.error)+'</p>':"")+(job.warning?'<p class="operation-error">'+escapeHTML(job.warning)+'</p>':"")+
+ '<div class="operation-actions">'+(ready?'<button class="catalog-primary" data-enrichment-start="'+job.id+'">Add to queue</button><button class="tab-button" data-enrichment-retry>Change selection</button>':!busy?'<button class="tab-button" data-import-open="'+job.id+'">Open platform</button><button class="tab-button" data-enrichment-retry>'+(job.state==='needs_review'?'Change selection':'Prepare another pass')+'</button>':"")+
+ (!busy||queued?'<button class="tab-button" data-import-dismiss="'+job.id+'">'+(queued?'Remove from queue':ready?'Discard plan':'Dismiss result')+'</button>':"")+'</div></article>';
 }
 function enrichmentBind(selected){
- document.querySelectorAll("[data-enrichment-choice]").forEach(input=>input.addEventListener("change",()=>{
-  if(enrichmentUI.busy||!enrichmentUI.draft)return;
-  const key=input.dataset.enrichmentChoice;
-  input.checked?enrichmentUI.draft.selected.add(key):enrichmentUI.draft.selected.delete(key);
-  const count=enrichmentSelected().length;const button=$("enrichment-prepare");button.disabled=!count;button.textContent="Review tasks ("+count+")";
- }));
+ document.querySelectorAll("[data-enrichment-platform]").forEach(input=>input.addEventListener("change",()=>{const f=enrichmentUI.draft,p=input.dataset.enrichmentPlatform;if(input.checked)f.platforms.push(p);else f.platforms=f.platforms.filter(v=>v!==p);enrichmentLoadChoices(!f.choices.length);}));
+ document.querySelectorAll("[data-enrichment-platforms]").forEach(b=>b.addEventListener("click",()=>{enrichmentUI.draft.platforms=b.dataset.enrichmentPlatforms==="all"?state.platforms.map(p=>p.platform):[];enrichmentLoadChoices(!enrichmentUI.draft.choices.length);}));
+ document.querySelectorAll("[data-enrichment-choice]").forEach(input=>input.addEventListener("change",()=>{const f=enrichmentUI.draft,key=input.dataset.enrichmentChoice;input.checked?f.selected.add(key):f.selected.delete(key);$("enrichment-prepare").disabled=!enrichmentSelected().length;}));
+ $("enrichment-concurrency")?.addEventListener("change",e=>{enrichmentUI.draft.concurrency=Number(e.target.value);});
  $("enrichment-plan-form")?.addEventListener("submit",enrichmentPrepare);
- $("enrichment-defaults")?.addEventListener("click",()=>{const f=enrichmentUI.draft;f.selected=new Set(f.choices.filter(c=>c.available&&c.default).map(enrichmentKey));libraryRenderOperations();});
- $("enrichment-reload")?.addEventListener("click",()=>enrichmentOpen(enrichmentUI.draft.platform,enrichmentSelected()));
- document.querySelectorAll("[data-enrichment-start]").forEach(b=>b.addEventListener("click",async()=>{
-  b.disabled=true;
-  await libraryImportAction("/api/catalog/enrichment-start",{id:selected.id,revision:selected.revision});
- }));
- document.querySelectorAll("[data-enrichment-retry]").forEach(b=>b.addEventListener("click",()=>enrichmentOpen(selected.platform,selected.enrichment.jobs)));
+ $("enrichment-defaults")?.addEventListener("click",()=>{const f=enrichmentUI.draft;f.selected=new Set(f.choices.filter(c=>c.available&&c.default).map(enrichmentKey));f.concurrency=0;libraryRenderOperations(true);});
+ document.querySelectorAll("[data-enrichment-start]").forEach(b=>b.addEventListener("click",async()=>{b.disabled=true;b.textContent="Adding to queue…";await libraryImportAction("/api/catalog/enrichment-start",{id:selected.id,revision:selected.revision});}));
+ document.querySelectorAll("[data-enrichment-retry]").forEach(b=>b.addEventListener("click",()=>enrichmentOpen(selected.enrichment.platforms||[selected.platform],selected.enrichment.jobs,selected.enrichment.concurrency||0)));
+ document.querySelectorAll("[data-enrichment-task]").forEach(b=>b.addEventListener("click",()=>{enrichmentUI.tasks.set(selected.id,Number(b.dataset.enrichmentTask));libraryRenderOperations(true);}));
+ document.querySelectorAll("[data-enrichment-follow]").forEach(b=>b.addEventListener("click",()=>{enrichmentUI.tasks.delete(selected.id);libraryRenderOperations(true);}));
+ document.querySelectorAll("[data-enrichment-new]").forEach(b=>b.addEventListener("click",()=>enrichmentOpen([])));
 }
-$("platform-enrich")?.addEventListener("click",()=>enrichmentOpen());
+$("platform-enrich")?.addEventListener("click",()=>{platformMenuClose();enrichmentOpen();});

@@ -15,6 +15,7 @@ import (
 )
 
 type Job struct {
+	rebuild func([]*exporter.Plan) (*frontend.Plan, error)
 	Native  *frontend.Plan
 	Plans   []*exporter.Plan
 	Skipped []exporter.SkippedSystem
@@ -108,24 +109,56 @@ func Build(options exporter.Options, api string, systems []string, all bool, des
 	if options.Progress != nil {
 		options.Progress("native fields", options.Target, 0, 0)
 	}
-	library, files, err := exporter.DestinationData(plans)
-	if err != nil {
-		return nil, err
-	}
-	source := &frontend.Source{Library: library, Check: checkInputs, Files: map[string]frontend.SourceFile{}}
-	for name, file := range files {
-		open := file.Open
-		if remoteAsset != nil && file.SourcePath != "" {
-			path := file.SourcePath
-			open = func() (io.ReadCloser, error) { return remoteAsset(path) }
+	rebuild := func(selected []*exporter.Plan) (*frontend.Plan, error) {
+		library, files, err := exporter.DestinationData(selected)
+		if err != nil {
+			return nil, err
 		}
-		source.Files[name] = frontend.SourceFile{Data: file.Data, SHA256: file.SHA256, Size: file.Size, Open: open}
+		source := &frontend.Source{Library: library, Check: checkInputs, Files: map[string]frontend.SourceFile{}}
+		for name, file := range files {
+			open := file.Open
+			if remoteAsset != nil && file.SourcePath != "" {
+				path := file.SourcePath
+				open = func() (io.ReadCloser, error) { return remoteAsset(path) }
+			}
+			source.Files[name] = frontend.SourceFile{Data: file.Data, SHA256: file.SHA256, Size: file.Size, Open: open}
+		}
+		nativeOptions := frontend.Options{Progress: options.Progress, Target: options.Target, PackageRoot: stage, Destination: destination, MediaRoot: mediaRoot, Source: source}
+		plan, err := frontend.Build(nativeOptions)
+		if err != nil {
+			return nil, err
+		}
+
+		return plan, nil
 	}
-	nativeOptions := frontend.Options{Progress: options.Progress, Target: options.Target, PackageRoot: stage, Destination: destination, MediaRoot: mediaRoot, Source: source}
-	plan, err := frontend.Build(nativeOptions)
+	plan, err := rebuild(plans)
 	if err != nil {
 		return nil, err
 	}
-
-	return &Job{Native: plan, Plans: plans, Skipped: skipped}, nil
+	return &Job{Native: plan, Plans: plans, Skipped: skipped, rebuild: rebuild}, nil
 }
+
+// Excluding an input only rebuilds native output from the retained scan.
+func (j *Job) WithExcluded(excluded map[string]bool) (*Job, error) {
+	if j.rebuild == nil {
+		return nil, fmt.Errorf("this plan cannot be revised; prepare it again")
+	}
+	plans := make([]*exporter.Plan, 0, len(j.Plans))
+	for _, p := range j.Plans {
+		copy := *p
+		copy.Records = nil
+		copy.LaunchBox = nil
+		for _, r := range p.Records {
+			if !excluded[InputKey(p.Platform, r.ROM)] {
+				copy.Records = append(copy.Records, r)
+			}
+		}
+		plans = append(plans, &copy)
+	}
+	native, err := j.rebuild(plans)
+	if err != nil {
+		return nil, err
+	}
+	return &Job{Native: native, Plans: plans, Skipped: j.Skipped, rebuild: j.rebuild}, nil
+}
+func InputKey(platform, rom string) string { return platform + "\n" + rom }

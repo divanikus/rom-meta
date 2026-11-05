@@ -6,11 +6,11 @@ const script=readFileSync(require('node:path').join(__dirname,'static/library.js
 function browser(){
  const elements=new Map(),calls=[],timers=[];
  function element(id){if(!elements.has(id))elements.set(id,{innerHTML:'',textContent:'',value:'',files:[],listeners:{},classes:new Set(),classList:{remove(name){element(id).classes.delete(name)},add(name){element(id).classes.add(name)},toggle(name,on){on?element(id).classes.add(name):element(id).classes.delete(name)}},setAttribute(){},replaceChildren(){},querySelectorAll:()=>[],addEventListener(k,v){this.listeners[k]=v},contains:()=>false,focus(){}});return elements.get(id);}
- const context=vm.createContext({console,URLSearchParams,$:element,window:{addEventListener(){},confirm:()=>true},document:{activeElement:null,querySelectorAll:()=>[],createTextNode:s=>s},
+ const context=vm.createContext({console,URLSearchParams,$:element,window:{addEventListener(){},confirm:()=>true},document:{documentElement:{dataset:{}},addEventListener(){},activeElement:null,querySelectorAll:()=>[],createTextNode:s=>s},
   state:{view:'browse',exportMode:false,platforms:[],platformsLoaded:true,platform:'Console',game:{id:'kept'},games:[{id:'kept'}]},
   catalogUI:{enabled:true},escapeHTML:s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),escapeAttr:s=>String(s??'').replaceAll('"','&quot;').replaceAll('<','&lt;'),formatNumber:n=>String(n??0),
   fetchJSON:async path=>{calls.push(['GET',path]);return []},catalogPost:async(path,body)=>{calls.push(['POST',path,JSON.parse(JSON.stringify(body))]);return {id:body.id,revision:body.revision,state:'importing',filename:'example.dat'}},
-  renderPlatforms(){},sourceLabel:s=>s,setView:view=>{context.state.view=view},setExportMode:on=>{context.state.exportMode=on},catalogLeaveInline:()=>true,
+  platformMenuClose(){},renderPlatforms(){},sourceLabel:s=>s,setView:view=>{context.state.view=view},setExportMode:on=>{context.state.exportMode=on},catalogLeaveInline:()=>true,
   setTimeout:(fn,ms)=>{timers.push(ms);return timers.length},clearTimeout(){},selectPlatform:async()=>{}});
  vm.runInContext(readFileSync(require('node:path').join(__dirname,'static/export.js'),'utf8'),context);vm.runInContext(script,context);vm.runInContext(readFileSync(require('node:path').join(__dirname,'static/enrichment.js'),'utf8'),context);return {run:c=>vm.runInContext(c,context),element,calls,timers,context};
 }
@@ -117,15 +117,15 @@ test('enrichment reconnection discovers running work without replaying a start',
  await b.run('libraryPollOperations()');
  assert.equal(b.run('libraryUI.selected'),'running');assert.equal(b.timers.at(-1),1000);
  assert.equal(b.calls.filter(c=>c[0]==='POST').length,0);
- assert.match(b.element('operations-pane').innerHTML,/3 \/ 9 in this stage/);
+ assert.match(b.element('operations-pane').innerHTML,/3 \/ 9 games/);
  assert.doesNotMatch(b.element('operations-pane').innerHTML,/data-enrichment-start=|data-import-apply=/);
 });
 test('enrichment draft keeps choices across polling and ignores unavailable source selections',async()=>{
- const b=browser();b.run('state.view="operations";enrichmentUI.draft={platform:"Console",revision:"r1",choices:[{source:"launchbox",type:"metadata",available:true,default:true},{source:"igdb",type:"metadata",available:false,reason:"Credentials missing"}],selected:new Set(["launchbox:metadata","igdb:metadata"])};libraryUI.selected=""');
+ const b=browser();b.run('state.view="operations";enrichmentUI.draft={platform:"Console",platforms:["Console"],concurrency:0,revision:"r1",choices:[{source:"launchbox",type:"metadata",available:true,default:true},{source:"igdb",type:"metadata",available:false,reason:"Credentials missing"}],selected:new Set(["launchbox:metadata","igdb:metadata"])};libraryUI.selected=""');
  await b.run('libraryPollOperations()');
  assert.equal(b.run('enrichmentSelected().length'),1);
  assert.match(b.element('operations-pane').innerHTML,/Credentials missing/);
- assert.match(b.element('operations-pane').innerHTML,/Review tasks \(1\)/);
+ assert.match(b.element('operations-pane').innerHTML,/Review tasks/);
  assert.equal(b.run('enrichmentUI.draft.selected.has("launchbox:metadata")'),true);
  b.run('libraryOpenImport()');assert.equal(b.run('enrichmentUI.draft'),null);
 });
@@ -133,11 +133,11 @@ test('enrichment prepares only reviewed source/type pairs for the exact platform
  const b=browser();const op={id:'prepared',kind:'enrichment',platform:'Console',revision:1,state:'ready',enrichment:{jobs:[{source:'launchbox',type:'metadata',state:'pending'}]}};
  b.context.catalogPost=async(path,body)=>{b.calls.push(['POST',path,JSON.parse(JSON.stringify(body))]);return op};
  b.context.fetchJSON=async()=>[op];
- b.run('state.view="operations";enrichmentUI.draft={platform:"Console",revision:"original",choices:[{source:"launchbox",type:"metadata",available:true},{source:"launchbox",type:"artwork",available:true}],selected:new Set(["launchbox:metadata"])}');
+ b.run('state.view="operations";enrichmentUI.draft={platform:"Console",platforms:["Console"],concurrency:4,revision:"original",choices:[{source:"launchbox",type:"metadata",available:true},{source:"launchbox",type:"artwork",available:true}],selected:new Set(["launchbox:metadata"])}');
  await b.run('enrichmentPrepare()');
- assert.deepEqual(b.calls.filter(c=>c[0]==='POST'),[['POST','/api/catalog/enrichment-plan',{platform:'Console',revision:'original',jobs:[{source:'launchbox',type:'metadata'}]}]]);
+ assert.deepEqual(b.calls.filter(c=>c[0]==='POST'),[['POST','/api/catalog/enrichment-plan',{platform:'Console',platforms:['Console'],concurrency:4,revision:'original',jobs:[{source:'launchbox',type:'metadata'}]}]]);
  assert.equal(b.run('libraryUI.selected'),'prepared');assert.equal(b.run('enrichmentUI.draft'),null);
- assert.match(b.element('operations-pane').innerHTML,/Start enrichment/);
+ assert.match(b.element('operations-pane').innerHTML,/Add to queue/);
 });
 test('enrichment partial completion refreshes data once and preserves an active editor',async()=>{
  const b=browser();let reloads=0;
@@ -147,7 +147,7 @@ test('enrichment partial completion refreshes data once and preserves an active 
  await b.run('libraryPollOperations()');await b.run('libraryPollOperations()');
  assert.equal(reloads,0);assert.equal(b.run('libraryUI.refreshed.size'),1);
  b.context.partial=op;
- const html=b.run('operationDetail(partial)');assert.match(html,/2 downloads/);assert.match(html,/Prepare another pass/);assert.match(html,/&lt;img/);assert.doesNotMatch(html,/<img/);
+ const html=b.run('operationDetail(partial)');assert.match(html,/Downloaded<\/dt><dd>2/);assert.match(html,/Prepare another pass/);assert.match(html,/&lt;img/);assert.doesNotMatch(html,/<img/);
 });
 test('late enrichment choices cannot replace a newer platform or a new import',async()=>{
  const b=browser(),resolve={};
@@ -211,4 +211,44 @@ test('unchanged export polling preserves expanded details and focus',async()=>{
  b.element('operations-pane').innerHTML='user is reviewing expanded details';
  await b.run('libraryPollOperations()');
  assert.equal(b.element('operations-pane').innerHTML,'user is reviewing expanded details');
+});
+
+test('opening a completed DAT import dismisses only its receipt',async()=>{
+ const b=browser();b.context.catalogPost=async(path,body)=>{b.calls.push([path,body.id]);return {dismissed:true}};
+ await b.run('libraryOpenCompleted({id:"dat",kind:"dat-import",state:"succeeded",platform:"Console",revision:2})');
+ assert.equal(b.run('state.view'),'browse');assert.deepEqual(b.calls.filter(x=>x[0]==="/api/operations/dismiss"),[["/api/operations/dismiss","dat"]]);
+ await b.run('libraryOpenCompleted({id:"enrich",kind:"enrichment",state:"succeeded",platform:"Console",revision:2})');
+ assert.equal(b.calls.filter(x=>x[0]==="/api/operations/dismiss").length,1);
+});
+test('queued enrichment reconnect exposes automatic start and remove, never Start again',()=>{
+ const b=browser();b.run('libraryUI.jobs=[{id:"q",kind:"enrichment",platform:"Console",state:"queued",queued_at:"1",enrichment:{platforms:["Console","Other"],jobs:[{source:"launchbox",type:"artwork",state:"pending",platform:"Console",workers:4}]}}]');
+ const html=b.run('enrichmentDetail(libraryUI.jobs[0])');
+ assert.equal(b.run('operationBusy(libraryUI.jobs[0])'),true);assert.match(html,/Starts automatically/);assert.match(html,/Remove from queue/);assert.doesNotMatch(html,/data-enrichment-start/);
+});
+test('enrichment platform changes fetch all choices and preserve explicit source choices',async()=>{
+ const b=browser();b.context.fetchJSON=async path=>path==="/api/operations"?[]:{revision:"settings",choices:[{source:"launchbox",type:"metadata",available:true,default:true},{source:"igdb",type:"metadata",available:false,reason:"Credentials missing"}]};
+ b.run('state.platforms=[{platform:"Console"},{platform:"Other"}]');
+ await b.run('enrichmentOpen(["Console","Other"],[{source:"launchbox",type:"metadata"}],4)');
+ assert.equal(b.run('enrichmentUI.draft.platforms.length'),2);assert.equal(b.run('enrichmentUI.draft.choices[0].platform_count'),2);assert.equal(b.run('enrichmentUI.draft.concurrency'),4);
+ assert.match(b.run('enrichmentWizard()'),/Platforms \(2\)/);
+});
+test('export review shows evidence, pages problem inputs and keeps exclusions across renders',()=>{
+ const b=browser();b.context.op={id:"review",revision:1,kind:"export",state:"ready",export:{excluded:[],totals:{issues:Array.from({length:81},(_,i)=>({id:"id"+i,rom:"Problem "+i+".bin",platform:"Console",status:"ambiguous",reason:"Multiple releases",candidates:["One","Two"]}))}}};
+ const html=b.run('exportIssues(op)');assert.match(html,/Candidates: One; Two/);assert.match(html,/1 \/ 3/);assert.doesNotMatch(html,/Problem 40/);
+ b.run('exportIssueDraft(op).excluded.add("id0")');assert.equal(b.run('exportReviewDirty(op)'),true);assert.match(b.run('exportIssues(op)'),/data-export-exclude="id0" checked/);
+ b.run('op.revision=2;op.export.excluded=["id0"]');assert.equal(b.run('exportReviewDirty(op)'),false);
+});
+test('effective profile inspector uses library policy instead of browser preview',async()=>{
+ const b=browser();b.context.fetchJSON=async path=>({profile_yaml:"selection: saved-priorities"});b.run('nativeExportUI.draft=exportDraft();exportCapture=()=>{}');
+ await b.run('exportInspectProfile()');assert.equal(b.run('nativeExportUI.draft.inspected_profile'),'selection: saved-priorities');
+});
+test('theme toggle applies both themes to the document',()=>{
+ const b=browser();b.run('libraryTheme("light")');assert.equal(b.context.document.documentElement.dataset.theme,'light');assert.equal(b.element('theme-toggle').textContent,'Dark theme');
+ b.run('libraryTheme("dark")');assert.equal(b.context.document.documentElement.dataset.theme,'dark');
+});
+
+
+test('inspecting a profile cannot leak UI-only fields into export requests',async()=>{
+ const b=browser();b.run('nativeExportUI.draft={...exportDraft(),name:"Test",inspected_profile:"yaml",inspected_policy:{selection:{}},profile_mode:"defaults"};exportCapture=()=>{}');
+ const input=await b.run('exportDestinationInput()');assert.equal(input.name,'Test');assert.equal('inspected_profile' in input,false);assert.equal('inspected_policy' in input,false);assert.equal('profile_mode' in input,false);
 });

@@ -192,26 +192,6 @@ func TestEnrichmentChoicesAndInvalidSelectionsNeverStartWork(t *testing.T) {
 		t.Fatal(w.Code)
 	}
 }
-func TestEnrichmentStalePlanAndBusyWriter(t *testing.T) {
-	s, _ := enrichmentTestServer(t)
-	op := enrichmentPlanFor(t, s, enrichmentSelection{"launchbox", "metadata"})
-	unlock, err := catalogedit.Lock(s.root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = s.beginEnrichment(op.ID, op.Revision); err == nil {
-		t.Error("writer conflict accepted")
-	}
-	unlock()
-	writeEnrichmentFixture(t, filepath.Join(s.root, "config", "catalog.yaml"), "regions: [Japan]\n")
-	if err = s.beginEnrichment(op.ID, op.Revision); err == nil || !strings.Contains(err.Error(), "changed") {
-		t.Fatal(err)
-	}
-	snapshot, _ := s.operationSnapshot(op.ID)
-	if snapshot.State != "ready" {
-		t.Fatal(snapshot)
-	}
-}
 func TestEnrichmentQuotaSkipsProviderAndContinuesOthers(t *testing.T) {
 	s, _ := enrichmentTestServer(t)
 	var starts atomic.Int32

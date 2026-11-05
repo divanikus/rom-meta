@@ -24,6 +24,7 @@ type nativeExportRequest struct {
 	Destination exportDestination `json:"destination"`
 }
 type exportTotals struct {
+	Issues      []exportIssue            `json:"issues"`
 	Matched     int                      `json:"matched"`
 	Unmatched   int                      `json:"unmatched"`
 	Ambiguous   int                      `json:"ambiguous"`
@@ -36,6 +37,7 @@ type exportTotals struct {
 	Skipped     []exporter.SkippedSystem `json:"skipped"`
 }
 type exportState struct {
+	Excluded    []string              `json:"excluded,omitempty"`
 	Destination exportDestination     `json:"destination"`
 	Totals      *exportTotals         `json:"totals,omitempty"`
 	Progress    taskprogress.Snapshot `json:"progress"`
@@ -132,9 +134,16 @@ func (s *server) exportPlan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, err)
 		return
 	}
-	// Keep the reviewed bytes; configuration revisions guard inherited defaults.
+	// Freeze and expose the resolved policy, including inherited source priorities.
+	resolved, err := portableExportProfile(profile)
+	if err != nil {
+		writeError(w, 400, err)
+		return
+	}
+	d.ProfileYAML = string(resolved)
+	// Configuration revisions still guard the plan.
 	if d.ProfileName == "" {
-		d.ProfileName = "Library defaults"
+		d.ProfileName = "Library settings"
 	}
 	s.operationsMu.Lock()
 	defer s.operationsMu.Unlock()
@@ -185,7 +194,7 @@ func (s *server) exportProgress(id string, applying bool) func(string, string, i
 }
 func summarizeExport(job *exportjob.Job) *exportTotals {
 	n := job.Native
-	totals := &exportTotals{Files: len(n.Files), Games: len(n.Changes), Changes: []frontend.Change{}, Conflicts: n.Conflicts, Warnings: n.Warnings, Skipped: job.Skipped}
+	totals := &exportTotals{Issues: exportInputs(job, true, nil), Files: len(n.Files), Games: len(n.Changes), Changes: []frontend.Change{}, Conflicts: n.Conflicts, Warnings: n.Warnings, Skipped: job.Skipped}
 	for _, p := range job.Plans {
 		totals.Matched += p.Matched
 		totals.Unmatched += p.Unmatched
@@ -223,6 +232,7 @@ func (s *server) runExportPlan(op libraryOperation) {
 			return
 		}
 		current.exportJob = job
+		current.exportReviewJob = job
 		current.exportDocuments = documents
 		current.Export.Totals = summarizeExport(job)
 		current.State = "ready"
@@ -312,6 +322,7 @@ func (s *server) runExportApply(op libraryOperation) {
 		current.Export.Progress.Stage = "complete"
 		// Release all retained native fields and asset closures after an accepted apply.
 		current.exportJob = nil
+		current.exportReviewJob = nil
 		current.exportDocuments = nil
 	})
 }
@@ -336,5 +347,5 @@ func (s *server) exportPlanDetails(w http.ResponseWriter, r *http.Request) {
 	sort.Strings(files)
 	w.Header().Set("Content-Disposition", "attachment; filename=rommeta-export-plan.json")
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, map[string]any{"destination": op.Export.Destination, "totals": op.Export.Totals, "games": n.Changes, "changed_files": files, "conflicts": n.Conflicts, "warnings": n.Warnings})
+	writeJSON(w, map[string]any{"destination": op.Export.Destination, "totals": op.Export.Totals, "games": n.Changes, "inputs": exportInputs(op.exportReviewJob, false, op.Export.Excluded), "changed_files": files, "conflicts": n.Conflicts, "warnings": n.Warnings})
 }

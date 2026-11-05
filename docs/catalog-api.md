@@ -573,6 +573,28 @@ In protected mode, **Authorize** accepts the token without `Bearer`, or HTTP Bas
 credentials. Authorization stays in page memory. Swagger UI 5.34.0 and its
 assets/notices are vendored; no CDN or external validator is used.
 
+## Browser workflow endpoints
+
+Editable serve uses server-owned operations: closing the browser does not cancel
+accepted work. Operations and queues are held in memory until server restart.
+`POST /api/enrichment/plan` accepts either `platform` or `platforms`, selected
+source/type jobs and optional `concurrency` (0 for configured defaults, 1–32 for
+an override subject to provider limits). `POST /api/enrichment/apply` accepts the
+reviewed operation/revision into a FIFO queue. Queued tasks wait for web or CLI
+writers, revalidate source settings, and start automatically. Catalog changes
+from earlier acquisition do not invalidate them. A queued operation can be dismissed;
+an actively running operation cannot.
+
+`GET /api/export/profile?target=es-de` (also `launchbox`) returns resolved library
+policy and reusable YAML. Native export plans retain this effective policy.
+The operation response includes only unresolved/uncertain input issues for review;
+the downloadable full plan includes every scanned input. `POST /api/export/review`
+accepts an operation ID, revision and excluded issue input IDs, then rebuilds
+native output from the retained scan without writing the destination. Restoring an
+input uses the same endpoint. Apply accepts only the resulting reviewed revision.
+See interactive [OpenAPI documentation](#openapi-and-interactive-documentation)
+for request schemas and [browser workflows](catalog-editing.md) for the UI.
+
 ## Browser statistics reference
 
 The browser links to `/api` and `/docs`. Stats accepts optional `platform` and

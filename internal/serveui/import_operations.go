@@ -29,8 +29,10 @@ const maxLibraryOperations = 32
 // Inactive receipts expire after 24 hours, dismissal or server restart. Uploaded
 // inputs are removed after success/dismissal/expiry in this process.
 type libraryOperation struct {
+	QueuedAt        *time.Time   `json:"queued_at,omitempty"`
 	Export          *exportState `json:"export,omitempty"`
 	exportJob       *exportjob.Job
+	exportReviewJob *exportjob.Job
 	exportDocuments map[string]string
 	exportStarted   bool
 	ID              string             `json:"id"`
@@ -75,7 +77,7 @@ type importAction struct {
 }
 
 func operationBusyState(state string) bool {
-	return state == "planning" || state == "importing" || state == "enriching" || state == "exporting"
+	return state == "queued" || state == "planning" || state == "importing" || state == "enriching" || state == "exporting"
 }
 func operationID() string {
 	var b [16]byte
@@ -318,7 +320,7 @@ func (s *server) operationDismiss(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]bool{"dismissed": true})
 		return
 	}
-	if operationBusyState(op.State) {
+	if operationBusyState(op.State) && op.State != "queued" {
 		writeError(w, 409, fmt.Errorf("operation is still running; closing the browser will not interrupt it"))
 		return
 	}

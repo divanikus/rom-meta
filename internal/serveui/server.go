@@ -135,6 +135,8 @@ func HandlerWithEditing(dataRoot string, allowEdit bool) (http.Handler, error) {
 	mux.HandleFunc("/api/export/folders", server.exportFolders)
 	mux.HandleFunc("/api/export/prepare", server.exportPlan)
 	mux.HandleFunc("/api/export/apply", server.exportApply)
+	mux.HandleFunc("/api/export/review", server.exportReview)
+	mux.HandleFunc("/api/export/profile", server.exportDefaultProfile)
 	mux.HandleFunc("/api/export/plan", server.exportPlanDetails)
 	mux.HandleFunc("/api/operations", server.operationsList)
 	mux.HandleFunc("/api/operations/dismiss", server.operationDismiss)
@@ -159,21 +161,22 @@ func HandlerWithEditing(dataRoot string, allowEdit bool) (http.Handler, error) {
 }
 
 type server struct {
-	exportWrite  func(*frontend.Plan) error
-	exportBuild  func(exporter.Options, string, string, bool) (*exportjob.Job, error)
-	operationsMu sync.Mutex
-	operations   map[string]*libraryOperation
-	uploads      int
-	enrichRun    func(enrichment.Job, enrichment.Options, store.SourcesConfig, taskprogress.Func) (any, error)
-	datImport    func(string, dat.ImportOptions) (dat.ImportResult, error)
-	allowEdit    bool
-	editMu       sync.Mutex
-	plans        map[string]storedPlan
-	root         string
-	realRoot     string
-	handler      http.Handler
-	summaryMu    sync.Mutex
-	summaries    map[string]summaryEntry
+	exportWrite            func(*frontend.Plan) error
+	exportBuild            func(exporter.Options, string, string, bool) (*exportjob.Job, error)
+	enrichmentQueueRunning bool
+	operationsMu           sync.Mutex
+	operations             map[string]*libraryOperation
+	uploads                int
+	enrichRun              func(enrichment.Job, enrichment.Options, store.SourcesConfig, taskprogress.Func) (any, error)
+	datImport              func(string, dat.ImportOptions) (dat.ImportResult, error)
+	allowEdit              bool
+	editMu                 sync.Mutex
+	plans                  map[string]storedPlan
+	root                   string
+	realRoot               string
+	handler                http.Handler
+	summaryMu              sync.Mutex
+	summaries              map[string]summaryEntry
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

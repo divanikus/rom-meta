@@ -12,7 +12,7 @@ async function catalogPost(path, body, signal) {
  if(!r.ok){const error=new Error(data.error || "The catalog operation could not finish.");error.consumed=data.consumed;error.result=data.result;throw error;}return data;
 }
 function catalogNotice(text,kind=""){return '<div class="catalog-notice '+kind+'" role="status">'+cEscape(text)+'</div>';}
-function catalogHeader(title,subtitle){catalogStopPlanArt();$("catalog-dialog").classList.toggle("is-plan",catalogUI.mode==="plan");$("catalog-title").textContent=title;$("catalog-subtitle").textContent=subtitle||"";}
+function catalogHeader(title,subtitle){catalogStopPlanArt();$("catalog-dialog").classList.toggle("is-plan",catalogUI.mode==="plan");$("catalog-dialog").classList.toggle("is-decisions",catalogUI.mode==="decisions");$("catalog-title").textContent=title;$("catalog-subtitle").textContent=subtitle||"";}
 function catalogOpen(title,subtitle){
  catalogUI.version=(catalogUI.version||0)+1;catalogHeader(title,subtitle);const dialog=$("catalog-dialog");if(!dialog.open)dialog.showModal();$("catalog-content").innerHTML='<div class="catalog-progress"><span class="catalog-spinner"></span><span id="catalog-progress-text">Preparing your workspace…</span></div>';
 }
@@ -406,7 +406,7 @@ function catalogRenderDecisions(){
  catalogUI.mode="decisions";catalogUI.group=null;catalogUI.dirty=false;
  const decisions=catalogBatchDecisions(),merge=decisions.filter(d=>d.action==="merge").length,separate=decisions.length-merge,remaining=catalogUI.plan.groups.length-decisions.length;
  catalogHeader("Review your decisions","One batch will save these changes. You can still go back and change any decision.");
- $("catalog-content").innerHTML=catalogSessionSummary()+'<div id="catalog-feedback"></div>'+catalogQueueNotice()+
+ $("catalog-content").innerHTML=catalogSessionSummary()+'<div id="catalog-feedback"></div>'+
  '<div class="catalog-decision-totals"><strong>'+merge+' merge</strong><strong>'+separate+' keep separate</strong><span>'+remaining+' unresolved / skipped</span></div>'+
  '<div class="catalog-decision-list">'+decisions.map(d=>{const pg=catalogUI.plan.groups.find(g=>g.id===d.id),g=pg.group;return '<button class="catalog-decision-row" data-plan-review="'+d.id+'"><span>'+cEscape(g.Keep.Title||g.Keep.Folder)+'</span><span>'+ (d.action==="merge"?(1+(g.Merge||[]).length)+' cards → 1':"Keep separate")+'</span><span>Review →</span></button>';}).join("")+'</div>'+
  (remaining?catalogNotice(remaining+" groups have no merge or separation decision. They will remain unchanged.","warn"):"")+
@@ -418,7 +418,7 @@ function catalogRenderDecisions(){
 $("catalog-dialog").addEventListener("cancel",event=>{event.preventDefault();catalogClose();});
 $("catalog-close").addEventListener("click",catalogClose);
 $("catalog-edit-card").addEventListener("click",catalogEditCard);
-$("catalog-build-plan").addEventListener("click",()=>catalogBuildPlan());
+$("catalog-build-plan").addEventListener("click",()=>{platformMenuClose();catalogBuildPlan();});
 $("catalog-compare").addEventListener("click",()=>catalogBuildPlan(true));
 $("catalog-add-compare").addEventListener("click",()=>{
  if(!state.selectedFolder)return;if(catalogUI.comparePlatform!==state.platform){catalogUI.compare.clear();catalogUI.comparePlatform=state.platform;}

@@ -26,6 +26,7 @@ import (
 )
 
 type enrichmentChoice struct {
+	Workers   int    `json:"workers"`
 	Source    string `json:"source"`
 	Type      string `json:"type"`
 	Available bool   `json:"available"`
@@ -42,21 +43,28 @@ type enrichmentSelection struct {
 	Type   string `json:"type"`
 }
 type enrichmentRequest struct {
-	Platform string                `json:"platform"`
-	Revision string                `json:"revision"`
-	Jobs     []enrichmentSelection `json:"jobs"`
+	Platforms   []string              `json:"platforms,omitempty"`
+	Concurrency int                   `json:"concurrency,omitempty"`
+	Platform    string                `json:"platform"`
+	Revision    string                `json:"revision"`
+	Jobs        []enrichmentSelection `json:"jobs"`
 }
 type enrichmentTask struct {
-	Source string            `json:"source"`
-	Type   string            `json:"type"`
-	State  string            `json:"state"`
-	Counts enrichment.Counts `json:"counts"`
-	Error  string            `json:"error,omitempty"`
+	Platform string            `json:"platform"`
+	Workers  int               `json:"workers"`
+	Source   string            `json:"source"`
+	Type     string            `json:"type"`
+	State    string            `json:"state"`
+	Counts   enrichment.Counts `json:"counts"`
+	Error    string            `json:"error,omitempty"`
 }
 type enrichmentState struct {
-	Jobs     []enrichmentTask      `json:"jobs"`
-	Current  int                   `json:"current"`
-	Progress taskprogress.Snapshot `json:"progress"`
+	Platforms   []string                      `json:"platforms"`
+	Concurrency int                           `json:"concurrency"`
+	Workers     map[int]taskprogress.Snapshot `json:"workers,omitempty"`
+	Jobs        []enrichmentTask              `json:"jobs"`
+	Current     int                           `json:"current"`
+	Progress    taskprogress.Snapshot         `json:"progress"`
 }
 
 func cloneOperation(op *libraryOperation) libraryOperation {
@@ -68,6 +76,11 @@ func cloneOperation(op *libraryOperation) libraryOperation {
 	if op.Enrichment != nil {
 		state := *op.Enrichment
 		state.Jobs = append([]enrichmentTask(nil), state.Jobs...)
+		state.Platforms = append([]string(nil), state.Platforms...)
+		state.Workers = map[int]taskprogress.Snapshot{}
+		for id, p := range op.Enrichment.Workers {
+			state.Workers[id] = p
+		}
 		result.Enrichment = &state
 	}
 	return result
@@ -102,7 +115,7 @@ func (s *server) enrichmentChoices(platform string) (enrichmentOptions, store.So
 	}
 	registry.MergeAliases(config.PlatformAliases)
 	hash := sha256.New()
-	for _, name := range []string{catalogchanges.RevisionFile, "config/sources.yaml", "config/platforms.yaml", "config/secrets.yaml", "config/catalog.yaml"} {
+	for _, name := range []string{"config/sources.yaml", "config/platforms.yaml", "config/secrets.yaml", "config/catalog.yaml"} {
 		data, e := os.ReadFile(filepath.Join(s.root, name))
 		if e != nil && !os.IsNotExist(e) {
 			return result, config, nil, fmt.Errorf("cannot read library configuration")
@@ -140,7 +153,7 @@ func (s *server) enrichmentChoices(platform string) (enrichmentOptions, store.So
 					}
 				}
 			}
-			result.Choices = append(result.Choices, enrichmentChoice{Source: name, Type: typ, Available: reason == "", Default: reason == "" && slices.Contains(config.Fetch[typ], name), Reason: reason})
+			result.Choices = append(result.Choices, enrichmentChoice{Workers: enrichment.Concurrency(enrichment.Options{}, config, enrichment.Job{Source: name, Type: typ}), Source: name, Type: typ, Available: reason == "", Default: reason == "" && slices.Contains(config.Fetch[typ], name), Reason: reason})
 		}
 	}
 	result.Revision = fmt.Sprintf("%x", hash.Sum(nil))
@@ -168,13 +181,16 @@ func (s *server) enrichmentPlan(w http.ResponseWriter, r *http.Request) {
 	if !s.editRequest(w, r, &input) {
 		return
 	}
-	options, _, _, err := s.enrichmentChoices(input.Platform)
-	if err != nil {
-		writeError(w, 400, err)
+	platforms := input.Platforms
+	if len(platforms) == 0 && input.Platform != "" {
+		platforms = []string{input.Platform}
+	}
+	if len(platforms) == 0 || len(platforms) > 256 {
+		writeError(w, 400, fmt.Errorf("select between 1 and 256 platforms"))
 		return
 	}
-	if options.Revision != input.Revision {
-		writeError(w, 409, fmt.Errorf("library or source settings changed; reopen enrichment and review the choices"))
+	if input.Concurrency < 0 || input.Concurrency > 32 {
+		writeError(w, 400, fmt.Errorf("parallel workers must be between 1 and 32, or 0 for source defaults"))
 		return
 	}
 	if len(input.Jobs) == 0 || len(input.Jobs) > 12 {
@@ -183,28 +199,50 @@ func (s *server) enrichmentPlan(w http.ResponseWriter, r *http.Request) {
 	}
 	selected := map[enrichmentSelection]bool{}
 	for _, job := range input.Jobs {
-		if selected[job] {
-			writeError(w, 400, fmt.Errorf("duplicate enrichment task"))
+		if selected[job] || !enrichment.Supported(enrichment.Job{Source: job.Source, Type: job.Type}) {
+			writeError(w, 400, fmt.Errorf("duplicate or unsupported enrichment task"))
 			return
 		}
 		selected[job] = true
 	}
-	state := &enrichmentState{Jobs: []enrichmentTask{}}
-	// Stable CLI order: metadata before artwork before video; configured sources first.
-	for _, choice := range options.Choices {
-		key := enrichmentSelection{choice.Source, choice.Type}
-		if !selected[key] {
-			continue
-		}
-		if !choice.Available {
-			writeError(w, 400, fmt.Errorf("%s: %s", choice.Source, choice.Reason))
+	state := &enrichmentState{Jobs: []enrichmentTask{}, Platforms: append([]string(nil), platforms...), Concurrency: input.Concurrency}
+	seen := map[string]bool{}
+	available := 0
+	for _, platform := range platforms {
+		if seen[platform] {
+			writeError(w, 400, fmt.Errorf("duplicate platform"))
 			return
 		}
-		state.Jobs = append(state.Jobs, enrichmentTask{Source: choice.Source, Type: choice.Type, State: "pending"})
-		delete(selected, key)
+		seen[platform] = true
+		options, config, _, err := s.enrichmentChoices(platform)
+		if err != nil {
+			writeError(w, 400, err)
+			return
+		}
+		if options.Revision != input.Revision {
+			writeError(w, 409, fmt.Errorf("source settings changed; reload choices and review the selection"))
+			return
+		}
+		for _, choice := range options.Choices {
+			if !selected[enrichmentSelection{choice.Source, choice.Type}] {
+				continue
+			}
+			task := enrichmentTask{Platform: platform, Source: choice.Source, Type: choice.Type, State: "pending"}
+			task.Workers = enrichment.Concurrency(enrichment.Options{Concurrency: input.Concurrency, ConcurrencySet: input.Concurrency > 0}, config, enrichment.Job{Source: choice.Source, Type: choice.Type})
+			if !choice.Available {
+				if len(platforms) == 1 {
+					writeError(w, 400, fmt.Errorf("%s: %s", choice.Source, choice.Reason))
+					return
+				}
+				task.State, task.Error = "skipped", choice.Reason
+			} else {
+				available++
+			}
+			state.Jobs = append(state.Jobs, task)
+		}
 	}
-	if len(selected) > 0 {
-		writeError(w, 400, fmt.Errorf("unsupported enrichment source or data type"))
+	if available == 0 {
+		writeError(w, 400, fmt.Errorf("no selected source is available for these platforms"))
 		return
 	}
 	s.operationsMu.Lock()
@@ -214,7 +252,7 @@ func (s *server) enrichmentPlan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 409, fmt.Errorf("dismiss an old operation before preparing another"))
 		return
 	}
-	op := &libraryOperation{ID: operationID(), Kind: "enrichment", Platform: input.Platform, State: "ready", Created: time.Now().UTC(), Updated: time.Now().UTC(), Revision: 1, Enrichment: state, stamp: options.Revision}
+	op := &libraryOperation{ID: operationID(), Kind: "enrichment", Platform: platforms[0], State: "ready", Created: time.Now().UTC(), Updated: time.Now().UTC(), Revision: 1, Enrichment: state, stamp: input.Revision}
 	if s.operations == nil {
 		s.operations = map[string]*libraryOperation{}
 	}
@@ -242,41 +280,6 @@ func (s *server) enrichmentStart(w http.ResponseWriter, r *http.Request) {
 	snapshot, _ := s.operationSnapshot(input.ID)
 	w.WriteHeader(http.StatusAccepted)
 	writeJSON(w, snapshot)
-}
-func (s *server) beginEnrichment(id string, revision int) error {
-	s.operationsMu.Lock()
-	defer s.operationsMu.Unlock()
-	op := s.operations[id]
-	if op == nil || op.Kind != "enrichment" {
-		return fmt.Errorf("enrichment plan is unavailable; prepare it again")
-	}
-	// All accepted starts, including terminal failures, are idempotent.
-	if op.State != "ready" {
-		return nil
-	}
-	if op.Revision != revision {
-		return fmt.Errorf("the plan changed; review the current operation")
-	}
-	if !s.editMu.TryLock() {
-		return fmt.Errorf("another catalog operation is running; try again when it finishes")
-	}
-	unlock, err := catalogedit.Lock(s.root)
-	if err != nil {
-		s.editMu.Unlock()
-		return err
-	}
-	options, config, registry, err := s.enrichmentChoices(op.Platform)
-	if err != nil || options.Revision != op.stamp {
-		unlock()
-		s.editMu.Unlock()
-		return fmt.Errorf("library or source settings changed; prepare enrichment again")
-	}
-	op.State = "enriching"
-	op.Error = ""
-	op.Updated = time.Now().UTC()
-	snapshot := cloneOperation(op)
-	go func() { defer s.editMu.Unlock(); defer unlock(); s.runEnrichment(snapshot, config, registry) }()
-	return nil
 }
 
 var enrichmentURLs = regexp.MustCompile(`(?i)(?:https?|ftp)://[^\s<>"']+`)
@@ -325,6 +328,10 @@ func (s *server) runEnrichment(op libraryOperation, config store.SourcesConfig, 
 	failed, issues := 0, 0
 	quota := map[string]bool{}
 	for index, task := range op.Enrichment.Jobs {
+		if task.State == "skipped" {
+			issues++
+			continue
+		}
 		if quota[task.Source] {
 			issues++
 			s.changeOperation(op.ID, func(current *libraryOperation) {
@@ -336,6 +343,7 @@ func (s *server) runEnrichment(op libraryOperation, config store.SourcesConfig, 
 		s.changeOperation(op.ID, func(current *libraryOperation) {
 			current.Enrichment.Current = index
 			current.Enrichment.Progress = taskprogress.Snapshot{Stage: "starting"}
+			current.Enrichment.Workers = map[int]taskprogress.Snapshot{}
 			current.Enrichment.Jobs[index].State = "running"
 		})
 		progress := func(p taskprogress.Snapshot) {
@@ -347,6 +355,14 @@ func (s *server) runEnrichment(op libraryOperation, config store.SourcesConfig, 
 			s.changeOperation(op.ID, func(current *libraryOperation) {
 				previous := current.Enrichment.Progress
 				if p.Worker > 0 {
+					if current.Enrichment.Workers == nil {
+						current.Enrichment.Workers = map[int]taskprogress.Snapshot{}
+					}
+					if p.BytesCurrent < 0 {
+						delete(current.Enrichment.Workers, p.Worker)
+					} else {
+						current.Enrichment.Workers[p.Worker] = p
+					}
 					previous.Item = p.Item
 					previous.BytesCurrent = 0
 					previous.BytesTotal = 0
@@ -359,7 +375,7 @@ func (s *server) runEnrichment(op libraryOperation, config store.SourcesConfig, 
 				current.Enrichment.Progress = p
 			})
 		}
-		result, err := run(enrichment.Job{Source: task.Source, Type: task.Type, Platform: op.Platform, Automatic: true}, enrichment.Options{DataRoot: s.root, Platform: op.Platform, PlatformRegistry: registry, Apply: true}, config, progress)
+		result, err := run(enrichment.Job{Source: task.Source, Type: task.Type, Platform: task.Platform, Automatic: true}, enrichment.Options{DataRoot: s.root, Platform: task.Platform, PlatformRegistry: registry, Apply: true, Concurrency: op.Enrichment.Concurrency, ConcurrencySet: op.Enrichment.Concurrency > 0}, config, progress)
 		counts := enrichment.Summarize(result)
 		status, message := "succeeded", ""
 		if err != nil {

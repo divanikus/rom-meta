@@ -34,12 +34,11 @@ function librarySyncNavigation(){
  document.querySelectorAll("[data-import-new]").forEach(el=>el.classList.toggle("hidden",!enabled));
  $("empty-readonly")?.classList.toggle("hidden",enabled);
  $("card-tools")?.classList.toggle("hidden",!enabled||!state.game||view!=="library");
- $("platform-workspace-actions")?.classList.toggle("hidden",!state.platform||!["library","stats"].includes(view));
- $("platform-heading")?.replaceChildren(document.createTextNode(state.platform||"Library"));
+ if(!state.platform||!["library","stats"].includes(view))platformMenuClose();
 }
-function operationTitle(job){if(job.kind==="export")return "Export "+job.export.destination.name;return job.kind==="enrichment"?"Enrich "+job.platform:job.filename}
+function operationTitle(job){if(job.kind==="export")return "Export "+job.export.destination.name;return job.kind==="enrichment"?"Enrich "+(job.enrichment.platforms?.length>1?job.enrichment.platforms.length+" platforms":job.platform):job.filename}
 function operationLabel(job){if(job.kind==="export")return exportStates[job.state]||job.state;return job.kind==="enrichment"?(enrichmentStates[job.state]||job.state):(operationLabels[job.state]||job.state)}
-function operationBusy(job){return job.state==="planning"||job.state==="importing"||job.state==="enriching"||job.state==="exporting"}
+function operationBusy(job){return job.state==="queued"||job.state==="planning"||job.state==="importing"||job.state==="enriching"||job.state==="exporting"}
 async function libraryPollOperations(){
  if(libraryUI.polling)return;
  libraryUI.polling=true;
@@ -50,18 +49,18 @@ async function libraryPollOperations(){
   libraryUI.error="";
   const active=libraryUI.jobs.filter(operationBusy).length,waiting=libraryUI.jobs.filter(j=>["ready","needs_selection","needs_review","failed","incomplete"].includes(j.state)).length;
   $("operations-count").textContent=active?String(active):waiting?String(waiting):"";
-  $("operations-status").textContent=active?active+" running on server":waiting?waiting+" to review":"";
+  $("operations-status").textContent=active?active+" active / queued":waiting?waiting+" to review":"";
   for(const job of libraryUI.jobs){
    if(job.kind!=="export"&&(job.state==="succeeded"||(job.kind==="enrichment"&&["incomplete","failed"].includes(job.state)))&&!libraryUI.refreshed.has(job.id)){
     state.platforms=await fetchJSON("/api/platforms");state.platformsLoaded=true;
     $("platform-count").textContent=formatNumber(state.platforms.length);renderPlatforms();librarySyncNavigation();
-    if(job.kind==="enrichment"&&state.platform===job.platform&&state.view==="browse"&&!state.exportMode&&!(typeof catalogEditorActive==="function"&&catalogEditorActive()))await selectPlatform(job.platform);
+    if(job.kind==="enrichment"&&(job.enrichment.platforms||[job.platform]).includes(state.platform)&&state.view==="browse"&&!state.exportMode&&!(typeof catalogEditorActive==="function"&&catalogEditorActive()))await selectPlatform(state.platform);
     libraryUI.refreshed.add(job.id);
    }
   }
   const selected=libraryUI.jobs.find(j=>j.id===libraryUI.selected);
-  const stableExport=selected?.kind==="export"&&previous===JSON.stringify(libraryUI.jobs)&&previousSelection===libraryUI.selected&&!previousError;
-  if(state.view==="operations"&&!stableExport)libraryRenderOperations();
+  const stableExport=previous===JSON.stringify(libraryUI.jobs)&&previousSelection===libraryUI.selected&&!previousError;
+  if(state.view==="operations"&&(!stableExport||(!selected&&enrichmentUI.draft)))libraryRenderOperations();
  }catch(error){libraryUI.error=error.message;if(state.view==="operations")libraryRenderOperations();}
  finally{
   libraryUI.polling=false;clearTimeout(libraryUI.timer);
@@ -107,18 +106,18 @@ function operationDetail(job){
  (done?'<button class="catalog-primary" data-import-open="'+job.id+'">Open '+escapeHTML(job.summary?.platform||"platform")+'</button><span class="secondary">Saved to your library.</span>':"")+
  (!busy?'<button class="tab-button" data-import-dismiss="'+job.id+'">'+(done?"Dismiss result":"Discard upload")+'</button>':"")+'</div></article>';
 }
-function libraryRenderOperations(){
+function libraryRenderOperations(force=false){
  const pane=$("operations-pane");if(!pane)return;
  // Keep a partially completed options form stable while background polling runs.
  const focused=document.activeElement;
- if(focused&&pane.contains?.(focused)&&["INPUT","SELECT"].includes(focused.tagName))return;
+ if(!force&&focused&&pane.contains?.(focused)&&["INPUT","SELECT"].includes(focused.tagName))return;
  const selected=libraryUI.jobs.find(j=>j.id===libraryUI.selected);
- pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">YOUR LIBRARY</span><h1>Operations</h1><p>Import, enrich, export — return whenever you are ready.</p></div>'+(selected?'<button class="tab-button" data-import-new>＋ Import DAT</button>':'')+'</div>'+
+ pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">YOUR LIBRARY</span><h1>Operations</h1><p>Import, enrich, export — return whenever you are ready.</p></div>'+'<div class="operation-actions">'+(state.platforms?.length?'<button class="tab-button" data-enrichment-new>Enrich platforms</button>':'')+(selected?'<button class="tab-button" data-import-new>＋ Import DAT</button>':'')+'</div>'+'</div>'+
  (libraryUI.error?'<p class="operation-error" role="alert">'+escapeHTML(libraryUI.error)+'</p>':"")+
  '<div class="operations-layout"><aside class="operations-list" aria-label="Library operations">'+
  (libraryUI.jobs.length?libraryUI.jobs.map(j=>'<button class="operation-row '+(j.id===libraryUI.selected?"active":"")+'" data-operation-select="'+j.id+'"><strong>'+escapeHTML(operationTitle(j))+'</strong><span>'+escapeHTML(operationLabel(j))+'</span><small>'+escapeHTML(j.platform||j.summary?.platform||j.member||"DAT import")+'</small></button>').join(""):'<p class="secondary">Your operations will appear here.</p>')+
  '<p class="secondary operations-lifetime">Progress stays with the running server, even when you close this browser. Inactive operations expire after 24 hours. Restarting the server clears this list.</p></aside>'+
- (selected?operationDetail(selected):typeof enrichmentUI!=="undefined"&&enrichmentUI.draft?enrichmentWizard():'<section class="operation-detail import-welcome"><span class="import-symbol" aria-hidden="true">↥</span><h2>Bring your library to life</h2><p>Start with a DAT. RomMeta prepares the game cards and fingerprints; your ROM files stay where they are.</p><form id="dat-upload-form"><label class="upload-label">Choose a DAT or ZIP<input type="file" id="dat-upload-file" name="file" accept=".dat,.xml,.zip" '+(libraryUI.uploading?"disabled":"")+'></label><p class="secondary">Preferred datasets: <strong>No-Intro</strong> for cartridges, <strong>Redump</strong> for discs, and <strong>MAME</strong> for arcade systems. Upload No-Intro, Redump or compatible XML DATs here; MAME listxml currently uses the CLI. ZIPs can contain several DATs. Up to 256 MiB.</p><button class="catalog-primary" type="submit" '+(libraryUI.uploading?"disabled":"")+'>'+(libraryUI.uploading?"Uploading…":"Upload & prepare")+'</button><p id="dat-upload-progress" role="status">'+(libraryUI.uploading?"Uploading "+libraryUI.uploadPercent+"% — keep this page open until the upload finishes.":"Uploading prepares a plan. You choose when to import.")+'</p></form><details><summary>Prefer the command line?</summary><p>The CLI uses the same importer and catalog rules.</p><pre>rom-meta dat import &quot;&lt;file.dat-or-zip&gt;&quot; --data-root &quot;&lt;library&gt;&quot;\n# Add --apply after reviewing the plan.</pre><p class="secondary">Use the CLI for classified MAME listxml imports.</p></details></section>')+'</div>';
+ (selected?operationDetail(selected):typeof enrichmentUI!=="undefined"&&enrichmentUI.draft?enrichmentWizard():'<section class="operation-detail import-welcome"><h2>Import a DAT</h2><p>Start with a DAT. RomMeta prepares the game cards and fingerprints; your ROM files stay where they are.</p><form id="dat-upload-form"><label class="upload-label">Choose a DAT or ZIP<input type="file" id="dat-upload-file" name="file" accept=".dat,.xml,.zip" '+(libraryUI.uploading?"disabled":"")+'></label><p class="secondary">Preferred datasets: <strong>No-Intro</strong> for cartridges, <strong>Redump</strong> for discs, and <strong>MAME</strong> for arcade systems. Upload No-Intro, Redump or compatible XML DATs here; MAME listxml currently uses the CLI. ZIPs can contain several DATs. Up to 256 MiB.</p><button class="catalog-primary" type="submit" '+(libraryUI.uploading?"disabled":"")+'>'+(libraryUI.uploading?"Uploading…":"Upload & prepare")+'</button><p id="dat-upload-progress" role="status">'+(libraryUI.uploading?"Uploading "+libraryUI.uploadPercent+"% — keep this page open until the upload finishes.":"Uploading prepares a plan. You choose when to import.")+'</p></form><details><summary>Prefer the command line?</summary><p>The CLI uses the same importer and catalog rules.</p><pre>rom-meta dat import &quot;&lt;file.dat-or-zip&gt;&quot; --data-root &quot;&lt;library&gt;&quot;\n# Add --apply after reviewing the plan.</pre><p class="secondary">Use the CLI for classified MAME listxml imports.</p></details></section>')+'</div>';
  pane.querySelectorAll("[data-operation-select]").forEach(b=>b.addEventListener("click",()=>{libraryUI.selected=b.dataset.operationSelect;libraryRenderOperations();}));
  pane.querySelectorAll("[data-import-new]").forEach(b=>b.addEventListener("click",libraryOpenImport));
  $("dat-upload-form")?.addEventListener("submit",libraryUploadDAT);
@@ -134,11 +133,15 @@ function libraryRenderOperations(){
  pane.querySelectorAll("[data-import-apply]").forEach(b=>b.addEventListener("click",()=>libraryImportAction("/api/catalog/import-apply",{id:selected.id,revision:selected.revision})));
  pane.querySelectorAll("[data-import-dismiss]").forEach(b=>b.addEventListener("click",async()=>{await libraryImportAction("/api/operations/dismiss",{id:selected.id,revision:selected.revision});}));
  pane.querySelectorAll("[data-import-open]").forEach(b=>b.addEventListener("click",async()=>{
-  libraryNavigate("library");await selectPlatform(selected.platform||selected.summary?.platform);
+  await libraryOpenCompleted(selected);
  }));
  if(typeof enrichmentBind==="function")enrichmentBind(selected);
  if(typeof nativeExportBindOperation==="function")nativeExportBindOperation(selected);
  librarySyncNavigation();
+}
+async function libraryOpenCompleted(job){
+ libraryNavigate("library");await selectPlatform(job.platform||job.summary?.platform);
+ if(job.kind==="dat-import"&&job.state==="succeeded")await libraryImportAction("/api/operations/dismiss",{id:job.id,revision:job.revision});
 }
 function libraryRememberJob(job){
  const i=libraryUI.jobs.findIndex(j=>j.id===job.id);
@@ -288,5 +291,28 @@ $("operations-tab").addEventListener("click",()=>libraryNavigate("operations"));
 $("settings-tab").addEventListener("click",()=>libraryNavigate("settings"));
 $("library-import").addEventListener("click",libraryOpenImport);
 document.querySelectorAll("[data-import-new]").forEach(b=>b.addEventListener("click",libraryOpenImport));
+
+/* Contextual platform actions; the platform name appears only in its list row. */
+document.addEventListener("click",async event=>{
+ const b=event.target.closest?.("[data-platform-menu]"),menu=$("platform-workspace-actions");
+ if(b){
+  const opened=b.getAttribute("aria-expanded")==="true";platformMenuClose();if(opened)return;
+  if(state.platform!==b.dataset.platformMenu)await selectPlatform(b.dataset.platformMenu);
+  const current=[...document.querySelectorAll("[data-platform-menu]")].find(x=>x.dataset.platformMenu===state.platform);
+  if(!current)return;const r=current.getBoundingClientRect();menu.style.left=Math.max(8,Math.min(r.left,window.innerWidth-230))+"px";menu.style.top=Math.min(r.bottom+4,window.innerHeight-180)+"px";
+  menu.classList.remove("hidden");current.setAttribute("aria-expanded","true");menu.querySelector("button:not(.hidden)")?.focus();
+ }else if(!menu?.contains(event.target))platformMenuClose();
+});
+document.addEventListener("keydown",event=>{if(event.key==="Escape")platformMenuClose();});
+$("stats-tab")?.addEventListener("click",platformMenuClose);
+function libraryTheme(theme){
+ document.documentElement.dataset.theme=theme;
+ const b=$("theme-toggle");if(b){b.textContent=theme==="light"?"Dark theme":"Light theme";b.setAttribute("aria-label","Switch to "+(theme==="light"?"dark":"light")+" theme");}
+ try{localStorage.setItem("rommeta-theme",theme);}catch{}
+}
+$("theme-toggle")?.addEventListener("click",()=>libraryTheme(document.documentElement.dataset.theme==="light"?"dark":"light"));
+if($("theme-toggle"))libraryTheme(document.documentElement.dataset.theme||"dark");
+
+
 librarySyncNavigation();
 libraryPollOperations();

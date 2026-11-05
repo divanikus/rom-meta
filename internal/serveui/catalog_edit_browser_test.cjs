@@ -317,7 +317,7 @@ test('merge, separate and skip decisions advance without applying until the fina
  await b.run('catalogQueueDecision("skip")');
  assert.equal(b.run('catalogUI.mode'),'decisions');assert.equal(calls.length,0);
  assert.match(b.element('catalog-content').innerHTML,/2 merge.*1 keep separate.*1 unresolved/s);
- assert.match(b.element('catalog-content').innerHTML,/Nothing saved yet/);
+ assert.match(b.element('catalog-subtitle').textContent,/One batch will save these changes/);
  await b.run('catalogApply(catalogBatchDecisions())');
  assert.equal(calls.filter(c=>c.path.endsWith('fold-apply')).length,1);
  assert.deepEqual(calls[0].body.decisions.map(d=>d.action).sort(),['merge','merge','separate']);

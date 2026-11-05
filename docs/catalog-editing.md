@@ -24,9 +24,10 @@ rom-meta serve --data-root "<catalog>" --edit
 
 **Library / Operations / Export / Settings** separate browsing, background work,
 export-profile preparation and library defaults. Platform review/statistics live
-beside the selected platform; the edit pencil lives on the card. **API** and
+in the ⋯ menu on each platform row; the edit pencil lives on the card. **API** and
 **API docs** remain in the header across views and open in a separate tab.
-Settings edits library configuration, as described below.
+Settings edits library configuration, as described below. The header theme switch
+chooses a neutral dark or light palette, remembered by this browser.
 
 1. Choose **Import your first DAT** in an empty library or the **+** beside
    **Platforms**. Operations offers a new import action when viewing an existing
@@ -36,7 +37,7 @@ Settings edits library configuration, as described below.
 3. Review the prepared platform, card/release/fingerprint counts and sample
    releases. **Prepare plan** refreshes the preview after changing options.
 4. **Import into library** applies the reviewed plan. **Open platform** takes you
-   to the saved cards; the platform count refreshes automatically.
+   to the saved cards, dismisses the completed import receipt, and refreshes counts.
 
 No-Intro, Redump and compatible Logiqx XML use the ordinary CLI importer, including
 library region/alias policy and preservation of existing metadata. No ROMs are
@@ -59,18 +60,25 @@ An interrupted server can leave its `.rommeta/web-import-*` upload directories;
 remove those only after ensuring their owning server is stopped. A running import
 cannot be cancelled/dismissed in this first workflow.
 
-## Enrich a platform
+## Enrich platforms
 
-Select a platform in **Library**, then choose **Platform actions → Enrich platform**.
+Use the ⋯ menu on a platform row → **Enrich platform**, or **Enrich platforms**
+in Operations. Select one or several platforms, or use **Select all**.
 
 1. Select sources and data types: metadata, artwork and video. Defaults come from
    the library's acquisition settings. Unavailable choices explain missing
    credentials or platform mappings; configure those in Settings/source setup.
 2. **Review tasks** prepares the selected jobs without contacting providers.
-   Review the platform and source/type list, then choose **Start enrichment**.
-3. **Operations** shows the current source, stage, game, counts and download
-   progress. Close the browser freely after starting; returning reconnects to the
-   same operation. Reconnecting or retrying Start never launches it twice.
+   Review the platform and source/type list, then choose **Add to queue**.
+   Optional parallel workers (1–32) apply within each task; provider limits still
+   apply. The default uses library/provider settings. Effective workers appear
+   beside each task; metadata databases may require serial processing.
+3. **Operations** shows stages in a separate list and progress/results for the
+   selected task. Downloads show active workers, transferred bytes, discovered
+   files and pending/failed counts; totals can grow while scanning. Queued tasks
+   start automatically in FIFO order when other web/CLI catalog writers finish.
+   Closing the browser preserves the queue and active work; reconnecting never
+   launches it twice.
 4. Review each source's result and choose **Open platform**. **Prepare another
    pass** creates a new plan when you want to retry incomplete work.
 
@@ -81,7 +89,7 @@ sources continue. ScreenScraper quota exhaustion skips its remaining tasks.
 Hasheous provides identity links from ROM hashes, rather than descriptions.
 Artwork can use existing source links without repeating metadata acquisition.
 
-This flow enriches the whole selected platform with ordinary acquisition
+This flow enriches all selected platforms with ordinary acquisition
 semantics. It does not force-overwrite existing results. Another pass skips
 completed metadata and downloaded files according to each provider's rules.
 Advanced force/refresh/limit options remain available through [CLI fetch](fetch.md).
@@ -90,7 +98,10 @@ Source credentials stay on the server and are never included in operation result
 The same operation lifetime and single-writer rules as DAT import apply:
 closing the browser is supported; restarting the server does not resume a running
 job or restore its receipt. Saved catalog changes remain. Inactive receipts expire
-after 24 hours. Running enrichment cannot be dismissed or cancelled.
+after 24 hours. Waiting queue entries can be removed before execution; running
+enrichment cannot be dismissed or cancelled. Catalog data updates do not make
+queued acquisition plans stale. Changed source settings require a fresh review;
+unavailable source/platform combinations appear as skipped tasks.
 
 ## Export on the server machine
 
@@ -104,8 +115,10 @@ LaunchBox. The CLI remains available through the same exporter.
 2. Choose the ROM folder and layout: one platform's ROMs, or a parent containing
    all platform folders. Select the catalog platform for the single-platform case.
    Batch mode uses the CLI folder recognition and reports skipped systems.
-3. Choose **Library defaults**, **Current preview settings**, or upload a YAML
-   profile (up to 1 MiB). **Build profile visually** opens the existing catalog
+3. Choose **Library settings (saved priorities)**, **Profile edited in this
+   browser**, or upload a YAML profile (up to 1 MiB). **View effective profile**
+   shows resolved title/language/source/media rules and the complete YAML.
+   **Edit browser profile** opens the existing catalog
    preview and source/language/media controls; **Continue to export** returns to
    setup using those settings. YAML profiles retain the ordinary CLI validation.
 4. **Save destination** stores the paths and selected profile policy in
@@ -114,7 +127,11 @@ LaunchBox. The CLI remains available through the same exporter.
    Removing an entry removes only its settings, never frontend files.
 5. **Prepare export plan** starts a background scan. Operations shows its progress,
    matching counts, native file count, game actions, conflicts and skipped systems.
-   The first 100 reviewed games are shown inline; **Download full plan** includes
+   **Inputs needing attention** lists unresolved, ambiguous and game-only matches
+   with filenames, reasons and candidate evidence. Search/page these inputs and
+   optionally exclude them from this export, then **Update plan**. This rebuilds
+   native output from the retained scan without writing or re-scanning ROMs.
+   Recognized inputs are included automatically; **Download full plan** includes
    all native changes and filenames. Preparing writes no destination files.
 6. Close the target frontend and choose **Apply export** after review. The server
    retains and applies this exact native plan, rechecking catalog/configuration,
@@ -278,7 +295,7 @@ A renamed/removed release must not leave a registered fingerprint dangling.
 A newly added `manual.*` source needs an existing named variant in the registry.
 Invalid or stale input stays in the editor for correction; it is never written.
 
-Review duplicates and Statistics are in **Platform actions** in the Platforms
+Review duplicates and Statistics are in the **⋯** menu on each row in the Platforms
 pane. **Compare (N)** appears beside card comparison controls after adding cards,
 and becomes available with at least two selected cards.
 
