@@ -244,6 +244,20 @@ test('edit mode exposes every field and names the exact destination',()=>{
  b.run('catalogInline.target={kind:"source",source:"launchbox",match:1}');
  assert.match(b.run('catalogInlineBanner()'),/Saved launchbox values/);
 });
+test('the toolbar can finish editing while a card is loading or failed to load',async()=>{
+ for(const failed of [false,true]){
+  const b=browser(async()=>json({}));
+  b.run('catalogUI.enabled=true;fetchJSON=()=>new Promise((resolve,reject)=>{state.resolveEdit=resolve;state.rejectEdit=reject})');
+  const pending=b.run('catalogStartInline()');
+  if(failed){b.run('state.rejectEdit(new Error("Unavailable"))');await pending;}
+  assert.equal((b.run('catalogInlineBanner()').match(/>Finish editing</g)||[]).length,1);
+  let finish;b.element('catalog-inline-cancel').addEventListener=(type,listener)=>{if(type==='click')finish=listener};
+  b.run('catalogBindInline()');finish();
+  assert.equal(b.run('catalogInline.mode'),false);
+  if(!failed){b.run('state.resolveEdit({fields:{title:"Late response"}})');await pending;}
+  assert.equal(b.run('catalogInline.card'),null);
+ }
+});
 test('save commits drafts for multiple records and stays in edit mode',async()=>{
  let sent;const card={revision:'new',fields:{title:'Orbit'},profile:{title:'Orbit'},records:[],registry:{sources:[]}};
  const b=browser(async(path,options)=>{sent={path,body:JSON.parse(options.body)};return json({card});});

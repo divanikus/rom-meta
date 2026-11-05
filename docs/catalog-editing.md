@@ -100,14 +100,16 @@ objects. You can add or remove source fields without replacing the whole record.
 
 Switching records retains their drafts. **Save changes** commits all edited
 records of this card in one atomic write; **Discard** discards them.
-**Finish editing** returns to the card. Leaving with unsaved changes asks before
+The compact editor toolbar contains the only **Finish editing** action; browsing
+and comparison controls return when editing ends. **Help** expands guidance for
+the selected source or Raw mode. Leaving with unsaved changes asks before
 discarding them. Invalid or stale saves retain the drafts. Drafts are not saved
 across a page/server restart; this differs from server-owned import operations.
 
 ### Named manual variants
 
-Choose **+ Named variant**, enter your own name, then contribute the fields you
-want to curate. You can create several variants and reuse each across cards.
+Choose **+** (**Add named variant**) beside the source tabs, enter your own name,
+then contribute the fields you want to curate. You can create several variants and reuse each across cards.
 Creating a variant saves its name immediately; **Save changes** saves its card
 fields. A variant stores only contributed values, never an implicit copy of the
 resolved card. **Rename variant** changes its label while retaining its stable ID.
