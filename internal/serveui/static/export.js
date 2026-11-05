@@ -128,7 +128,7 @@ function exportRenderFolder(){
 }
 function nativeExportDetail(job){
  const x=job.export,d=x.destination,n=x.totals,p=x.progress||{},busy=operationBusy(job),review=["ready","needs_review"].includes(job.state);
- return '<article class="operation-detail"><div class="operation-eyebrow">FRONTEND EXPORT · '+escapeHTML(exportStates[job.state]||job.state)+'</div><h2>'+escapeHTML(d.name)+'</h2>'+
+ return '<article class="operation-detail"><div class="operation-eyebrow">FRONTEND EXPORT · '+operationStatus(job.state,exportStates[job.state]||job.state)+'</div><h2>'+escapeHTML(d.name)+'</h2>'+
  '<dl class="operation-facts"><dt>Frontend</dt><dd>'+escapeHTML(d.target)+'</dd><dt>Destination</dt><dd>'+escapeHTML(d.path)+'</dd><dt>ROMs</dt><dd>'+escapeHTML(d.rom_root)+'</dd><dt>Scope</dt><dd>'+escapeHTML(d.all?"All platform folders":d.platform)+'</dd><dt>Profile</dt><dd>'+escapeHTML(d.profile_name)+'</dd>'+(d.media_root?'<dt>Media</dt><dd>'+escapeHTML(d.media_root)+'</dd>':"")+'</dl>'+
  (busy?'<div class="operation-progress" role="status"><strong>'+escapeHTML(exportStageLabel(p.Stage))+'</strong><span>'+escapeHTML(p.Item||"")+'</span>'+(p.Total>0?'<progress value="'+Math.min(p.Total,Math.max(0,p.Current||0))+'" max="'+p.Total+'"></progress><span>'+formatNumber(p.Current)+' / '+formatNumber(p.Total)+'</span>':'<progress aria-label="Export in progress"></progress>')+'<p>You can close the browser and return to this operation.</p></div>':"")+
  (job.error?'<p class="operation-error" role="alert">'+escapeHTML(job.error)+'</p>':"")+

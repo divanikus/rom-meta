@@ -102,7 +102,14 @@ body{font-size:14px}button,input,select,textarea{accent-color:var(--accent)}
 .enrichment-stage{display:grid;gap:4px;width:100%;font:inherit;text-align:left;padding:10px;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--text);cursor:pointer}.enrichment-stage small{color:var(--muted)}
 .enrichment-stage.active{background:var(--selected);border-color:var(--line)}
 .enrichment-stage-detail{min-width:0}.enrichment-transfers{display:grid;gap:12px}.enrichment-transfers>div{display:grid;gap:4px;min-width:0}.enrichment-transfers>div>span:first-child{font-size:11px;color:var(--muted)}.enrichment-transfers>div>span:nth-child(2){overflow-wrap:anywhere;font-size:12px}
-.queue-status{border-left:3px solid var(--accent);padding-left:12px}
+.queue-status{border-left:3px solid var(--warn);padding-left:12px}
+.operation-status{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;line-height:1.5;color:var(--muted);text-transform:none;letter-spacing:normal}
+.operation-status::before{content:"";width:6px;height:6px;flex:0 0 6px;border-radius:50%;background:currentColor}
+.operation-status.status-success{color:var(--accent2)}
+.operation-status.status-active,.operation-status.status-ready{color:var(--accent)}
+.operation-status.status-queued,.operation-status.status-warning{color:var(--warn)}
+.operation-status.status-error{color:var(--bad)}
+
 #catalog-dialog.is-decisions{width:min(1000px,94vw);max-height:88vh}
 #catalog-dialog.is-decisions[open]{display:flex;flex-direction:column}
 .is-decisions #catalog-content{display:flex;flex-direction:column;overflow:hidden;min-height:0;padding:18px}
@@ -132,7 +139,7 @@ body{font-size:14px}button,input,select,textarea{accent-color:var(--accent)}
 /* Visible platform commands and readable card blocks. */
 .platform-row .platform-item{padding-right:12px;box-shadow:none}.platform-row.active .platform-item{background:transparent;box-shadow:none}.platform-select{display:flex;align-items:flex-start;padding:17px 0 0 12px}.platform-select input{width:15px;height:15px;margin:0}
 .platform-selection-toolbar{padding:10px 12px;border-bottom:1px solid var(--line);flex-shrink:0}.platform-selection-options{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;color:var(--muted);font-size:11px}.platform-selection-options label{display:flex;align-items:center;gap:6px}
-.platform-action-bar{display:flex;gap:6px}.platform-action-bar button{background:var(--panel2);border:1px solid var(--line);border-radius:4px;color:var(--text);font:inherit;font-size:12px;padding:7px 9px;cursor:pointer;white-space:nowrap}.platform-action-bar .platform-fetch-action{background:var(--accent);border-color:var(--accent);color:var(--button-text);font-weight:600;flex:1}.platform-action-bar button:disabled{opacity:.4;cursor:default}.platform-action-bar button:hover:not(:disabled){filter:brightness(1.12)}.platform-action-bar svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;vertical-align:middle}
+.platform-action-bar{display:flex;gap:6px}.platform-action-bar button{background:var(--panel2);border:1px solid var(--line);border-radius:4px;color:var(--text);font:inherit;font-size:12px;width:36px;height:36px;padding:8px;display:grid;place-items:center;cursor:pointer;white-space:nowrap}.platform-action-bar .platform-fetch-action{background:var(--accent);border-color:var(--accent);color:var(--button-text);font-weight:600}.platform-action-bar button:disabled{opacity:.4;cursor:default}.platform-action-bar button:hover:not(:disabled){filter:brightness(1.12)}.platform-action-bar svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.platform-action-bar button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .profile-content{align-content:start}.profile-facts .fact-row{display:block;padding:10px 12px}.profile-facts .fact-label{font-size:11px}.profile-facts .fact-value{margin-top:5px;line-height:1.5}.profile-facts .catalog-value-origin{font-size:10px;margin-top:5px}
 .catalog-inline-block{display:grid;grid-template-columns:minmax(0,1fr);align-content:start;gap:8px;min-width:0}.catalog-inline-block>.section{gap:0}.catalog-inline-block .catalog-inline-label{justify-content:flex-start}.catalog-inline-block .fact-label{font-size:13px;font-weight:600}.catalog-inline-block .catalog-value-origin{margin:0}
 .catalog-inline-label{align-items:center}.catalog-pencil{padding:1px 5px}.overview-description,.overview-details{align-content:start}.overview-details{margin-top:22px}.detail-body>.card-section{width:100%;max-width:1280px}

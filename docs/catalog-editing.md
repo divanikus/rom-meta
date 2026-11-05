@@ -25,7 +25,8 @@ rom-meta serve --data-root "<catalog>" --edit
 **Library / Operations / Export / Settings** separate browsing, background work,
 export-profile preparation and library defaults. Check platforms in the sidebar,
 then use the **Fetch metadata**, **Merge** or **Statistics** buttons above the
-platform list. The action strip stays in that column and shows the selection
+platform list. These icon buttons have hover tooltips and accessible names.
+The action strip stays in that column and shows the selection
 count. Without checked platforms it uses the currently browsed platform.
 Statistics requires one platform. The edit pencil lives on the card. **API** and
 **API docs** remain in the header across views and open in a separate tab.
@@ -74,11 +75,17 @@ and lets you adjust it before choosing sources, data types and parallel workers.
    the library's acquisition settings. Unavailable choices explain missing
    credentials or platform mappings; configure those in Settings/source setup.
 2. **Review tasks** prepares the selected jobs without contacting providers.
-   Review the platform and source/type list, then choose **Add to queue**.
+   Review the platform and source/type list, then choose **Start fetching**.
+   While another operation is active or queued, this button becomes **Enqueue**;
+   the accepted task starts automatically when its turn arrives. The label follows
+   Operations updates, including when the previous job finishes.
    Optional parallel workers (1–32) apply within each task; provider limits still
    apply. The default uses library/provider settings. Effective workers appear
    beside each task; metadata databases may require serial processing.
-3. **Operations** shows stages in a separate list and progress/results for the
+3. **Operations** colors status labels consistently in the operation list and
+   task stages: green for complete, blue for active/ready, amber for queued or
+   attention needed, red for failure, and gray for waiting/skipped stages.
+   Text labels remain visible. It shows stages in a separate list and progress/results for the
    selected task. Downloads show active workers, transferred bytes, discovered
    files and pending/failed counts; totals can grow while scanning. Queued tasks
    start automatically in FIFO order when other web/CLI catalog writers finish.

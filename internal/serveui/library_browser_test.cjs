@@ -137,8 +137,34 @@ test('enrichment prepares only reviewed source/type pairs for the exact platform
  await b.run('enrichmentPrepare()');
  assert.deepEqual(b.calls.filter(c=>c[0]==='POST'),[['POST','/api/catalog/enrichment-plan',{platform:'Console',platforms:['Console'],concurrency:4,revision:'original',jobs:[{source:'launchbox',type:'metadata'}]}]]);
  assert.equal(b.run('libraryUI.selected'),'prepared');assert.equal(b.run('enrichmentUI.draft'),null);
- assert.match(b.element('operations-pane').innerHTML,/Add to queue/);
+ assert.match(b.element('operations-pane').innerHTML,/>Start fetching<\/button>/);
 });
+test('fetch action distinguishes runnable plans from active and queued operations',()=>{
+ const b=browser();b.run('plan={id:"new",kind:"enrichment",platform:"Console",state:"ready",enrichment:{jobs:[]}};libraryUI.jobs=[plan]');
+ assert.match(b.run('enrichmentDetail(plan)'),/>Start fetching<\/button>/);
+ for(const state of ['planning','importing','enriching','exporting','queued']){
+  b.context.otherState=state;b.run('libraryUI.jobs=[plan,{id:"other",state:otherState}]');
+  assert.match(b.run('enrichmentDetail(plan)'),/>Enqueue<\/button>/,state);
+ }
+ for(const state of ['ready','needs_review','succeeded','incomplete','failed']){
+  b.context.otherState=state;b.run('libraryUI.jobs=[plan,{id:"other",state:otherState}]');
+  assert.match(b.run('enrichmentDetail(plan)'),/>Start fetching<\/button>/,state);
+ }
+});
+
+test('ready fetch action returns to Start after the active operation finishes',async()=>{
+ const b=browser();
+ const plan={id:'new',kind:'enrichment',platform:'Console',state:'ready',enrichment:{jobs:[]}};
+ const other={id:'other',filename:'example.dat',state:'importing'};
+ b.context.fetchJSON=async path=>path==='/api/operations'?JSON.parse(JSON.stringify([plan,other])):[];
+ b.run('state.view="operations";libraryUI.selected="new"');
+ await b.run('libraryPollOperations()');
+ assert.match(b.element('operations-pane').innerHTML,/>Enqueue<\/button>/);
+ other.state='succeeded';await b.run('libraryPollOperations()');
+ assert.match(b.element('operations-pane').innerHTML,/>Start fetching<\/button>/);
+ assert.equal(b.calls.filter(c=>c[0]==='POST').length,0);
+});
+
 test('enrichment partial completion refreshes data once and preserves an active editor',async()=>{
  const b=browser();let reloads=0;
  b.context.selectPlatform=async()=>{reloads++};b.context.catalogEditorActive=()=>true;

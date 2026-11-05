@@ -64,23 +64,24 @@ function enrichmentProgress(job){
 }
 function enrichmentTaskResult(t){
  const c=t.counts||{};
- return '<p>'+escapeHTML(enrichmentStates[t.state]||t.state)+'</p>'+
+ return '<p>'+operationStatus(t.state,enrichmentStates[t.state]||t.state)+'</p>'+
  (["pending","running","skipped"].includes(t.state)?"":'<dl class="operation-facts">'+(t.type==="metadata"?'<dt>Matched</dt><dd>'+formatNumber(c.matched||0)+'</dd><dt>Not found</dt><dd>'+formatNumber(c.not_found||0)+'</dd><dt>Files written</dt><dd>'+formatNumber(c.written||0)+'</dd>':'<dt>Downloaded</dt><dd>'+formatNumber(c.downloaded||0)+'</dd>')+'<dt>Existing</dt><dd>'+formatNumber(c.existing||0)+'</dd><dt>Failed</dt><dd>'+formatNumber(c.failed||0)+'</dd></dl>')+
  (t.error?'<p class="operation-error">'+escapeHTML(t.error)+'</p>':"");
 }
+function enrichmentWillQueue(job){return libraryUI.jobs.some(other=>other.id!==job.id&&operationBusy(other));}
 function enrichmentDetail(job){
- const e=job.enrichment,busy=operationBusy(job),ready=job.state==="ready",queued=job.state==="queued",platforms=e.platforms||[job.platform];
+ const e=job.enrichment,busy=operationBusy(job),ready=job.state==="ready",queued=job.state==="queued",willQueue=enrichmentWillQueue(job),platforms=e.platforms||[job.platform];
  const index=enrichmentUI.tasks.has(job.id)?enrichmentUI.tasks.get(job.id):Math.max(0,e.current||0),task=e.jobs[index]||e.jobs[0];
  const finished=e.jobs.filter(t=>!["pending","running"].includes(t.state)).length;
  const queue=libraryUI.jobs.filter(j=>j.state==="queued").sort((a,b)=>(a.queued_at||"").localeCompare(b.queued_at||""));
- return '<article class="operation-detail enrichment-detail"><div class="operation-eyebrow">FETCH METADATA · '+escapeHTML(enrichmentStates[job.state]||job.state)+'</div><h2>'+escapeHTML(platforms.length===1?platforms[0]:platforms.length+" platforms")+'</h2>'+
+ return '<article class="operation-detail enrichment-detail"><div class="operation-eyebrow">FETCH METADATA · '+operationStatus(job.state,enrichmentStates[job.state]||job.state)+'</div><h2>'+escapeHTML(platforms.length===1?platforms[0]:platforms.length+" platforms")+'</h2>'+
  (platforms.length>1?'<details><summary>Selected platforms</summary><ul>'+platforms.map(p=>'<li>'+escapeHTML(p)+'</li>').join("")+'</ul></details>':"")+
- (queued?'<p class="queue-status" role="status">Queue position '+Math.max(1,queue.findIndex(j=>j.id===job.id)+1)+'. Starts automatically when the current library operation finishes. You can close the browser.</p>':ready?'<p>Review the tasks, then add them to the server queue. No downloads have started.</p>':'<p>'+finished+' / '+e.jobs.length+' tasks finished. Progress remains available in Operations.</p>')+
- '<div class="enrichment-layout"><nav aria-label="Fetch stages"><ol class="enrichment-tasks">'+e.jobs.map((t,i)=>'<li><button class="enrichment-stage '+(i===index?'active':'')+'" data-enrichment-task="'+i+'"><span>'+escapeHTML(sourceLabel(t.source))+' · '+enrichmentTypes[t.type]+'</span>'+(platforms.length>1?'<small>'+escapeHTML(t.platform)+'</small>':"")+'<small>'+escapeHTML(enrichmentStates[t.state]||t.state)+'</small></button></li>').join("")+'</ol></nav><section class="enrichment-stage-detail"><h3>'+escapeHTML(task?sourceLabel(task.source)+" · "+enrichmentTypes[task.type]:"Tasks")+'</h3>'+
+ (queued?'<p class="queue-status" role="status">Queue position '+Math.max(1,queue.findIndex(j=>j.id===job.id)+1)+'. Starts automatically when the current library operation finishes. You can close the browser.</p>':ready?'<p>'+(willQueue?'Another operation is active or queued. These tasks will start automatically when it is their turn.':'Review the tasks, then start fetching metadata.')+' No downloads have started.</p>':'<p>'+finished+' / '+e.jobs.length+' tasks finished. Progress remains available in Operations.</p>')+
+ '<div class="enrichment-layout"><nav aria-label="Fetch stages"><ol class="enrichment-tasks">'+e.jobs.map((t,i)=>'<li><button class="enrichment-stage '+(i===index?'active':'')+'" data-enrichment-task="'+i+'"><span>'+escapeHTML(sourceLabel(t.source))+' · '+enrichmentTypes[t.type]+'</span>'+(platforms.length>1?'<small>'+escapeHTML(t.platform)+'</small>':"")+'<span>'+operationStatus(t.state,enrichmentStates[t.state]||t.state)+'</span></button></li>').join("")+'</ol></nav><section class="enrichment-stage-detail"><h3>'+escapeHTML(task?sourceLabel(task.source)+" · "+enrichmentTypes[task.type]:"Tasks")+'</h3>'+
  (task?'<p class="secondary">'+escapeHTML(task.platform||job.platform)+' · '+(task.workers||1)+' worker'+((task.workers||1)===1?'':'s')+'</p>'+((job.state==="enriching"&&index===e.current)?enrichmentProgress(job):enrichmentTaskResult(task)):"")+
  (job.state==="enriching"&&index!==e.current?'<button class="tab-button" data-enrichment-follow>Show current task</button>':"")+'</section></div>'+
  (job.error?'<p class="operation-error" role="alert">'+escapeHTML(job.error)+'</p>':"")+(job.warning?'<p class="operation-error">'+escapeHTML(job.warning)+'</p>':"")+
- '<div class="operation-actions">'+(ready?'<button class="catalog-primary" data-enrichment-start="'+job.id+'">Add to queue</button><button class="tab-button" data-enrichment-retry>Change selection</button>':!busy?'<button class="tab-button" data-import-open="'+job.id+'">Open platform</button><button class="tab-button" data-enrichment-retry>'+(job.state==='needs_review'?'Change selection':'Prepare another pass')+'</button>':"")+
+ '<div class="operation-actions">'+(ready?'<button class="catalog-primary" data-enrichment-start="'+job.id+'">'+(willQueue?'Enqueue':'Start fetching')+'</button><button class="tab-button" data-enrichment-retry>Change selection</button>':!busy?'<button class="tab-button" data-import-open="'+job.id+'">Open platform</button><button class="tab-button" data-enrichment-retry>'+(job.state==='needs_review'?'Change selection':'Prepare another pass')+'</button>':"")+
  (!busy||queued?'<button class="tab-button" data-import-dismiss="'+job.id+'">'+(queued?'Remove from queue':ready?'Discard plan':'Dismiss result')+'</button>':"")+'</div></article>';
 }
 function enrichmentBind(selected){
@@ -90,7 +91,7 @@ function enrichmentBind(selected){
  $("enrichment-concurrency")?.addEventListener("change",e=>{enrichmentUI.draft.concurrency=Number(e.target.value);});
  $("enrichment-plan-form")?.addEventListener("submit",enrichmentPrepare);
  $("enrichment-defaults")?.addEventListener("click",()=>{const f=enrichmentUI.draft;f.selected=new Set(f.choices.filter(c=>c.available&&c.default).map(enrichmentKey));f.concurrency=0;libraryRenderOperations(true);});
- document.querySelectorAll("[data-enrichment-start]").forEach(b=>b.addEventListener("click",async()=>{b.disabled=true;b.textContent="Adding to queue…";await libraryImportAction("/api/catalog/enrichment-start",{id:selected.id,revision:selected.revision});}));
+ document.querySelectorAll("[data-enrichment-start]").forEach(b=>b.addEventListener("click",async()=>{b.disabled=true;b.textContent=enrichmentWillQueue(selected)?"Adding to queue…":"Starting…";await libraryImportAction("/api/catalog/enrichment-start",{id:selected.id,revision:selected.revision});}));
  document.querySelectorAll("[data-enrichment-retry]").forEach(b=>b.addEventListener("click",()=>enrichmentOpen(selected.enrichment.platforms||[selected.platform],selected.enrichment.jobs,selected.enrichment.concurrency||0)));
  document.querySelectorAll("[data-enrichment-task]").forEach(b=>b.addEventListener("click",()=>{enrichmentUI.tasks.set(selected.id,Number(b.dataset.enrichmentTask));libraryRenderOperations(true);}));
  document.querySelectorAll("[data-enrichment-follow]").forEach(b=>b.addEventListener("click",()=>{enrichmentUI.tasks.delete(selected.id);libraryRenderOperations(true);}));
