@@ -5,14 +5,14 @@ const vm=require('node:vm');
 const script=readFileSync(require('node:path').join(__dirname,'static/library.js'),'utf8').replace(/librarySyncNavigation\(\);\s*libraryPollOperations\(\);\s*$/,'');
 function browser(){
  const elements=new Map(),calls=[],timers=[];
- function element(id){if(!elements.has(id))elements.set(id,{innerHTML:'',textContent:'',value:'',files:[],listeners:{},classes:new Set(),classList:{add(name){element(id).classes.add(name)},toggle(name,on){on?element(id).classes.add(name):element(id).classes.delete(name)}},setAttribute(){},replaceChildren(){},querySelectorAll:()=>[],addEventListener(k,v){this.listeners[k]=v},contains:()=>false,focus(){}});return elements.get(id);}
+ function element(id){if(!elements.has(id))elements.set(id,{innerHTML:'',textContent:'',value:'',files:[],listeners:{},classes:new Set(),classList:{remove(name){element(id).classes.delete(name)},add(name){element(id).classes.add(name)},toggle(name,on){on?element(id).classes.add(name):element(id).classes.delete(name)}},setAttribute(){},replaceChildren(){},querySelectorAll:()=>[],addEventListener(k,v){this.listeners[k]=v},contains:()=>false,focus(){}});return elements.get(id);}
  const context=vm.createContext({console,URLSearchParams,$:element,window:{addEventListener(){},confirm:()=>true},document:{activeElement:null,querySelectorAll:()=>[],createTextNode:s=>s},
   state:{view:'browse',exportMode:false,platforms:[],platformsLoaded:true,platform:'Console',game:{id:'kept'},games:[{id:'kept'}]},
   catalogUI:{enabled:true},escapeHTML:s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),escapeAttr:s=>String(s??'').replaceAll('"','&quot;').replaceAll('<','&lt;'),formatNumber:n=>String(n??0),
   fetchJSON:async path=>{calls.push(['GET',path]);return []},catalogPost:async(path,body)=>{calls.push(['POST',path,JSON.parse(JSON.stringify(body))]);return {id:body.id,revision:body.revision,state:'importing',filename:'example.dat'}},
   renderPlatforms(){},sourceLabel:s=>s,setView:view=>{context.state.view=view},setExportMode:on=>{context.state.exportMode=on},catalogLeaveInline:()=>true,
   setTimeout:(fn,ms)=>{timers.push(ms);return timers.length},clearTimeout(){},selectPlatform:async()=>{}});
- vm.runInContext(script,context);vm.runInContext(readFileSync(require('node:path').join(__dirname,'static/enrichment.js'),'utf8'),context);return {run:c=>vm.runInContext(c,context),element,calls,timers,context};
+ vm.runInContext(readFileSync(require('node:path').join(__dirname,'static/export.js'),'utf8'),context);vm.runInContext(script,context);vm.runInContext(readFileSync(require('node:path').join(__dirname,'static/enrichment.js'),'utf8'),context);return {run:c=>vm.runInContext(c,context),element,calls,timers,context};
 }
 test('reconnection only reads server operations and finds the running job',async()=>{
  const b=browser();b.run('fetchJSON=async()=>[{id:"same-job",state:"importing",filename:"games.dat",progress:{Stage:"writing",Current:4,Total:9}}]');
@@ -159,4 +159,56 @@ test('late enrichment choices cannot replace a newer platform or a new import',a
  const third=b.run('enrichmentOpen("Third")');b.run('libraryOpenImport()');
  resolve.Third({platform:'Third',revision:'3',choices:[]});await third;
  assert.equal(b.run('enrichmentUI.draft'),null);
+});
+
+test('export navigation opens setup and keeps a draft through other views',async()=>{
+ const b=browser();b.run('nativeExportUI.loaded=true;nativeExportUI.draft={...exportDraft(),name:"ES-DE couch",path:"/frontends/esde",rom_root:"/roms"};libraryNavigate("export")');
+ assert.equal(b.run('state.view'),'export');assert.match(b.element('native-export-pane').innerHTML,/ES-DE couch/);
+ b.run('libraryNavigate("library");libraryNavigate("export")');
+ assert.equal(b.run('nativeExportUI.draft.path'),'/frontends/esde');
+ assert.equal(b.calls.filter(x=>x[0]==='POST').length,0);
+});
+test('export reconnect reads progress without replaying planning or apply',async()=>{
+ const b=browser();
+ b.run('state.view="operations";fetchJSON=async()=>[{id:"exp1",kind:"export",state:"exporting",export:{destination:{name:"Couch",target:"es-de",path:"/output",rom_root:"/roms",platform:"n64"},progress:{Stage:"write",Item:"gamelist.xml",Current:1,Total:3},written:1}}]');
+ await b.run('libraryPollOperations()');
+ assert.equal(b.run('libraryUI.selected'),'exp1');assert.equal(b.timers.at(-1),1000);
+ assert.match(b.element('operations-pane').innerHTML,/1 \/ 3/);assert.doesNotMatch(b.element('operations-pane').innerHTML,/data-native-export-apply/);
+ assert.equal(b.calls.filter(x=>x[0]==='POST').length,0);
+});
+test('export prepare freezes chosen paths and uploaded profile without applying',async()=>{
+ const b=browser();b.run('state.view="export";nativeExportUI.loaded=true;nativeExportUI.draft={...exportDraft(),profile_yaml:"schema_version: 1\\n",profile_name:"curated.yaml"}');
+ for(const [id,value]of Object.entries({'export-destination-name':'Couch','export-run-target':'es-de','export-destination-path':'/frontend','export-rom-root':'/roms/n64','export-run-platform':'n64','export-media-root':'','export-profile-mode':'yaml','export-rom-mode':'single'}))b.element(id).value=value;
+ const op={id:'plan1',kind:'export',state:'planning',revision:1,export:{destination:{name:'Couch'},progress:{}}};
+ b.context.catalogPost=async(path,body)=>{b.calls.push(['POST',path,JSON.parse(JSON.stringify(body))]);return op};
+ b.context.fetchJSON=async()=>[op];
+ await b.run('exportPrepare()');
+ const posts=b.calls.filter(x=>x[0]==='POST');assert.equal(posts.length,1);assert.equal(posts[0][1],'/api/export/prepare');
+ assert.equal(posts[0][2].destination.path,'/frontend');assert.equal(posts[0][2].destination.rom_root,'/roms/n64');assert.equal(posts[0][2].destination.profile_yaml,'schema_version: 1\n');
+ assert.equal(b.run('state.view'),'operations');assert.equal(b.run('libraryUI.selected'),'plan1');
+});
+test('export conflicts block apply and partial results retain readable counts',()=>{
+ const b=browser();b.context.job={id:'x',kind:'export',state:'needs_review',export:{destination:{name:'<img>',path:'/out',rom_root:'/rom'},written:0,totals:{matched:1,unmatched:2,ambiguous:0,unsupported:0,files:3,games:0,changes:[],conflicts:['<script>bad</script>'],warnings:[],skipped:[]}}};
+ const html=b.run('nativeExportDetail(job)');assert.doesNotMatch(html,/data-native-export-apply|<script>|<img>/);assert.match(html,/&lt;script/);assert.match(html,/Download full plan/);
+ b.run('job.state="incomplete";job.export.written=1');const partial=b.run('nativeExportDetail(job)');assert.match(partial,/Some files were written/);assert.match(partial,/Prepare another plan/);
+});
+test('late folder replies cannot reopen a closed picker or replace a newer path',async()=>{
+ const b=browser(),resolve={};
+ b.context.fetchJSON=path=>new Promise(r=>{resolve[new URL('http://test'+path).searchParams.get('path')]=r});
+ const first=b.run('exportBrowse("rom_root","/first")'),second=b.run('exportBrowse("rom_root","/second")');
+ resolve['/second']({path:'/second',parent:'/',folders:[]});await second;
+ resolve['/first']({path:'/first',parent:'/',folders:[]});await first;
+ assert.equal(b.run('nativeExportUI.folder.path'),'/second');
+ const third=b.run('exportBrowse("path","/third")');b.run('exportCloseFolder()');resolve['/third']({path:'/third',folders:[]});await third;
+ assert.equal(b.run('nativeExportUI.folder'),null);
+});
+
+
+test('unchanged export polling preserves expanded details and focus',async()=>{
+ const b=browser();const op={id:'steady',kind:'export',state:'ready',export:{destination:{name:'Couch',path:'/out',rom_root:'/roms'},totals:{files:1,games:0,changes:[]},progress:{}}};
+ b.context.fetchJSON=async()=>[op];b.run('state.view="operations"');
+ await b.run('libraryPollOperations()');
+ b.element('operations-pane').innerHTML='user is reviewing expanded details';
+ await b.run('libraryPollOperations()');
+ assert.equal(b.element('operations-pane').innerHTML,'user is reviewing expanded details');
 });

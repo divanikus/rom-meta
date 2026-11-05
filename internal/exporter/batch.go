@@ -67,7 +67,7 @@ func BuildBatch(options BatchOptions) (*BatchPlan, error) {
 		return nil, fmt.Errorf("output must be separate from the catalog and ROM trees")
 	}
 	// Validate the shared policy even if every folder is skipped.
-	if _, err := loadProfile(root, options.ProfilePath); err != nil {
+	if _, err := loadOptionsProfile(root, options.Options); err != nil {
 		return nil, err
 	}
 	selector, err := LoadPlatformSelector(root)

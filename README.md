@@ -117,17 +117,18 @@ Open http://127.0.0.1:8787 for the read-only browser. Local browsing requires no
 token or profile. Stats starts with one platform; full-catalog scans are explicit,
 show progress and support cancellation. HDD/network scans can take minutes.
 Video loads on playback. The ordinary view includes saved game fields and source
-evidence. Choose **Export preview** to adjust one shared frontend/language/media
-profile while browsing, then **Save profile** to download YAML for CLI export.
+evidence. Choose **Export → Build profile visually** to adjust one shared
+frontend/language/media profile while browsing; **Save profile** downloads YAML
+for CLI export.
 Advanced offers discovered sources and frontend-supported media types. Cards
 show metadata, Sources and then Media together in Overview; Releases & fingerprints
 and Raw have separate tabs. Registered file names, sizes and hashes load on demand;
 export mode shows selected media and a native XML preview. Variants use readable
 translation labels.
-Add `--edit` to correct cards and build automatic fold plans with visual comparison
-and batch apply. See [catalog editing](docs/catalog-editing.md). Frontend export
-remains a CLI action; [browser export preview](docs/catalog-api.md#browse-with-an-export-profile)
-prepares its selection profile.
+Add `--edit` for DAT import, enrichment, card/source editing, reviewed folds and
+native export on the serve host. **Export** saves named destinations, selects ROMs
+and a profile, then prepares a plan before applying. **Operations** keeps progress
+available after browser closure. See [library management](docs/catalog-editing.md).
 
 ## HTTP API
 

@@ -933,9 +933,11 @@
 <script src="/catalog-edit.js" defer></script>
 <link rel="stylesheet" href="/library.css">
 <script src="/enrichment.js" defer></script>
+<script src="/export.js" defer></script>
 <script src="/library.js" defer></script>
 </head>
 <body>
+<div id="export-folder-dialog" class="export-folder-dialog hidden" role="dialog" aria-modal="true" aria-label="Choose server folder"></div>
   <div class="app" id="app">
     <header>
       <div class="brand">RomMeta</div>
@@ -974,7 +976,7 @@
           </div></details>
           <button class="tab-button" id="save-profile" type="button">Save profile</button>
         </div>
-        <div class="export-notice hidden" id="export-notice">Preview across the library: one selected description and media per role. Save the profile to use it with CLI export.</div>
+        <div class="export-notice hidden" id="export-notice">Preview across the library: one selected description and media per role. <button class="tab-button" type="button" onclick="libraryNavigate('export')">Continue to export</button> Save profile also downloads YAML for CLI use.</div>
         <div class="error hidden" id="export-error" role="status"></div>
       </div>
       <div class="top-status" id="top-status">Loading...</div>
@@ -1019,7 +1021,8 @@
     </section>
 
     <section class="stats-view hidden" id="stats-pane"></section>
-    <section class="management-page hidden" id="operations-pane" aria-label="Operations"></section>
+    <section class="management-page hidden" id="native-export-pane" aria-label="Export"></section>
+<section class="management-page hidden" id="operations-pane" aria-label="Operations"></section>
     <section class="management-page hidden" id="settings-pane" aria-label="Settings"><h1>Settings</h1></section>
     <section class="management-page hidden" id="library-empty"><div class="empty-library-card"><span class="import-symbol" aria-hidden="true">↥</span><h1>A library starts with a DAT</h1><p>Bring in a game list, then add descriptions and artwork, review duplicates, and prepare your export.</p><button class="catalog-primary hidden" data-import-new>Import your first DAT</button><p class="secondary" id="empty-readonly">This server is read-only. Start serve with --edit to import through the browser.</p></div></section>
   </div>

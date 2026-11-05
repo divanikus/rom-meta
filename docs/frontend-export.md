@@ -5,6 +5,11 @@ games and enriches existing entries using a prepared local catalog or the same
 catalog API. ROMs and catalog payloads remain unchanged. Choose the destination and
 inspect the plan; add `--apply` to write the planned destination files.
 
+For a guided workflow on the machine running serve, use **Export** in
+`serve --edit`: saved destinations, ROM/profile selection, a reviewed native plan
+and reconnectable Operations progress. See [browser export](catalog-editing.md#export-on-the-server-machine).
+CLI local/API export remains fully supported.
+
 ```powershell
 rom-meta export --target launchbox --platform nes --data-root "D:\Catalog" --rom-root "D:\ROMs\nes" --destination "D:\LaunchBox"
 rom-meta export --target launchbox --platform nes --data-root "D:\Catalog" --rom-root "D:\ROMs\nes" --destination "D:\LaunchBox" --apply

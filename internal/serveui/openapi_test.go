@@ -22,7 +22,7 @@ func TestBrowserOpenAPIRoutesAndWireSchemas(t *testing.T) {
 		t.Fatal(err)
 	}
 	paths := doc["paths"].(map[string]any)
-	for _, path := range []string{"/api", "/api/platforms", "/api/games", "/api/game", "/api/fingerprints", "/api/export-preview", "/api/export-options", "/api/stats", "/media", "/api/catalog", "/api/catalog/edit", "/api/catalog/edit-preview", "/api/catalog/fold-plan", "/api/catalog/fold-preview", "/api/catalog/fold-apply", "/api/catalog/fold-discard", "/api/operations", "/api/operations/dismiss", "/api/catalog/enrichment-options", "/api/catalog/enrichment-plan", "/api/catalog/enrichment-start", "/api/catalog/import-upload", "/api/catalog/import-plan", "/api/catalog/import-apply", "/api/catalog/import-dismiss", "/api/catalog/settings"} {
+	for _, path := range []string{"/api/export/destinations", "/api/export/folders", "/api/export/prepare", "/api/export/apply", "/api/export/plan", "/api", "/api/platforms", "/api/games", "/api/game", "/api/fingerprints", "/api/export-preview", "/api/export-options", "/api/stats", "/media", "/api/catalog", "/api/catalog/edit", "/api/catalog/edit-preview", "/api/catalog/fold-plan", "/api/catalog/fold-preview", "/api/catalog/fold-apply", "/api/catalog/fold-discard", "/api/operations", "/api/operations/dismiss", "/api/catalog/enrichment-options", "/api/catalog/enrichment-plan", "/api/catalog/enrichment-start", "/api/catalog/import-upload", "/api/catalog/import-plan", "/api/catalog/import-apply", "/api/catalog/import-dismiss", "/api/catalog/settings"} {
 		if paths[path] == nil {
 			t.Fatal("undocumented route", path)
 		}

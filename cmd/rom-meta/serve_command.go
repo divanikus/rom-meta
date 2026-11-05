@@ -17,7 +17,7 @@ func runServe(args []string) error {
 	flags.SetOutput(os.Stdout)
 	flags.Usage = func() { printServeUsage() }
 	flags.StringVar(&options.DataRoot, "data-root", ".", "Catalog root")
-	flags.BoolVar(&options.AllowEdit, "edit", false, "Enable browser import, enrichment, settings and card editing")
+	flags.BoolVar(&options.AllowEdit, "edit", false, "Enable browser import, enrichment, export, settings and card editing")
 	flags.StringVar(&options.Addr, "addr", defaultAddr, "One HTTP listen address")
 	flags.StringVar(&options.ProfilePath, "profile", "", "Optional selection profile; defaults follow sources.yaml")
 	flags.StringVar(&options.LookupCacheDir, "lookup-cache-dir", "", "Optional derived index directory; - disables")
@@ -79,8 +79,9 @@ Set ROMMETA_API_TOKEN (32+ characters) only to enable optional shared protection
 Clients use Bearer; browsers use HTTP Basic (user rommeta, password the same token).
 There are no user accounts, roles or sessions. Use TLS outside a trusted network.
 
-Add --edit to enable browser DAT import, platform enrichment, library settings,
-saved card corrections and reviewed fold plans.
+Add --edit to enable browser DAT import, platform enrichment, native export,
+library settings, saved card corrections and reviewed fold plans.
+Export destinations and ROM folders are selected on the machine running serve.
 Ordinary browsing stays read-only. Do not run older catalog writers concurrently.
 Export writes frontend output while preserving the catalog and source ROMs.
 Stats reports progress and cancels on navigation. Video opens only on explicit play.

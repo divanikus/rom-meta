@@ -4,22 +4,26 @@ const importStages={opening:"Opening DAT",parsing:"Reading releases",planning:"P
 const operationLabels={needs_selection:"Choose a DAT",planning:"Preparing plan",ready:"Ready to import",needs_review:"Needs attention",importing:"Importing",succeeded:"Complete",failed:"Could not finish"};
 function libraryNavigate(view){
  if(typeof catalogLeaveInline==="function"&&!catalogLeaveInline())return;
+ if(view==="export"&&state.view==="browse"&&state.exportMode&&typeof nativeExportUI!=="undefined"&&nativeExportUI.draft?.profile_mode==="current")nativeExportUI.draft.target=state.exportSettings.target;
  libraryUI.view=view;
- if(view==="library"||view==="export"){setView("browse");setExportMode(view==="export");}
+ if(view==="library"){setView("browse");setExportMode(false);}
  else setView(view);
  librarySyncNavigation();
- if(view==="operations")libraryPollOperations();
+ if(view==="operations"){libraryRenderOperations();libraryPollOperations();}
  if(view==="settings")libraryLoadSettings();
+ if(view==="export"&&typeof exportOpen==="function")exportOpen();
 }
 function librarySyncNavigation(){
  if(typeof libraryUI==="undefined")return;
  const view=state.view==="browse"?(state.exportMode?"export":"library"):state.view;
  libraryUI.view=view;
- $("top-status")?.classList.toggle("hidden",view!=="library"&&view!=="export");
+ $("top-status")?.classList.toggle("hidden",state.view!=="browse");
  for(const [id,target] of [["browse-tab","library"],["operations-tab","operations"],["export-mode","export"],["settings-tab","settings"]]){
   $(id)?.classList.toggle("active",view===target);$(id)?.setAttribute("aria-current",view===target?"page":"false");
  }
  $("operations-pane")?.classList.toggle("hidden",view!=="operations");
+ $("native-export-pane")?.classList.toggle("hidden",state.view!=="export");
+ $("export-mode")?.setAttribute("aria-pressed",String(view==="export"));
  $("settings-pane")?.classList.toggle("hidden",view!=="settings");
  const empty=state.platformsLoaded&&state.platforms.length===0&&state.view==="browse";
  $("library-empty")?.classList.toggle("hidden",!empty);
@@ -33,13 +37,14 @@ function librarySyncNavigation(){
  $("platform-workspace-actions")?.classList.toggle("hidden",!state.platform||!["library","stats"].includes(view));
  $("platform-heading")?.replaceChildren(document.createTextNode(state.platform||"Library"));
 }
-function operationTitle(job){return job.kind==="enrichment"?"Enrich "+job.platform:job.filename}
-function operationLabel(job){return job.kind==="enrichment"?(enrichmentStates[job.state]||job.state):(operationLabels[job.state]||job.state)}
-function operationBusy(job){return job.state==="planning"||job.state==="importing"||job.state==="enriching"}
+function operationTitle(job){if(job.kind==="export")return "Export "+job.export.destination.name;return job.kind==="enrichment"?"Enrich "+job.platform:job.filename}
+function operationLabel(job){if(job.kind==="export")return exportStates[job.state]||job.state;return job.kind==="enrichment"?(enrichmentStates[job.state]||job.state):(operationLabels[job.state]||job.state)}
+function operationBusy(job){return job.state==="planning"||job.state==="importing"||job.state==="enriching"||job.state==="exporting"}
 async function libraryPollOperations(){
  if(libraryUI.polling)return;
  libraryUI.polling=true;
  try{
+  const previous=JSON.stringify(libraryUI.jobs),previousSelection=libraryUI.selected,previousError=libraryUI.error;
   libraryUI.jobs=await fetchJSON("/api/operations");
   if(libraryUI.selected===null)libraryUI.selected=(libraryUI.jobs.find(operationBusy)||libraryUI.jobs[0])?.id||"";
   libraryUI.error="";
@@ -47,14 +52,16 @@ async function libraryPollOperations(){
   $("operations-count").textContent=active?String(active):waiting?String(waiting):"";
   $("operations-status").textContent=active?active+" running on server":waiting?waiting+" to review":"";
   for(const job of libraryUI.jobs){
-   if((job.state==="succeeded"||(job.kind==="enrichment"&&["incomplete","failed"].includes(job.state)))&&!libraryUI.refreshed.has(job.id)){
+   if(job.kind!=="export"&&(job.state==="succeeded"||(job.kind==="enrichment"&&["incomplete","failed"].includes(job.state)))&&!libraryUI.refreshed.has(job.id)){
     state.platforms=await fetchJSON("/api/platforms");state.platformsLoaded=true;
     $("platform-count").textContent=formatNumber(state.platforms.length);renderPlatforms();librarySyncNavigation();
     if(job.kind==="enrichment"&&state.platform===job.platform&&state.view==="browse"&&!state.exportMode&&!(typeof catalogEditorActive==="function"&&catalogEditorActive()))await selectPlatform(job.platform);
     libraryUI.refreshed.add(job.id);
    }
   }
-  if(state.view==="operations")libraryRenderOperations();
+  const selected=libraryUI.jobs.find(j=>j.id===libraryUI.selected);
+  const stableExport=selected?.kind==="export"&&previous===JSON.stringify(libraryUI.jobs)&&previousSelection===libraryUI.selected&&!previousError;
+  if(state.view==="operations"&&!stableExport)libraryRenderOperations();
  }catch(error){libraryUI.error=error.message;if(state.view==="operations")libraryRenderOperations();}
  finally{
   libraryUI.polling=false;clearTimeout(libraryUI.timer);
@@ -84,6 +91,7 @@ function libraryUpdateApply(job){
  const hint=$("dat-apply-hint");if(hint)hint.textContent=dirty?"Options changed. Prepare the plan again before importing.":"The plan has not changed your cards.";
 }
 function operationDetail(job){
+ if(job.kind==="export")return nativeExportDetail(job);
  if(job.kind==="enrichment")return enrichmentDetail(job);
  const busy=operationBusy(job),done=job.state==="succeeded",p=job.progress||{},draft=libraryUI.drafts.get(job.id)||{},selected=draft.member??job.member??"";
  return '<article class="operation-detail"><div class="operation-eyebrow">DAT IMPORT · '+escapeHTML(operationLabels[job.state]||job.state)+'</div><h2>'+escapeHTML(job.filename)+'</h2>'+
@@ -105,7 +113,7 @@ function libraryRenderOperations(){
  const focused=document.activeElement;
  if(focused&&pane.contains?.(focused)&&["INPUT","SELECT"].includes(focused.tagName))return;
  const selected=libraryUI.jobs.find(j=>j.id===libraryUI.selected);
- pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">YOUR LIBRARY</span><h1>Operations</h1><p>Import, enrich, and return whenever you are ready.</p></div>'+(selected?'<button class="tab-button" data-import-new>＋ Import DAT</button>':'')+'</div>'+
+ pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">YOUR LIBRARY</span><h1>Operations</h1><p>Import, enrich, export — return whenever you are ready.</p></div>'+(selected?'<button class="tab-button" data-import-new>＋ Import DAT</button>':'')+'</div>'+
  (libraryUI.error?'<p class="operation-error" role="alert">'+escapeHTML(libraryUI.error)+'</p>':"")+
  '<div class="operations-layout"><aside class="operations-list" aria-label="Library operations">'+
  (libraryUI.jobs.length?libraryUI.jobs.map(j=>'<button class="operation-row '+(j.id===libraryUI.selected?"active":"")+'" data-operation-select="'+j.id+'"><strong>'+escapeHTML(operationTitle(j))+'</strong><span>'+escapeHTML(operationLabel(j))+'</span><small>'+escapeHTML(j.platform||j.summary?.platform||j.member||"DAT import")+'</small></button>').join(""):'<p class="secondary">Your operations will appear here.</p>')+
@@ -129,6 +137,7 @@ function libraryRenderOperations(){
   libraryNavigate("library");await selectPlatform(selected.platform||selected.summary?.platform);
  }));
  if(typeof enrichmentBind==="function")enrichmentBind(selected);
+ if(typeof nativeExportBindOperation==="function")nativeExportBindOperation(selected);
  librarySyncNavigation();
 }
 function libraryRememberJob(job){

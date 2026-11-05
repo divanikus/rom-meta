@@ -67,7 +67,7 @@ func (s *server) catalogCapabilities(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	writeJSON(w, map[string]any{"editing": s.allowEdit, "fields": catalogedit.Fields, "dat_import": s.allowEdit, "enrichment": s.allowEdit, "upload_limit": maxDATUpload, "operations_lifetime": "server-session"})
+	writeJSON(w, map[string]any{"editing": s.allowEdit, "fields": catalogedit.Fields, "dat_import": s.allowEdit, "enrichment": s.allowEdit, "export": s.allowEdit, "upload_limit": maxDATUpload, "operations_lifetime": "server-session"})
 }
 func (s *server) catalogWriteAllowed(w http.ResponseWriter, r *http.Request) bool {
 	if r.Method != http.MethodPost {

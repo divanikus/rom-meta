@@ -107,7 +107,7 @@ func Build(options Options) (*Plan, error) {
 		return nil, fmt.Errorf("catalog platform escapes data root")
 	}
 	options.System = system
-	profile, err := loadProfile(root, options.ProfilePath)
+	profile, err := loadOptionsProfile(root, options)
 	if err != nil {
 		return nil, err
 	}

@@ -18,6 +18,7 @@ import (
 	"rommeta/internal/catalogedit"
 	"rommeta/internal/dat"
 	"rommeta/internal/exporter"
+	"rommeta/internal/exportjob"
 )
 
 const maxDATUpload = 256 << 20
@@ -28,24 +29,28 @@ const maxLibraryOperations = 32
 // Inactive receipts expire after 24 hours, dismissal or server restart. Uploaded
 // inputs are removed after success/dismissal/expiry in this process.
 type libraryOperation struct {
-	ID         string             `json:"id"`
-	Kind       string             `json:"kind"`
-	Enrichment *enrichmentState   `json:"enrichment,omitempty"`
-	Filename   string             `json:"filename"`
-	State      string             `json:"state"`
-	Created    time.Time          `json:"created"`
-	Updated    time.Time          `json:"updated"`
-	Revision   int                `json:"revision"`
-	Member     string             `json:"member,omitempty"`
-	Members    []string           `json:"members,omitempty"`
-	Platform   string             `json:"platform,omitempty"`
-	Progress   dat.ImportProgress `json:"progress"`
-	Summary    *importSummary     `json:"summary,omitempty"`
-	Error      string             `json:"error,omitempty"`
-	Warning    string             `json:"warning,omitempty"`
-	path       string
-	stamp      string
-	dir        string
+	Export          *exportState `json:"export,omitempty"`
+	exportJob       *exportjob.Job
+	exportDocuments map[string]string
+	exportStarted   bool
+	ID              string             `json:"id"`
+	Kind            string             `json:"kind"`
+	Enrichment      *enrichmentState   `json:"enrichment,omitempty"`
+	Filename        string             `json:"filename"`
+	State           string             `json:"state"`
+	Created         time.Time          `json:"created"`
+	Updated         time.Time          `json:"updated"`
+	Revision        int                `json:"revision"`
+	Member          string             `json:"member,omitempty"`
+	Members         []string           `json:"members,omitempty"`
+	Platform        string             `json:"platform,omitempty"`
+	Progress        dat.ImportProgress `json:"progress"`
+	Summary         *importSummary     `json:"summary,omitempty"`
+	Error           string             `json:"error,omitempty"`
+	Warning         string             `json:"warning,omitempty"`
+	path            string
+	stamp           string
+	dir             string
 }
 type importSummary struct {
 	Dataset      string           `json:"dataset"`
@@ -70,7 +75,7 @@ type importAction struct {
 }
 
 func operationBusyState(state string) bool {
-	return state == "planning" || state == "importing" || state == "enriching"
+	return state == "planning" || state == "importing" || state == "enriching" || state == "exporting"
 }
 func operationID() string {
 	var b [16]byte

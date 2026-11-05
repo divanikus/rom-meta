@@ -16,6 +16,9 @@ import (
 )
 
 type Options struct {
+	// ProfileContent is an inline selection policy, exclusive with ProfilePath.
+	ProfileContent string
+
 	HashROMs                                             bool
 	LegacyOnly                                           bool
 	selector                                             *PlatformSelector
@@ -185,6 +188,16 @@ var roles = map[string]struct{ Kind, Dir string }{
 	"cart-front": {"cart-front", "cartfronts"}, "cart-back": {"cart-back", "cartbacks"},
 	"cart-3d": {"cart-3d", "3dcarts"}, "disc": {"disc", "discs"},
 	"box-spine": {"box-spine", "boxspines"}, "banner": {"banner", "banners"}, "icon": {"icon", "icons"},
+}
+
+func loadOptionsProfile(root string, options Options) (Profile, error) {
+	if options.ProfileContent != "" {
+		if options.ProfilePath != "" {
+			return Profile{}, fmt.Errorf("choose a profile file or inline profile")
+		}
+		return ExportProfile(root, options.ProfileContent)
+	}
+	return loadProfile(root, options.ProfilePath)
 }
 
 func loadProfile(root, name string) (Profile, error) {

@@ -61,6 +61,10 @@ type enrichmentState struct {
 
 func cloneOperation(op *libraryOperation) libraryOperation {
 	result := *op
+	if op.Export != nil {
+		state := *op.Export
+		result.Export = &state
+	}
 	if op.Enrichment != nil {
 		state := *op.Enrichment
 		state.Jobs = append([]enrichmentTask(nil), state.Jobs...)

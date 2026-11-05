@@ -24,6 +24,9 @@ import (
 	"rommeta/internal/curation"
 	"rommeta/internal/dat"
 	"rommeta/internal/enrichment"
+	"rommeta/internal/exporter"
+	"rommeta/internal/exportjob"
+	"rommeta/internal/frontend"
 	"rommeta/internal/httpdocs"
 	"rommeta/internal/medianames"
 	"rommeta/internal/platformnames"
@@ -48,6 +51,9 @@ var libraryCSS string
 
 //go:embed static/enrichment.js
 var enrichmentJS string
+
+//go:embed static/export.js
+var nativeExportJS string
 
 // Handler returns a read-only HTTP handler for a portable metadata data root.
 func Handler(dataRoot string) (http.Handler, error) { return HandlerWithEditing(dataRoot, false) }
@@ -108,6 +114,14 @@ func HandlerWithEditing(dataRoot string, allowEdit bool) (http.Handler, error) {
 		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 		_, _ = w.Write([]byte(enrichmentJS))
 	})
+	mux.HandleFunc("/export.js", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		_, _ = w.Write([]byte(nativeExportJS))
+	})
 	mux.HandleFunc("/api", server.apiIndex)
 	mux.HandleFunc("/api/stats", server.stats)
 	mux.HandleFunc("/api/platforms", server.platforms)
@@ -117,6 +131,11 @@ func HandlerWithEditing(dataRoot string, allowEdit bool) (http.Handler, error) {
 	mux.HandleFunc("/api/export-preview", server.exportPreview)
 	mux.HandleFunc("/api/export-options", server.exportOptions)
 	mux.HandleFunc("/media", server.media)
+	mux.HandleFunc("/api/export/destinations", server.exportDestinations)
+	mux.HandleFunc("/api/export/folders", server.exportFolders)
+	mux.HandleFunc("/api/export/prepare", server.exportPlan)
+	mux.HandleFunc("/api/export/apply", server.exportApply)
+	mux.HandleFunc("/api/export/plan", server.exportPlanDetails)
 	mux.HandleFunc("/api/operations", server.operationsList)
 	mux.HandleFunc("/api/operations/dismiss", server.operationDismiss)
 	mux.HandleFunc("/api/catalog/enrichment-options", server.enrichmentOptions)
@@ -140,6 +159,8 @@ func HandlerWithEditing(dataRoot string, allowEdit bool) (http.Handler, error) {
 }
 
 type server struct {
+	exportWrite  func(*frontend.Plan) error
+	exportBuild  func(exporter.Options, string, string, bool) (*exportjob.Job, error)
 	operationsMu sync.Mutex
 	operations   map[string]*libraryOperation
 	uploads      int

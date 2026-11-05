@@ -92,6 +92,55 @@ closing the browser is supported; restarting the server does not resume a runnin
 job or restore its receipt. Saved catalog changes remain. Inactive receipts expire
 after 24 hours. Running enrichment cannot be dismissed or cancelled.
 
+## Export on the server machine
+
+With `serve --edit`, **Export** opens a native export setup for ES-DE or
+LaunchBox. The CLI remains available through the same exporter.
+
+1. Choose a saved destination or enter a name, frontend and absolute destination
+   path. **Browse** lists folders on the machine running serve. For LaunchBox,
+   choose its installation containing Data/Platforms; for ES-DE, choose its data
+   folder. ES-DE optionally supports a separate media folder.
+2. Choose the ROM folder and layout: one platform's ROMs, or a parent containing
+   all platform folders. Select the catalog platform for the single-platform case.
+   Batch mode uses the CLI folder recognition and reports skipped systems.
+3. Choose **Library defaults**, **Current preview settings**, or upload a YAML
+   profile (up to 1 MiB). **Build profile visually** opens the existing catalog
+   preview and source/language/media controls; **Continue to export** returns to
+   setup using those settings. YAML profiles retain the ordinary CLI validation.
+4. **Save destination** stores the paths and selected profile policy in
+   `config/export-destinations.yaml`. Saved entries survive server restarts.
+   Renaming updates the selected entry; choose New destination for another.
+   Removing an entry removes only its settings, never frontend files.
+5. **Prepare export plan** starts a background scan. Operations shows its progress,
+   matching counts, native file count, game actions, conflicts and skipped systems.
+   The first 100 reviewed games are shown inline; **Download full plan** includes
+   all native changes and filenames. Preparing writes no destination files.
+6. Close the target frontend and choose **Apply export** after review. The server
+   retains and applies this exact native plan, rechecking catalog/configuration,
+   selected card documents, ROM stamps and destination files. Stale inputs require
+   a new plan. Accepted Apply retries never replay writes.
+
+Both planning and applying continue after browser closure. Return to Operations
+for progress or results; a completed repeat can report zero files to write.
+A write failure reports the files completed so far. Prepare another plan against
+the current destination to continue; there is no automatic rollback, hidden backup
+tree, package staging or ROM copying. Native metadata, playlists and selected
+missing media use the same additive rules as [CLI export](frontend-export.md).
+
+Paths always belong to the serve host, including when the browser is elsewhere.
+In a container, mount ROM folders read-only and destinations writable as needed,
+and ensure the service user has access. Browser paths do not grant access to a
+different computer's disks. `--edit` permits native writes within that process's
+filesystem permissions; existing server access protection applies to these routes.
+Browser-managed remote-catalog export and portable packages are outside this
+workflow; existing CLI `--api`, `--out` and `--package` remain available.
+
+Operation receipts and in-memory plans have the same server-session lifetime as
+imports: browser reconnection is supported, server restart recovery/cancellation
+is not. Inactive receipts expire after 24 hours. Saved destinations are durable;
+active progress is not stored alongside frontend output.
+
 ## Edit library settings
 
 **Settings** saves the actual library YAML used by the CLI:
@@ -342,8 +391,8 @@ no filesystem or ZFS snapshot is requested.
 
 Single-card saves use atomic replacement and reject stale revisions. The recognition
 index and browser summaries are refreshed after writes; an index refresh problem is
-reported separately from a successful save. The editor does not download media,
-edit ROM files, import profiles or apply frontend exports.
+reported separately from a successful save. Acquisition and native export use the separate operations described above;
+card/fold edits preserve ROM files.
 
 ## HTTP entry points
 
