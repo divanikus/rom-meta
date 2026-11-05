@@ -1,4 +1,4 @@
-# Edit cards and review folds in the browser
+# Manage your library in the browser
 
 Start a complete catalog server with explicit write access:
 
@@ -58,6 +58,39 @@ Successful imports, dismissed uploads and expired records clean up their inputs.
 An interrupted server can leave its `.rommeta/web-import-*` upload directories;
 remove those only after ensuring their owning server is stopped. A running import
 cannot be cancelled/dismissed in this first workflow.
+
+## Enrich a platform
+
+Select a platform in **Library**, then choose **Platform actions → Enrich platform**.
+
+1. Select sources and data types: metadata, artwork and video. Defaults come from
+   the library's acquisition settings. Unavailable choices explain missing
+   credentials or platform mappings; configure those in Settings/source setup.
+2. **Review tasks** prepares the selected jobs without contacting providers.
+   Review the platform and source/type list, then choose **Start enrichment**.
+3. **Operations** shows the current source, stage, game, counts and download
+   progress. Close the browser freely after starting; returning reconnects to the
+   same operation. Reconnecting or retrying Start never launches it twice.
+4. Review each source's result and choose **Open platform**. **Prepare another
+   pass** creates a new plan when you want to retry incomplete work.
+
+The browser and CLI use the same provider routines, library configuration, rate
+limits, cached snapshots and existing-data checks. Metadata runs before artwork
+and video. Successful work is retained if another task fails; later independent
+sources continue. ScreenScraper quota exhaustion skips its remaining tasks.
+Hasheous provides identity links from ROM hashes, rather than descriptions.
+Artwork can use existing source links without repeating metadata acquisition.
+
+This flow enriches the whole selected platform with ordinary acquisition
+semantics. It does not force-overwrite existing results. Another pass skips
+completed metadata and downloaded files according to each provider's rules.
+Advanced force/refresh/limit options remain available through [CLI fetch](fetch.md).
+Source credentials stay on the server and are never included in operation results.
+
+The same operation lifetime and single-writer rules as DAT import apply:
+closing the browser is supported; restarting the server does not resume a running
+job or restore its receipt. Saved catalog changes remain. Inactive receipts expire
+after 24 hours. Running enrichment cannot be dismissed or cancelled.
 
 ## Edit library settings
 

@@ -23,9 +23,12 @@ import (
 	"rommeta/internal/catalogyaml"
 	"rommeta/internal/curation"
 	"rommeta/internal/dat"
+	"rommeta/internal/enrichment"
 	"rommeta/internal/httpdocs"
 	"rommeta/internal/medianames"
 	"rommeta/internal/platformnames"
+	"rommeta/internal/store"
+	"rommeta/internal/taskprogress"
 )
 
 //go:embed static/index.html
@@ -42,6 +45,9 @@ var libraryJS string
 
 //go:embed static/library.css
 var libraryCSS string
+
+//go:embed static/enrichment.js
+var enrichmentJS string
 
 // Handler returns a read-only HTTP handler for a portable metadata data root.
 func Handler(dataRoot string) (http.Handler, error) { return HandlerWithEditing(dataRoot, false) }
@@ -94,6 +100,14 @@ func HandlerWithEditing(dataRoot string, allowEdit bool) (http.Handler, error) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		_, _ = w.Write([]byte(libraryCSS))
 	})
+	mux.HandleFunc("/enrichment.js", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		_, _ = w.Write([]byte(enrichmentJS))
+	})
 	mux.HandleFunc("/api", server.apiIndex)
 	mux.HandleFunc("/api/stats", server.stats)
 	mux.HandleFunc("/api/platforms", server.platforms)
@@ -104,10 +118,14 @@ func HandlerWithEditing(dataRoot string, allowEdit bool) (http.Handler, error) {
 	mux.HandleFunc("/api/export-options", server.exportOptions)
 	mux.HandleFunc("/media", server.media)
 	mux.HandleFunc("/api/operations", server.operationsList)
+	mux.HandleFunc("/api/operations/dismiss", server.operationDismiss)
+	mux.HandleFunc("/api/catalog/enrichment-options", server.enrichmentOptions)
+	mux.HandleFunc("/api/catalog/enrichment-plan", server.enrichmentPlan)
+	mux.HandleFunc("/api/catalog/enrichment-start", server.enrichmentStart)
 	mux.HandleFunc("/api/catalog/import-upload", server.importUpload)
 	mux.HandleFunc("/api/catalog/import-plan", server.importPlan)
 	mux.HandleFunc("/api/catalog/import-apply", server.importApply)
-	mux.HandleFunc("/api/catalog/import-dismiss", server.importDismiss)
+	mux.HandleFunc("/api/catalog/import-dismiss", server.operationDismiss)
 	mux.HandleFunc("/api/catalog", server.catalogCapabilities)
 	mux.HandleFunc("/api/catalog/settings", server.librarySettings)
 	mux.HandleFunc("/api/catalog/curation", server.curationSources)
@@ -123,8 +141,9 @@ func HandlerWithEditing(dataRoot string, allowEdit bool) (http.Handler, error) {
 
 type server struct {
 	operationsMu sync.Mutex
-	operations   map[string]*importOperation
+	operations   map[string]*libraryOperation
 	uploads      int
+	enrichRun    func(enrichment.Job, enrichment.Options, store.SourcesConfig, taskprogress.Func) (any, error)
 	datImport    func(string, dat.ImportOptions) (dat.ImportResult, error)
 	allowEdit    bool
 	editMu       sync.Mutex

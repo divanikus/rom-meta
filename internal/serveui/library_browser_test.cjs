@@ -6,13 +6,13 @@ const script=readFileSync(require('node:path').join(__dirname,'static/library.js
 function browser(){
  const elements=new Map(),calls=[],timers=[];
  function element(id){if(!elements.has(id))elements.set(id,{innerHTML:'',textContent:'',value:'',files:[],listeners:{},classes:new Set(),classList:{add(name){element(id).classes.add(name)},toggle(name,on){on?element(id).classes.add(name):element(id).classes.delete(name)}},setAttribute(){},replaceChildren(){},querySelectorAll:()=>[],addEventListener(k,v){this.listeners[k]=v},contains:()=>false,focus(){}});return elements.get(id);}
- const context=vm.createContext({console,$:element,window:{addEventListener(){},confirm:()=>true},document:{activeElement:null,querySelectorAll:()=>[],createTextNode:s=>s},
+ const context=vm.createContext({console,URLSearchParams,$:element,window:{addEventListener(){},confirm:()=>true},document:{activeElement:null,querySelectorAll:()=>[],createTextNode:s=>s},
   state:{view:'browse',exportMode:false,platforms:[],platformsLoaded:true,platform:'Console',game:{id:'kept'},games:[{id:'kept'}]},
   catalogUI:{enabled:true},escapeHTML:s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),escapeAttr:s=>String(s??'').replaceAll('"','&quot;').replaceAll('<','&lt;'),formatNumber:n=>String(n??0),
   fetchJSON:async path=>{calls.push(['GET',path]);return []},catalogPost:async(path,body)=>{calls.push(['POST',path,JSON.parse(JSON.stringify(body))]);return {id:body.id,revision:body.revision,state:'importing',filename:'example.dat'}},
   renderPlatforms(){},sourceLabel:s=>s,setView:view=>{context.state.view=view},setExportMode:on=>{context.state.exportMode=on},catalogLeaveInline:()=>true,
   setTimeout:(fn,ms)=>{timers.push(ms);return timers.length},clearTimeout(){},selectPlatform:async()=>{}});
- vm.runInContext(script,context);return {run:c=>vm.runInContext(c,context),element,calls,timers,context};
+ vm.runInContext(script,context);vm.runInContext(readFileSync(require('node:path').join(__dirname,'static/enrichment.js'),'utf8'),context);return {run:c=>vm.runInContext(c,context),element,calls,timers,context};
 }
 test('reconnection only reads server operations and finds the running job',async()=>{
  const b=browser();b.run('fetchJSON=async()=>[{id:"same-job",state:"importing",filename:"games.dat",progress:{Stage:"writing",Current:4,Total:9}}]');
@@ -110,4 +110,53 @@ test('saving one section keeps other same-file drafts saveable but preserves old
  assert.equal(b.run('librarySettingsUI.drafts.get("fetch").revision'),'after');
  assert.equal(b.run('librarySettingsUI.drafts.get("fetch").values.concurrency'),3);
  assert.equal(b.run('librarySettingsUI.drafts.get("source:igdb").revision'),'older');
+});
+
+test('enrichment reconnection discovers running work without replaying a start',async()=>{
+ const b=browser();b.run('state.view="operations";fetchJSON=async()=>[{id:"running",kind:"enrichment",platform:"Console",state:"enriching",enrichment:{current:0,progress:{Stage:"matching",Current:3,Total:9},jobs:[{source:"launchbox",type:"metadata",state:"running"}]}}]');
+ await b.run('libraryPollOperations()');
+ assert.equal(b.run('libraryUI.selected'),'running');assert.equal(b.timers.at(-1),1000);
+ assert.equal(b.calls.filter(c=>c[0]==='POST').length,0);
+ assert.match(b.element('operations-pane').innerHTML,/3 \/ 9 in this stage/);
+ assert.doesNotMatch(b.element('operations-pane').innerHTML,/data-enrichment-start=|data-import-apply=/);
+});
+test('enrichment draft keeps choices across polling and ignores unavailable source selections',async()=>{
+ const b=browser();b.run('state.view="operations";enrichmentUI.draft={platform:"Console",revision:"r1",choices:[{source:"launchbox",type:"metadata",available:true,default:true},{source:"igdb",type:"metadata",available:false,reason:"Credentials missing"}],selected:new Set(["launchbox:metadata","igdb:metadata"])};libraryUI.selected=""');
+ await b.run('libraryPollOperations()');
+ assert.equal(b.run('enrichmentSelected().length'),1);
+ assert.match(b.element('operations-pane').innerHTML,/Credentials missing/);
+ assert.match(b.element('operations-pane').innerHTML,/Review tasks \(1\)/);
+ assert.equal(b.run('enrichmentUI.draft.selected.has("launchbox:metadata")'),true);
+ b.run('libraryOpenImport()');assert.equal(b.run('enrichmentUI.draft'),null);
+});
+test('enrichment prepares only reviewed source/type pairs for the exact platform',async()=>{
+ const b=browser();const op={id:'prepared',kind:'enrichment',platform:'Console',revision:1,state:'ready',enrichment:{jobs:[{source:'launchbox',type:'metadata',state:'pending'}]}};
+ b.context.catalogPost=async(path,body)=>{b.calls.push(['POST',path,JSON.parse(JSON.stringify(body))]);return op};
+ b.context.fetchJSON=async()=>[op];
+ b.run('state.view="operations";enrichmentUI.draft={platform:"Console",revision:"original",choices:[{source:"launchbox",type:"metadata",available:true},{source:"launchbox",type:"artwork",available:true}],selected:new Set(["launchbox:metadata"])}');
+ await b.run('enrichmentPrepare()');
+ assert.deepEqual(b.calls.filter(c=>c[0]==='POST'),[['POST','/api/catalog/enrichment-plan',{platform:'Console',revision:'original',jobs:[{source:'launchbox',type:'metadata'}]}]]);
+ assert.equal(b.run('libraryUI.selected'),'prepared');assert.equal(b.run('enrichmentUI.draft'),null);
+ assert.match(b.element('operations-pane').innerHTML,/Start enrichment/);
+});
+test('enrichment partial completion refreshes data once and preserves an active editor',async()=>{
+ const b=browser();let reloads=0;
+ b.context.selectPlatform=async()=>{reloads++};b.context.catalogEditorActive=()=>true;
+ const op={id:'partial',kind:'enrichment',platform:'Console',state:'incomplete',enrichment:{jobs:[{source:'launchbox',type:'artwork',state:'incomplete',counts:{downloaded:2,failed:1},error:'<img src=x onerror=alert(1)>'}]}};
+ b.context.fetchJSON=async path=>path==='/api/operations'?[op]:[{platform:'Console',game_count:9}];
+ await b.run('libraryPollOperations()');await b.run('libraryPollOperations()');
+ assert.equal(reloads,0);assert.equal(b.run('libraryUI.refreshed.size'),1);
+ b.context.partial=op;
+ const html=b.run('operationDetail(partial)');assert.match(html,/2 downloads/);assert.match(html,/Prepare another pass/);assert.match(html,/&lt;img/);assert.doesNotMatch(html,/<img/);
+});
+test('late enrichment choices cannot replace a newer platform or a new import',async()=>{
+ const b=browser(),resolve={};
+ b.context.fetchJSON=path=>path==='/api/operations'?Promise.resolve([]):new Promise(r=>{resolve[new URL('http://test'+path).searchParams.get('platform')]=r});
+ const first=b.run('enrichmentOpen("First")'),second=b.run('enrichmentOpen("Second")');
+ resolve.Second({platform:'Second',revision:'2',choices:[]});await second;
+ resolve.First({platform:'First',revision:'1',choices:[]});await first;
+ assert.equal(b.run('enrichmentUI.draft.platform'),'Second');
+ const third=b.run('enrichmentOpen("Third")');b.run('libraryOpenImport()');
+ resolve.Third({platform:'Third',revision:'3',choices:[]});await third;
+ assert.equal(b.run('enrichmentUI.draft'),null);
 });

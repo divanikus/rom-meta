@@ -1,4 +1,4 @@
-/* Library navigation and server-owned DAT operations. No browser job queue. */
+/* Library navigation and server-owned library operations. No browser job queue. */
 const libraryUI={jobs:[],selected:null,view:"library",timer:null,polling:false,uploading:false,uploadPercent:0,error:"",refreshed:new Set(),settings:null,file:null,drafts:new Map()};
 const importStages={opening:"Opening DAT",parsing:"Reading releases",planning:"Preparing changes",bundling:"Grouping releases",writing:"Saving cards",importing:"Starting import"};
 const operationLabels={needs_selection:"Choose a DAT",planning:"Preparing plan",ready:"Ready to import",needs_review:"Needs attention",importing:"Importing",succeeded:"Complete",failed:"Could not finish"};
@@ -25,6 +25,7 @@ function librarySyncNavigation(){
  $("library-empty")?.classList.toggle("hidden",!empty);
  if(empty)for(const id of ["platform-pane","game-pane","detail-pane"])$(id).classList.add("hidden");
  const enabled=typeof catalogUI!=="undefined"&&catalogUI.enabled;
+ $("platform-enrich")?.classList.toggle("hidden",!enabled);
  $("library-import")?.classList.toggle("hidden",!enabled);
  document.querySelectorAll("[data-import-new]").forEach(el=>el.classList.toggle("hidden",!enabled));
  $("empty-readonly")?.classList.toggle("hidden",enabled);
@@ -32,7 +33,9 @@ function librarySyncNavigation(){
  $("platform-workspace-actions")?.classList.toggle("hidden",!state.platform||!["library","stats"].includes(view));
  $("platform-heading")?.replaceChildren(document.createTextNode(state.platform||"Library"));
 }
-function operationBusy(job){return job.state==="planning"||job.state==="importing"}
+function operationTitle(job){return job.kind==="enrichment"?"Enrich "+job.platform:job.filename}
+function operationLabel(job){return job.kind==="enrichment"?(enrichmentStates[job.state]||job.state):(operationLabels[job.state]||job.state)}
+function operationBusy(job){return job.state==="planning"||job.state==="importing"||job.state==="enriching"}
 async function libraryPollOperations(){
  if(libraryUI.polling)return;
  libraryUI.polling=true;
@@ -40,14 +43,15 @@ async function libraryPollOperations(){
   libraryUI.jobs=await fetchJSON("/api/operations");
   if(libraryUI.selected===null)libraryUI.selected=(libraryUI.jobs.find(operationBusy)||libraryUI.jobs[0])?.id||"";
   libraryUI.error="";
-  const active=libraryUI.jobs.filter(operationBusy).length,waiting=libraryUI.jobs.filter(j=>["ready","needs_selection","needs_review","failed"].includes(j.state)).length;
+  const active=libraryUI.jobs.filter(operationBusy).length,waiting=libraryUI.jobs.filter(j=>["ready","needs_selection","needs_review","failed","incomplete"].includes(j.state)).length;
   $("operations-count").textContent=active?String(active):waiting?String(waiting):"";
   $("operations-status").textContent=active?active+" running on server":waiting?waiting+" to review":"";
   for(const job of libraryUI.jobs){
-   if(job.state==="succeeded"&&!libraryUI.refreshed.has(job.id)){
-    libraryUI.refreshed.add(job.id);
+   if((job.state==="succeeded"||(job.kind==="enrichment"&&["incomplete","failed"].includes(job.state)))&&!libraryUI.refreshed.has(job.id)){
     state.platforms=await fetchJSON("/api/platforms");state.platformsLoaded=true;
     $("platform-count").textContent=formatNumber(state.platforms.length);renderPlatforms();librarySyncNavigation();
+    if(job.kind==="enrichment"&&state.platform===job.platform&&state.view==="browse"&&!state.exportMode&&!(typeof catalogEditorActive==="function"&&catalogEditorActive()))await selectPlatform(job.platform);
+    libraryUI.refreshed.add(job.id);
    }
   }
   if(state.view==="operations")libraryRenderOperations();
@@ -59,6 +63,7 @@ async function libraryPollOperations(){
 }
 function libraryOpenImport(){
  if(typeof catalogLeaveInline==="function"&&!catalogLeaveInline())return;
+ if(typeof enrichmentUI!=="undefined"){enrichmentUI.version++;enrichmentUI.draft=null;}
  libraryUI.selected="";libraryUI.file=null;libraryNavigate("operations");libraryRenderOperations();
  $("dat-upload-file")?.focus();
 }
@@ -79,6 +84,7 @@ function libraryUpdateApply(job){
  const hint=$("dat-apply-hint");if(hint)hint.textContent=dirty?"Options changed. Prepare the plan again before importing.":"The plan has not changed your cards.";
 }
 function operationDetail(job){
+ if(job.kind==="enrichment")return enrichmentDetail(job);
  const busy=operationBusy(job),done=job.state==="succeeded",p=job.progress||{},draft=libraryUI.drafts.get(job.id)||{},selected=draft.member??job.member??"";
  return '<article class="operation-detail"><div class="operation-eyebrow">DAT IMPORT · '+escapeHTML(operationLabels[job.state]||job.state)+'</div><h2>'+escapeHTML(job.filename)+'</h2>'+
  (job.member?'<p class="secondary">'+escapeHTML(job.member)+'</p>':"")+
@@ -99,12 +105,12 @@ function libraryRenderOperations(){
  const focused=document.activeElement;
  if(focused&&pane.contains?.(focused)&&["INPUT","SELECT"].includes(focused.tagName))return;
  const selected=libraryUI.jobs.find(j=>j.id===libraryUI.selected);
- pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">YOUR LIBRARY</span><h1>Operations</h1><p>Import, review, and return whenever you are ready.</p></div>'+(selected?'<button class="tab-button" data-import-new>＋ Import DAT</button>':'')+'</div>'+
+ pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">YOUR LIBRARY</span><h1>Operations</h1><p>Import, enrich, and return whenever you are ready.</p></div>'+(selected?'<button class="tab-button" data-import-new>＋ Import DAT</button>':'')+'</div>'+
  (libraryUI.error?'<p class="operation-error" role="alert">'+escapeHTML(libraryUI.error)+'</p>':"")+
  '<div class="operations-layout"><aside class="operations-list" aria-label="Library operations">'+
- (libraryUI.jobs.length?libraryUI.jobs.map(j=>'<button class="operation-row '+(j.id===libraryUI.selected?"active":"")+'" data-operation-select="'+j.id+'"><strong>'+escapeHTML(j.filename)+'</strong><span>'+escapeHTML(operationLabels[j.state]||j.state)+'</span><small>'+escapeHTML(j.summary?.platform||j.member||"DAT import")+'</small></button>').join(""):'<p class="secondary">Your operations will appear here.</p>')+
+ (libraryUI.jobs.length?libraryUI.jobs.map(j=>'<button class="operation-row '+(j.id===libraryUI.selected?"active":"")+'" data-operation-select="'+j.id+'"><strong>'+escapeHTML(operationTitle(j))+'</strong><span>'+escapeHTML(operationLabel(j))+'</span><small>'+escapeHTML(j.platform||j.summary?.platform||j.member||"DAT import")+'</small></button>').join(""):'<p class="secondary">Your operations will appear here.</p>')+
  '<p class="secondary operations-lifetime">Progress stays with the running server, even when you close this browser. Inactive operations expire after 24 hours. Restarting the server clears this list.</p></aside>'+
- (selected?operationDetail(selected):'<section class="operation-detail import-welcome"><span class="import-symbol" aria-hidden="true">↥</span><h2>Bring your library to life</h2><p>Start with a DAT. RomMeta prepares the game cards and fingerprints; your ROM files stay where they are.</p><form id="dat-upload-form"><label class="upload-label">Choose a DAT or ZIP<input type="file" id="dat-upload-file" name="file" accept=".dat,.xml,.zip" '+(libraryUI.uploading?"disabled":"")+'></label><p class="secondary">Preferred datasets: <strong>No-Intro</strong> for cartridges, <strong>Redump</strong> for discs, and <strong>MAME</strong> for arcade systems. Upload No-Intro, Redump or compatible XML DATs here; MAME listxml currently uses the CLI. ZIPs can contain several DATs. Up to 256 MiB.</p><button class="catalog-primary" type="submit" '+(libraryUI.uploading?"disabled":"")+'>'+(libraryUI.uploading?"Uploading…":"Upload & prepare")+'</button><p id="dat-upload-progress" role="status">'+(libraryUI.uploading?"Uploading "+libraryUI.uploadPercent+"% — keep this page open until the upload finishes.":"Uploading prepares a plan. You choose when to import.")+'</p></form><details><summary>Prefer the command line?</summary><p>The CLI uses the same importer and catalog rules.</p><pre>rom-meta dat import &quot;&lt;file.dat-or-zip&gt;&quot; --data-root &quot;&lt;library&gt;&quot;\n# Add --apply after reviewing the plan.</pre><p class="secondary">Use the CLI for classified MAME listxml imports.</p></details></section>')+'</div>';
+ (selected?operationDetail(selected):typeof enrichmentUI!=="undefined"&&enrichmentUI.draft?enrichmentWizard():'<section class="operation-detail import-welcome"><span class="import-symbol" aria-hidden="true">↥</span><h2>Bring your library to life</h2><p>Start with a DAT. RomMeta prepares the game cards and fingerprints; your ROM files stay where they are.</p><form id="dat-upload-form"><label class="upload-label">Choose a DAT or ZIP<input type="file" id="dat-upload-file" name="file" accept=".dat,.xml,.zip" '+(libraryUI.uploading?"disabled":"")+'></label><p class="secondary">Preferred datasets: <strong>No-Intro</strong> for cartridges, <strong>Redump</strong> for discs, and <strong>MAME</strong> for arcade systems. Upload No-Intro, Redump or compatible XML DATs here; MAME listxml currently uses the CLI. ZIPs can contain several DATs. Up to 256 MiB.</p><button class="catalog-primary" type="submit" '+(libraryUI.uploading?"disabled":"")+'>'+(libraryUI.uploading?"Uploading…":"Upload & prepare")+'</button><p id="dat-upload-progress" role="status">'+(libraryUI.uploading?"Uploading "+libraryUI.uploadPercent+"% — keep this page open until the upload finishes.":"Uploading prepares a plan. You choose when to import.")+'</p></form><details><summary>Prefer the command line?</summary><p>The CLI uses the same importer and catalog rules.</p><pre>rom-meta dat import &quot;&lt;file.dat-or-zip&gt;&quot; --data-root &quot;&lt;library&gt;&quot;\n# Add --apply after reviewing the plan.</pre><p class="secondary">Use the CLI for classified MAME listxml imports.</p></details></section>')+'</div>';
  pane.querySelectorAll("[data-operation-select]").forEach(b=>b.addEventListener("click",()=>{libraryUI.selected=b.dataset.operationSelect;libraryRenderOperations();}));
  pane.querySelectorAll("[data-import-new]").forEach(b=>b.addEventListener("click",libraryOpenImport));
  $("dat-upload-form")?.addEventListener("submit",libraryUploadDAT);
@@ -118,10 +124,11 @@ function libraryRenderOperations(){
   await libraryImportAction("/api/catalog/import-plan",{id:job.id,revision:job.revision,member:$("dat-member")?.value||"",platform:$("dat-platform").value});
  });
  pane.querySelectorAll("[data-import-apply]").forEach(b=>b.addEventListener("click",()=>libraryImportAction("/api/catalog/import-apply",{id:selected.id,revision:selected.revision})));
- pane.querySelectorAll("[data-import-dismiss]").forEach(b=>b.addEventListener("click",async()=>{await libraryImportAction("/api/catalog/import-dismiss",{id:selected.id,revision:selected.revision});}));
+ pane.querySelectorAll("[data-import-dismiss]").forEach(b=>b.addEventListener("click",async()=>{await libraryImportAction("/api/operations/dismiss",{id:selected.id,revision:selected.revision});}));
  pane.querySelectorAll("[data-import-open]").forEach(b=>b.addEventListener("click",async()=>{
-  libraryNavigate("library");await selectPlatform(selected.summary.platform);
+  libraryNavigate("library");await selectPlatform(selected.platform||selected.summary?.platform);
  }));
+ if(typeof enrichmentBind==="function")enrichmentBind(selected);
  librarySyncNavigation();
 }
 function libraryRememberJob(job){

@@ -2,6 +2,11 @@
 
 Set up accounts, keys and secret/env mappings with [source setup](source-setup.md).
 
+For a guided selected-platform workflow, use **Platform actions → Enrich platform**
+in `serve --edit`. The [browser workflow](catalog-editing.md#enrich-a-platform)
+shares these provider routines and keeps progress available after browser closure.
+CLI fetch remains available independently, including its advanced options.
+
 Omit `--source` to use `fetch.metadata`, `fetch.artwork` and `fetch.video` from
 `config/sources.yaml`, in that order. `--type` selects lists. Unlisted sources are
 not added; legacy `enabled` does not control selection.

@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 
-	"rommeta/internal/catalogfs"
 	"rommeta/internal/emumovies"
+	"rommeta/internal/enrichment"
 	"rommeta/internal/fetchstate"
 	"rommeta/internal/hasheous"
 	"rommeta/internal/igdb"
@@ -24,32 +23,8 @@ import (
 	"rommeta/internal/taskprogress"
 )
 
-type fetchOptions struct {
-	DataRoot         string
-	Types            []string
-	Sources          []string
-	MediaTypes       []string
-	Platform         string
-	PlatformRegistry *platformnames.Registry
-	Apply            bool
-	ForceOverwrite   bool
-	RefreshRelations bool
-	RefreshLinks     bool
-	LinkReview       string
-	Limit            int
-	Concurrency      int
-	ConcurrencySet   bool
-	PlanPath         string
-	PlanFormat       string
-}
-
-type fetchJob struct {
-	Type       string
-	Source     string
-	Platform   string
-	Automatic  bool
-	SkipReason string
-}
+type fetchOptions = enrichment.Options
+type fetchJob = enrichment.Job
 
 func runFetch(args []string) error {
 	if len(args) > 0 && isHelpArg(args[0]) {
@@ -307,34 +282,7 @@ func validateFetchJobs(jobs []fetchJob) error {
 	return nil
 }
 
-func fetchJobSupported(job fetchJob) bool {
-	switch {
-	case job.Source == "openvgdb" && job.Type == "metadata":
-		return true
-	case job.Source == "openvgdb" && job.Type == "artwork":
-		return true
-	case job.Source == "launchbox" && job.Type == "metadata":
-		return true
-	case job.Source == "launchbox" && job.Type == "artwork":
-		return true
-	case job.Source == "igdb" && job.Type == "metadata":
-		return true
-	case job.Source == "hasheous" && job.Type == "metadata":
-		return true
-	case job.Source == "igdb" && job.Type == "artwork":
-		return true
-	case job.Source == "screenscraper" && job.Type == "metadata":
-		return true
-	case job.Source == "screenscraper" && job.Type == "artwork":
-		return true
-	case job.Source == "emumovies" && job.Type == "video":
-		return true
-	case job.Source == "emumovies" && job.Type == "artwork":
-		return true
-	default:
-		return false
-	}
-}
+func fetchJobSupported(job fetchJob) bool { return enrichment.Supported(job) }
 
 func printFetchHeader(root, platform string, jobs []fetchJob) {
 	fmt.Println("Preparing fetch")
@@ -447,279 +395,47 @@ func appendFetchValues(values []string, raw string) []string {
 }
 
 func runFetchJob(job fetchJob, options fetchOptions, config store.SourcesConfig) error {
-	if len(options.MediaTypes) > 0 && !(job.Source == "emumovies" && job.Type == "artwork") {
-		return fmt.Errorf("--media-type is currently supported only for fetch --source emumovies --type artwork")
+	progress, update := newFetchTaskProgress(job)
+	result, err := enrichment.Run(job, options, config, update)
+	progress.Done()
+	switch v := result.(type) {
+	case openvgdb.ImportResult:
+		if err == nil {
+			printOpenVGDBResult(v)
+		}
+	case launchbox.ImportResult:
+		if err == nil {
+			printLaunchBoxResult(v)
+		}
+	case igdb.ImportResult:
+		if err == nil || (v.Apply && v.DataRoot != "") {
+			printIGDBResult(v, err)
+		}
+	case hasheous.ImportResult:
+		if err == nil || v.Apply {
+			printHasheousResult(v, err)
+		}
+	case screenscraper.ImportResult:
+		if err == nil || (v.Apply && v.DataRoot != "") {
+			printScreenScraperResult(v, err)
+		}
+	case sourceassets.Result:
+		if v.DataRoot != "" {
+			printSourceAssetResult(v)
+		}
+	case emumovies.VideoResult:
+		if v.DataRoot != "" {
+			printEmuMoviesVideoResult(v)
+		}
+	case emumovies.ArtworkResult:
+		if v.DataRoot != "" {
+			printEmuMoviesArtworkResult(v)
+		}
 	}
-	concurrency := fetchConcurrency(options, config, job)
-	switch {
-	case job.Source == "openvgdb" && job.Type == "metadata":
-		args := []string{"--data-root", options.DataRoot}
-		if options.Platform != "" {
-			args = append(args, "--platform", options.Platform)
-		}
-		if options.Apply {
-			args = append(args, "--download", "--apply")
-		}
-		if options.ForceOverwrite {
-			args = append(args, "--force-overwrite")
-		}
-		progress, progressFunc := newFetchTaskProgress(job)
-		result, err := runFetchOpenVGDB(args, progressFunc, options.PlatformRegistry)
-		progress.Done()
-		if err != nil {
-			return err
-		}
-		printOpenVGDBResult(result)
-		return nil
-	case job.Source == "openvgdb" && job.Type == "artwork":
-		progress, progressFunc := newFetchTaskProgress(job)
-		result, err := sourceassets.Fetch(sourceassets.Options{
-			DataRoot:         options.DataRoot,
-			Source:           "openvgdb",
-			Platform:         options.Platform,
-			PlatformRegistry: options.PlatformRegistry,
-			Apply:            options.Apply,
-			Limit:            options.Limit,
-			Concurrency:      concurrency,
-			PlanPath:         options.PlanPath,
-			PlanFormat:       options.PlanFormat,
-			PolicyScope:      "review",
-			PolicyNote:       "Imported from OpenVGDB media URLs; verify rights before sharing.",
-			Progress:         progressFunc,
-		})
-		progress.Done()
-		if result.DataRoot != "" {
-			printSourceAssetResult(result)
-		}
-		return err
-	case job.Source == "launchbox" && job.Type == "metadata":
-		progress, progressFunc := newFetchTaskProgress(job)
-		result, err := runFetchLaunchBox(fetchOptions{
-			DataRoot:         options.DataRoot,
-			Platform:         options.Platform,
-			PlatformRegistry: options.PlatformRegistry,
-			Apply:            options.Apply,
-			ForceOverwrite:   options.ForceOverwrite,
-			Limit:            options.Limit,
-			Concurrency:      concurrency,
-		}, progressFunc)
-		progress.Done()
-		if err != nil {
-			return err
-		}
-		printLaunchBoxResult(result)
-		return nil
-	case job.Source == "launchbox" && job.Type == "artwork":
-		progress, progressFunc := newFetchTaskProgress(job)
-		result, err := sourceassets.Fetch(sourceassets.Options{
-			DataRoot:         options.DataRoot,
-			Source:           "launchbox",
-			Platform:         options.Platform,
-			PlatformRegistry: options.PlatformRegistry,
-			Apply:            options.Apply,
-			Limit:            options.Limit,
-			Concurrency:      concurrency,
-			PlanPath:         options.PlanPath,
-			PlanFormat:       options.PlanFormat,
-			PolicyScope:      "review",
-			PolicyNote:       "Imported from LaunchBox Games Database media URLs; verify rights before sharing.",
-			Progress:         progressFunc,
-		})
-		progress.Done()
-		if result.DataRoot != "" {
-			printSourceAssetResult(result)
-		}
-		return err
-	case job.Source == "igdb" && job.Type == "metadata":
-		progress := newTerminalProgress(os.Stdout)
-		result, err := igdb.Import(igdb.ImportOptions{
-			RefreshRelations: options.RefreshRelations,
-			RefreshLinks:     options.RefreshLinks, LinkReview: options.LinkReview,
-			DataRoot:         options.DataRoot,
-			Platform:         options.Platform,
-			PlatformRegistry: options.PlatformRegistry,
-			Apply:            options.Apply,
-			ForceOverwrite:   options.ForceOverwrite,
-			Limit:            options.Limit,
-			Progress: func(snapshot igdb.ImportProgress) {
-				updateFetchMetadataProgress(progress, job, snapshot.Stage, snapshot.Current, snapshot.Total, snapshot.Queries, snapshot.Matches, snapshot.Game)
-			},
-		})
-		progress.Done()
-		if err != nil {
-			if result.Apply && result.DataRoot != "" {
-				printIGDBResult(result, err)
-			}
-			return err
-		}
-		printIGDBResult(result)
-		return fetchstate.Incomplete(result.FailedSearchCount)
-	case job.Source == "hasheous" && job.Type == "metadata":
-		progress := newTerminalProgress(os.Stdout)
-		result, err := hasheous.Import(hasheous.ImportOptions{
-			DataRoot:            options.DataRoot,
-			Platform:            options.Platform,
-			Apply:               options.Apply,
-			ForceOverwrite:      options.ForceOverwrite,
-			SkipWithoutEvidence: job.Automatic,
-			Limit:               options.Limit,
-			Concurrency:         concurrency,
-			Progress: func(snapshot hasheous.ImportProgress) {
-				updateHasheousProgress(progress, job, snapshot)
-			},
-		})
-		progress.Done()
-		if err != nil {
-			if result.Apply {
-				printHasheousResult(result, err)
-			}
-			return err
-		}
-		printHasheousResult(result)
-		return fetchstate.Incomplete(result.FailedLookupCount)
-	case job.Source == "igdb" && job.Type == "artwork":
-		progress, progressFunc := newFetchTaskProgress(job)
-		result, err := sourceassets.Fetch(sourceassets.Options{
-			DataRoot:         options.DataRoot,
-			Source:           "igdb",
-			Platform:         options.Platform,
-			PlatformRegistry: options.PlatformRegistry,
-			Apply:            options.Apply,
-			Limit:            options.Limit,
-			Concurrency:      concurrency,
-			PlanPath:         options.PlanPath,
-			PlanFormat:       options.PlanFormat,
-			PolicyScope:      "review",
-			PolicyNote:       "Imported from IGDB media URLs; verify rights before sharing.",
-			Progress:         progressFunc,
-		})
-		progress.Done()
-		if result.DataRoot != "" {
-			printSourceAssetResult(result)
-		}
-		return err
-	case job.Source == "screenscraper" && job.Type == "metadata":
-		progress := newTerminalProgress(os.Stdout)
-		result, err := screenscraper.Import(screenscraper.ImportOptions{
-			DataRoot:         options.DataRoot,
-			Platform:         options.Platform,
-			PlatformRegistry: options.PlatformRegistry,
-			Apply:            options.Apply,
-			ForceOverwrite:   options.ForceOverwrite,
-			Limit:            options.Limit,
-			Progress: func(snapshot screenscraper.ImportProgress) {
-				updateFetchMetadataProgress(progress, job, snapshot.Stage, snapshot.Current, snapshot.Total, snapshot.Queries, snapshot.Matches, snapshot.Game)
-			},
-		})
-		progress.Done()
-		if err != nil {
-			if result.Apply && result.DataRoot != "" {
-				printScreenScraperResult(result, err)
-			}
-			return err
-		}
-		printScreenScraperResult(result)
-		return fetchstate.Incomplete(result.FailedSearchCount)
-	case job.Source == "screenscraper" && job.Type == "artwork":
-		progress, progressFunc := newFetchTaskProgress(job)
-		result, err := sourceassets.Fetch(sourceassets.Options{
-			DataRoot:         options.DataRoot,
-			Source:           "screenscraper",
-			Platform:         options.Platform,
-			PlatformRegistry: options.PlatformRegistry,
-			Apply:            options.Apply,
-			Limit:            options.Limit,
-			Concurrency:      concurrency,
-			PlanPath:         options.PlanPath,
-			PlanFormat:       options.PlanFormat,
-			PolicyScope:      "review",
-			PolicyNote:       "Imported from ScreenScraper media URLs; verify rights before sharing.",
-			Progress:         progressFunc,
-		})
-		progress.Done()
-		if result.DataRoot != "" {
-			printSourceAssetResult(result)
-		}
-		return err
-	case job.Source == "emumovies" && job.Type == "video":
-		progress, progressFunc := newFetchTaskProgress(job)
-		result, err := emumovies.FetchVideo(emumovies.VideoOptions{
-			DataRoot:         options.DataRoot,
-			Platform:         options.Platform,
-			PlatformRegistry: options.PlatformRegistry,
-			Apply:            options.Apply,
-			Limit:            options.Limit,
-			Concurrency:      concurrency,
-			PlanPath:         options.PlanPath,
-			PlanFormat:       options.PlanFormat,
-			Progress:         progressFunc,
-		})
-		progress.Done()
-		if result.DataRoot != "" {
-			printEmuMoviesVideoResult(result)
-		}
-		return err
-	case job.Source == "emumovies" && job.Type == "artwork":
-		progress, progressFunc := newFetchTaskProgress(job)
-		result, err := emumovies.FetchArtwork(emumovies.ArtworkOptions{
-			DataRoot:         options.DataRoot,
-			MediaTypes:       options.MediaTypes,
-			Platform:         options.Platform,
-			PlatformRegistry: options.PlatformRegistry,
-			Apply:            options.Apply,
-			Limit:            options.Limit,
-			Concurrency:      concurrency,
-			PlanPath:         options.PlanPath,
-			PlanFormat:       options.PlanFormat,
-			Progress:         progressFunc,
-		})
-		progress.Done()
-		if result.DataRoot != "" {
-			printEmuMoviesArtworkResult(result)
-		}
-		return err
-	default:
-		return fmt.Errorf("fetch source %q does not support type %q yet", job.Source, job.Type)
-	}
+	return err
 }
-
 func fetchConcurrency(options fetchOptions, config store.SourcesConfig, job fetchJob) int {
-	concurrency := 1
-	if configured := config.FetchConcurrency; configured > 0 {
-		concurrency = configured
-	}
-	if configured := sourceConcurrency(config, job.Source); configured > 0 {
-		concurrency = configured
-	}
-	if options.ConcurrencySet {
-		concurrency = options.Concurrency
-	}
-	if !parallelFetchSupported(job) {
-		return 1
-	}
-	if concurrency < 1 {
-		return 1
-	}
-	return concurrency
-}
-
-func sourceConcurrency(config store.SourcesConfig, sourceName string) int {
-	for _, source := range config.Sources {
-		if strings.EqualFold(source.Name, sourceName) {
-			return source.FetchConcurrency
-		}
-	}
-	return 0
-}
-
-func parallelFetchSupported(job fetchJob) bool {
-	if !store.SourceSupportsParallelFetch(job.Source) {
-		return false
-	}
-	if job.Type == "metadata" {
-		return job.Source == "hasheous"
-	}
-	return job.Type == "artwork" || job.Type == "video"
+	return enrichment.Concurrency(options, config, job)
 }
 
 func newFetchTaskProgress(job fetchJob) (*terminalProgress, taskprogress.Func) {
@@ -785,150 +501,6 @@ func fetchMetadataProgressLabel(queries, matches int, label string) string {
 		parts = append(parts, label)
 	}
 	return strings.Join(parts, " | ")
-}
-
-func runFetchLaunchBox(options fetchOptions, progress taskprogress.Func) (launchbox.ImportResult, error) {
-	importOptions := launchbox.ImportOptions{DataRoot: options.DataRoot, Platform: options.Platform, PlatformRegistry: options.PlatformRegistry, Apply: options.Apply, ForceOverwrite: options.ForceOverwrite, Progress: progress}
-	downloadURL := ""
-	config, err := store.LoadSources(options.DataRoot)
-	if err != nil {
-		return launchbox.ImportResult{}, err
-	}
-	for _, source := range config.Sources {
-		if source.Name == "launchbox" {
-			importOptions.ZipPath = store.ResolveDataRootPath(options.DataRoot, source.SnapshotPath)
-			downloadURL = source.SnapshotURL
-			break
-		}
-	}
-	if importOptions.ZipPath == "" {
-		importOptions.ZipPath = launchbox.DefaultSnapshotPath(options.DataRoot)
-	}
-	if downloadURL == "" {
-		downloadURL = launchbox.DefaultSnapshotURL()
-	}
-
-	var snapshot launchbox.SnapshotResult
-	if options.Apply {
-		snapshot, err = launchbox.EnsureSnapshotFromURL(options.DataRoot, downloadURL, progress)
-		if err != nil {
-			return launchbox.ImportResult{}, err
-		}
-		importOptions.ZipPath = snapshot.ZipPath
-	}
-	progress.Update("check snapshot", 0, 0, filepath.Base(importOptions.ZipPath))
-	if _, err := catalogfs.Stat(importOptions.ZipPath); err != nil {
-		if os.IsNotExist(err) {
-			return launchbox.ImportResult{}, fmt.Errorf("LaunchBox snapshot not found: %s (rerun with --apply to download it, or set sources.launchbox.snapshot.path)", importOptions.ZipPath)
-		}
-		return launchbox.ImportResult{}, err
-	}
-
-	result, err := launchbox.Import(importOptions)
-	if err != nil {
-		return launchbox.ImportResult{}, err
-	}
-	result.Snapshot = snapshot
-	return result, nil
-}
-
-func runFetchOpenVGDB(args []string, progress taskprogress.Func, registry *platformnames.Registry) (openvgdb.ImportResult, error) {
-	options := openvgdb.ImportOptions{DataRoot: ".", PlatformRegistry: registry, Progress: progress}
-	download := false
-	downloadURL := ""
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		switch {
-		case arg == "--apply":
-			options.Apply = true
-		case arg == "--force-overwrite":
-			options.ForceOverwrite = true
-		case arg == "--download":
-			download = true
-		case arg == "--data-root":
-			if i+1 >= len(args) {
-				return openvgdb.ImportResult{}, fmt.Errorf("--data-root requires a value")
-			}
-			i++
-			options.DataRoot = args[i]
-		case strings.HasPrefix(arg, "--data-root="):
-			options.DataRoot = strings.TrimPrefix(arg, "--data-root=")
-		case arg == "--platform":
-			if i+1 >= len(args) {
-				return openvgdb.ImportResult{}, fmt.Errorf("--platform requires a value")
-			}
-			i++
-			options.Platform = args[i]
-		case strings.HasPrefix(arg, "--platform="):
-			options.Platform = strings.TrimPrefix(arg, "--platform=")
-		case arg == "--db":
-			if i+1 >= len(args) {
-				return openvgdb.ImportResult{}, fmt.Errorf("--db requires a value")
-			}
-			i++
-			options.DBPath = args[i]
-		case strings.HasPrefix(arg, "--db="):
-			options.DBPath = strings.TrimPrefix(arg, "--db=")
-		case arg == "--url":
-			if i+1 >= len(args) {
-				return openvgdb.ImportResult{}, fmt.Errorf("--url requires a value")
-			}
-			i++
-			downloadURL = args[i]
-		case strings.HasPrefix(arg, "--url="):
-			downloadURL = strings.TrimPrefix(arg, "--url=")
-		default:
-			return openvgdb.ImportResult{}, fmt.Errorf("unknown option: %s", arg)
-		}
-	}
-
-	needsSourceConfig := options.DBPath == "" || (download && downloadURL == "")
-	if needsSourceConfig {
-		config, err := store.LoadSources(options.DataRoot)
-		if err != nil {
-			return openvgdb.ImportResult{}, err
-		}
-		for _, source := range config.Sources {
-			if source.Name == "openvgdb" {
-				if options.DBPath == "" {
-					options.DBPath = store.ResolveDataRootPath(options.DataRoot, source.SnapshotPath)
-				}
-				if download && downloadURL == "" {
-					downloadURL = source.SnapshotURL
-				}
-				break
-			}
-		}
-	}
-	if downloadURL == "" {
-		downloadURL = openvgdb.DefaultSnapshotURL()
-	}
-	var snapshot openvgdb.SnapshotResult
-	var err error
-	if download {
-		snapshot, err = openvgdb.EnsureSnapshotFromURL(options.DataRoot, downloadURL, progress)
-		if err != nil {
-			return openvgdb.ImportResult{}, err
-		}
-		options.DBPath = snapshot.DBPath
-	}
-	if options.DBPath == "" {
-		options.DBPath = openvgdb.DefaultSnapshotPath(options.DataRoot)
-	}
-	progress.Update("check snapshot", 0, 0, filepath.Base(options.DBPath))
-	if _, err := catalogfs.Stat(options.DBPath); err != nil {
-		if os.IsNotExist(err) {
-			return openvgdb.ImportResult{}, fmt.Errorf("OpenVGDB snapshot not found: %s (rerun with --download, pass --db, or set sources.openvgdb.snapshot.path)", options.DBPath)
-		}
-		return openvgdb.ImportResult{}, err
-	}
-
-	result, err := openvgdb.Import(options)
-	if err != nil {
-		return openvgdb.ImportResult{}, err
-	}
-	result.Snapshot = snapshot
-	return result, nil
 }
 
 func printOpenVGDBResult(result openvgdb.ImportResult) {

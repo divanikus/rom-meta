@@ -11,7 +11,7 @@ Start with the [operator walkthrough](cli-workflow.md) and
 | Arcade or ScummVM input | [MAME import](arcade-import.md), [ScummVM](scummvm.md) |
 | Prepare translations/hacks | [Variants and inherited metadata](catalog-variants.md), [staging helper](prepare-variants.md) |
 | Understand catalog files | [Metadata model](portable-metadata.md), [storage](catalog-storage.md) |
-| Edit cards / apply automatic fold plans | [Browser editor and visual comparison](catalog-editing.md) |
+| Import, enrich, edit cards and review folds in the browser | [Library management](catalog-editing.md) |
 | Review game boundaries | [Identity rules](regional-content-identity.md), [fold plans](reviewed-fold-plans.md), [splits](reviewed-content-splits.md) |
 | Export ROM sets / new platforms | [Generic input handling and evidence](romset-export.md) |
 | Select platforms / identify folders | [Codes, aliases and export support](platform-selection.md) |

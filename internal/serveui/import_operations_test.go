@@ -35,7 +35,7 @@ func importTestServer(t *testing.T) (*server, *httptest.Server) {
 	t.Cleanup(ts.Close)
 	return s, ts
 }
-func uploadTestDAT(t *testing.T, h http.Handler, name string, data []byte) (*httptest.ResponseRecorder, importOperation) {
+func uploadTestDAT(t *testing.T, h http.Handler, name string, data []byte) (*httptest.ResponseRecorder, libraryOperation) {
 	t.Helper()
 	var body bytes.Buffer
 	mp := multipart.NewWriter(&body)
@@ -49,25 +49,25 @@ func uploadTestDAT(t *testing.T, h http.Handler, name string, data []byte) (*htt
 	r.Header.Set("Content-Type", mp.FormDataContentType())
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
-	var op importOperation
+	var op libraryOperation
 	_ = json.Unmarshal(w.Body.Bytes(), &op)
 	return w, op
 }
-func waitImport(t *testing.T, s *server, id, state string) importOperation {
+func waitImport(t *testing.T, s *server, id, state string) libraryOperation {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		op, _ := s.importSnapshot(id)
+		op, _ := s.operationSnapshot(id)
 		if op.State == state {
 			return op
 		}
-		if !importBusy(op.State) {
+		if !operationBusyState(op.State) {
 			t.Fatalf("wanted %s: %#v", state, op)
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatal("operation timeout")
-	return importOperation{}
+	return libraryOperation{}
 }
 func TestDATImportContinuesWithoutBrowserAndApplyIsIdempotent(t *testing.T) {
 	s, ts := importTestServer(t)
@@ -117,7 +117,7 @@ func TestDATImportContinuesWithoutBrowserAndApplyIsIdempotent(t *testing.T) {
 		close(release)
 		t.Fatal(err)
 	}
-	var operations []importOperation
+	var operations []libraryOperation
 	err = json.NewDecoder(response.Body).Decode(&operations)
 	response.Body.Close()
 	if err != nil || len(operations) != 1 || operations[0].State != "importing" || operations[0].Progress.Current != 1 {

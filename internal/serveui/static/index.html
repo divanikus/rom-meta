@@ -932,6 +932,7 @@
 <link rel="stylesheet" href="/catalog-edit.css">
 <script src="/catalog-edit.js" defer></script>
 <link rel="stylesheet" href="/library.css">
+<script src="/enrichment.js" defer></script>
 <script src="/library.js" defer></script>
 </head>
 <body>
@@ -987,7 +988,7 @@
         </div>
       </div>
       <div class="scroll" id="platform-list"></div>
-      <div class="platform-workspace-head hidden" id="platform-workspace-actions"><span class="secondary">Selected platform</span><h2 id="platform-heading">Library</h2><details id="platform-actions"><summary>Platform actions</summary><div class="platform-actions-menu"><div class="catalog-tools hidden" id="catalog-tools"><button class="tab-button" id="catalog-build-plan" type="button">Review duplicates</button></div><button class="tab-button" id="stats-tab" type="button">Statistics</button></div></details></div>
+      <div class="platform-workspace-head hidden" id="platform-workspace-actions"><span class="secondary">Selected platform</span><h2 id="platform-heading">Library</h2><details id="platform-actions"><summary>Platform actions</summary><div class="platform-actions-menu"><div class="catalog-tools hidden" id="catalog-tools"><button class="tab-button hidden" id="platform-enrich" type="button">Enrich platform</button><button class="tab-button" id="catalog-build-plan" type="button">Review duplicates</button></div><button class="tab-button" id="stats-tab" type="button">Statistics</button></div></details></div>
     </aside>
 
     <main class="games" id="game-pane">
@@ -1210,7 +1211,7 @@
       source = String(source || "");
       if (state.sourceDefaults?.source_labels?.[source]) return state.sourceDefaults.source_labels[source];
       if (state.game?.source_labels?.[source]) return state.game.source_labels[source];
-      return ({launchbox:"LaunchBox", screenscraper:"ScreenScraper", igdb:"IGDB", openvgdb:"OpenVGDB", emumovies:"EmuMovies", local:"Saved catalog override", catalog:"Catalog"})[source] || (source.startsWith("gamelist.") ? "Imported gamelist: " + source.slice(9) : source);
+      return ({launchbox:"LaunchBox", screenscraper:"ScreenScraper", igdb:"IGDB", openvgdb:"OpenVGDB", emumovies:"EmuMovies", hasheous:"Hasheous", local:"Saved catalog override", catalog:"Catalog"})[source] || (source.startsWith("gamelist.") ? "Imported gamelist: " + source.slice(9) : source);
     }
     async function loadExportSources() {
       if (state.sourceDefaults || state.sourceOptionsLoading) { renderSourceControls(); return; }

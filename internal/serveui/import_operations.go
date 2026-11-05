@@ -22,29 +22,30 @@ import (
 
 const maxDATUpload = 256 << 20
 const maxDATExpanded = 512 << 20
-const maxImportOperations = 32
+const maxLibraryOperations = 32
 
 // Operation records belong to this server, never to the initiating HTTP request.
 // Inactive receipts expire after 24 hours, dismissal or server restart. Uploaded
 // inputs are removed after success/dismissal/expiry in this process.
-type importOperation struct {
-	ID       string             `json:"id"`
-	Kind     string             `json:"kind"`
-	Filename string             `json:"filename"`
-	State    string             `json:"state"`
-	Created  time.Time          `json:"created"`
-	Updated  time.Time          `json:"updated"`
-	Revision int                `json:"revision"`
-	Member   string             `json:"member,omitempty"`
-	Members  []string           `json:"members,omitempty"`
-	Platform string             `json:"platform,omitempty"`
-	Progress dat.ImportProgress `json:"progress"`
-	Summary  *importSummary     `json:"summary,omitempty"`
-	Error    string             `json:"error,omitempty"`
-	Warning  string             `json:"warning,omitempty"`
-	path     string
-	stamp    string
-	dir      string
+type libraryOperation struct {
+	ID         string             `json:"id"`
+	Kind       string             `json:"kind"`
+	Enrichment *enrichmentState   `json:"enrichment,omitempty"`
+	Filename   string             `json:"filename"`
+	State      string             `json:"state"`
+	Created    time.Time          `json:"created"`
+	Updated    time.Time          `json:"updated"`
+	Revision   int                `json:"revision"`
+	Member     string             `json:"member,omitempty"`
+	Members    []string           `json:"members,omitempty"`
+	Platform   string             `json:"platform,omitempty"`
+	Progress   dat.ImportProgress `json:"progress"`
+	Summary    *importSummary     `json:"summary,omitempty"`
+	Error      string             `json:"error,omitempty"`
+	Warning    string             `json:"warning,omitempty"`
+	path       string
+	stamp      string
+	dir        string
 }
 type importSummary struct {
 	Dataset      string           `json:"dataset"`
@@ -68,8 +69,10 @@ type importAction struct {
 	Platform string `json:"platform,omitempty"`
 }
 
-func importBusy(state string) bool { return state == "planning" || state == "importing" }
-func importID() string {
+func operationBusyState(state string) bool {
+	return state == "planning" || state == "importing" || state == "enriching"
+}
+func operationID() string {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		panic(err)
@@ -81,16 +84,16 @@ func summarizeImport(result dat.ImportResult) *importSummary {
 		Platform: filepath.Base(result.PlatformPath), Games: result.GameBundleCount, Releases: result.ReleaseCount, Fingerprints: result.FingerprintCount,
 		Added: result.Changes.Added, Reconciled: result.Changes.Reconciled, Action: result.Changes.Action, Conflicts: result.Changes.Conflicts, Samples: result.SampleGames, Written: result.WrittenFileCount}
 }
-func (s *server) importSnapshot(id string) (importOperation, bool) {
+func (s *server) operationSnapshot(id string) (libraryOperation, bool) {
 	s.operationsMu.Lock()
 	defer s.operationsMu.Unlock()
 	op, ok := s.operations[id]
 	if !ok {
-		return importOperation{}, false
+		return libraryOperation{}, false
 	}
-	return *op, true
+	return cloneOperation(op), true
 }
-func (s *server) changeImport(id string, update func(*importOperation)) {
+func (s *server) changeOperation(id string, update func(*libraryOperation)) {
 	s.operationsMu.Lock()
 	defer s.operationsMu.Unlock()
 	if op := s.operations[id]; op != nil {
@@ -98,9 +101,9 @@ func (s *server) changeImport(id string, update func(*importOperation)) {
 		op.Updated = time.Now().UTC()
 	}
 }
-func (s *server) expireImportsLocked() {
+func (s *server) expireOperationsLocked() {
 	for id, op := range s.operations {
-		if !importBusy(op.State) && time.Since(op.Updated) > 24*time.Hour {
+		if !operationBusyState(op.State) && time.Since(op.Updated) > 24*time.Hour {
 			if op.dir != "" {
 				_ = os.RemoveAll(op.dir)
 			}
@@ -114,10 +117,10 @@ func (s *server) operationsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.operationsMu.Lock()
-	s.expireImportsLocked()
-	result := make([]importOperation, 0, len(s.operations))
+	s.expireOperationsLocked()
+	result := make([]libraryOperation, 0, len(s.operations))
 	for _, op := range s.operations {
-		result = append(result, *op)
+		result = append(result, cloneOperation(op))
 	}
 	s.operationsMu.Unlock()
 	sort.Slice(result, func(i, j int) bool { return result[i].Created.After(result[j].Created) })
@@ -171,8 +174,8 @@ func (s *server) importUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.operationsMu.Lock()
-	s.expireImportsLocked()
-	if len(s.operations)+s.uploads >= maxImportOperations {
+	s.expireOperationsLocked()
+	if len(s.operations)+s.uploads >= maxLibraryOperations {
 		s.operationsMu.Unlock()
 		writeError(w, 409, fmt.Errorf("dismiss an old operation before uploading another DAT"))
 		return
@@ -249,23 +252,23 @@ func (s *server) importUpload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, err)
 		return
 	}
-	op := &importOperation{ID: importID(), Kind: "dat-import", Filename: filename, State: "needs_selection", Created: time.Now().UTC(), Updated: time.Now().UTC(), Revision: 1, Members: members, path: path, dir: dir}
+	op := &libraryOperation{ID: operationID(), Kind: "dat-import", Filename: filename, State: "needs_selection", Created: time.Now().UTC(), Updated: time.Now().UTC(), Revision: 1, Members: members, path: path, dir: dir}
 	if len(members) == 1 {
 		op.Member = members[0]
 	}
 	s.operationsMu.Lock()
 	if s.operations == nil {
-		s.operations = map[string]*importOperation{}
+		s.operations = map[string]*libraryOperation{}
 	}
 	s.operations[op.ID] = op
 	s.operationsMu.Unlock()
 	keep = true
 	if len(members) < 2 {
 		if err := s.beginImport(op.ID, 1, op.Member, "", false); err != nil {
-			s.changeImport(op.ID, func(current *importOperation) { current.Error = s.importError(err, *current) })
+			s.changeOperation(op.ID, func(current *libraryOperation) { current.Error = s.importError(err, *current) })
 		}
 	}
-	snapshot, _ := s.importSnapshot(op.ID)
+	snapshot, _ := s.operationSnapshot(op.ID)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusAccepted)
 	writeJSON(w, snapshot)
@@ -279,7 +282,7 @@ func (s *server) importPlan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 409, err)
 		return
 	}
-	op, _ := s.importSnapshot(input.ID)
+	op, _ := s.operationSnapshot(input.ID)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusAccepted)
 	writeJSON(w, op)
@@ -293,12 +296,12 @@ func (s *server) importApply(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 409, err)
 		return
 	}
-	op, _ := s.importSnapshot(input.ID)
+	op, _ := s.operationSnapshot(input.ID)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusAccepted)
 	writeJSON(w, op)
 }
-func (s *server) importDismiss(w http.ResponseWriter, r *http.Request) {
+func (s *server) operationDismiss(w http.ResponseWriter, r *http.Request) {
 	var input importAction
 	if !s.editRequest(w, r, &input) {
 		return
@@ -310,7 +313,7 @@ func (s *server) importDismiss(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]bool{"dismissed": true})
 		return
 	}
-	if importBusy(op.State) {
+	if operationBusyState(op.State) {
 		writeError(w, 409, fmt.Errorf("operation is still running; closing the browser will not interrupt it"))
 		return
 	}
@@ -330,8 +333,12 @@ func (s *server) beginImport(id string, revision int, member, platform string, a
 		s.operationsMu.Unlock()
 		return fmt.Errorf("operation no longer exists; upload the DAT again")
 	}
+	if op.Kind != "dat-import" {
+		s.operationsMu.Unlock()
+		return fmt.Errorf("this operation is not a DAT import")
+	}
 	// A repeated accepted command is a lookup, never a second worker.
-	if importBusy(op.State) || (apply && op.State == "succeeded") {
+	if operationBusyState(op.State) || (apply && op.State == "succeeded") {
 		s.operationsMu.Unlock()
 		return nil
 	}
@@ -400,7 +407,7 @@ func (s *server) beginImport(id string, revision int, member, platform string, a
 	go func() { defer s.editMu.Unlock(); defer unlock(); s.runImport(snapshot, apply) }()
 	return nil
 }
-func (s *server) runImport(op importOperation, apply bool) {
+func (s *server) runImport(op libraryOperation, apply bool) {
 	// Test seam uses the same progress callback and deterministic disconnect checks.
 	run := s.datImport
 	if run == nil {
@@ -411,7 +418,7 @@ func (s *server) runImport(op importOperation, apply bool) {
 	var batch *catalogchanges.Batch
 	if err == nil {
 		options.Progress = func(p dat.ImportProgress) {
-			s.changeImport(op.ID, func(current *importOperation) { current.Progress = p })
+			s.changeOperation(op.ID, func(current *libraryOperation) { current.Progress = p })
 		}
 		format, e := dat.DetectFormat(op.path, op.Member)
 		err = e
@@ -444,7 +451,7 @@ func (s *server) runImport(op importOperation, apply bool) {
 			warning += " Uploaded file cleanup: " + s.importError(cleanupErr, op)
 		}
 	}
-	s.changeImport(op.ID, func(current *importOperation) {
+	s.changeOperation(op.ID, func(current *libraryOperation) {
 		current.Warning = warning
 		if result.PlatformPath != "" {
 			current.Summary = summarizeImport(result)
@@ -466,7 +473,7 @@ func (s *server) runImport(op importOperation, apply bool) {
 		current.Progress = dat.ImportProgress{Stage: "complete", Current: result.GameBundleCount, Total: result.GameBundleCount}
 	})
 }
-func (s *server) importError(err error, op importOperation) string {
+func (s *server) importError(err error, op libraryOperation) string {
 	message := err.Error()
 	message = strings.ReplaceAll(message, op.dir, "uploaded DAT")
 	message = strings.ReplaceAll(message, s.realRoot, "library")

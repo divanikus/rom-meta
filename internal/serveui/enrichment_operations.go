@@ -1,0 +1,403 @@
+package serveui
+
+import (
+	"crypto/sha256"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
+	"time"
+
+	"rommeta/internal/catalogchanges"
+	"rommeta/internal/catalogedit"
+	"rommeta/internal/catalogfs"
+	"rommeta/internal/enrichment"
+	"rommeta/internal/exporter"
+	"rommeta/internal/fetchstate"
+	"rommeta/internal/platformnames"
+	"rommeta/internal/screenscraper"
+	"rommeta/internal/store"
+	"rommeta/internal/taskprogress"
+)
+
+type enrichmentChoice struct {
+	Source    string `json:"source"`
+	Type      string `json:"type"`
+	Available bool   `json:"available"`
+	Default   bool   `json:"default"`
+	Reason    string `json:"reason,omitempty"`
+}
+type enrichmentOptions struct {
+	Platform string             `json:"platform"`
+	Revision string             `json:"revision"`
+	Choices  []enrichmentChoice `json:"choices"`
+}
+type enrichmentSelection struct {
+	Source string `json:"source"`
+	Type   string `json:"type"`
+}
+type enrichmentRequest struct {
+	Platform string                `json:"platform"`
+	Revision string                `json:"revision"`
+	Jobs     []enrichmentSelection `json:"jobs"`
+}
+type enrichmentTask struct {
+	Source string            `json:"source"`
+	Type   string            `json:"type"`
+	State  string            `json:"state"`
+	Counts enrichment.Counts `json:"counts"`
+	Error  string            `json:"error,omitempty"`
+}
+type enrichmentState struct {
+	Jobs     []enrichmentTask      `json:"jobs"`
+	Current  int                   `json:"current"`
+	Progress taskprogress.Snapshot `json:"progress"`
+}
+
+func cloneOperation(op *libraryOperation) libraryOperation {
+	result := *op
+	if op.Enrichment != nil {
+		state := *op.Enrichment
+		state.Jobs = append([]enrichmentTask(nil), state.Jobs...)
+		result.Enrichment = &state
+	}
+	return result
+}
+
+// Provider configuration is server-side. Browser input can select only known
+// source/type pairs for one exact catalog platform, never credentials or URLs.
+func (s *server) enrichmentChoices(platform string) (enrichmentOptions, store.SourcesConfig, *platformnames.Registry, error) {
+	result := enrichmentOptions{Platform: platform, Choices: []enrichmentChoice{}}
+	if !catalogedit.Component(platform) {
+		return result, store.SourcesConfig{}, nil, fmt.Errorf("choose a catalog platform")
+	}
+	path, err := catalogfs.EvalSymlinks(filepath.Join(s.root, "platforms", platform))
+	if err != nil {
+		return result, store.SourcesConfig{}, nil, fmt.Errorf("platform is unavailable")
+	}
+	relative, err := filepath.Rel(s.realRoot, path)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return result, store.SourcesConfig{}, nil, fmt.Errorf("platform must stay inside this library")
+	}
+	info, err := catalogfs.Stat(path)
+	if err != nil || !info.IsDir() {
+		return result, store.SourcesConfig{}, nil, fmt.Errorf("platform is unavailable")
+	}
+	config, err := store.LoadSources(s.root)
+	if err != nil {
+		return result, config, nil, fmt.Errorf("cannot read source settings; check config/sources.yaml")
+	}
+	registry, _, err := platformnames.LoadRegistry(s.root)
+	if err != nil {
+		return result, config, nil, fmt.Errorf("cannot read platform mappings; check config/platforms.yaml")
+	}
+	registry.MergeAliases(config.PlatformAliases)
+	hash := sha256.New()
+	for _, name := range []string{catalogchanges.RevisionFile, "config/sources.yaml", "config/platforms.yaml", "config/secrets.yaml", "config/catalog.yaml"} {
+		data, e := os.ReadFile(filepath.Join(s.root, name))
+		if e != nil && !os.IsNotExist(e) {
+			return result, config, nil, fmt.Errorf("cannot read library configuration")
+		}
+		hash.Write([]byte(name))
+		hash.Write(data)
+	}
+	for _, typ := range []string{"metadata", "artwork", "video"} {
+		order := append([]string(nil), config.Fetch[typ]...)
+		for _, name := range []string{"launchbox", "openvgdb", "igdb", "screenscraper", "hasheous", "emumovies"} {
+			if !slices.Contains(order, name) {
+				order = append(order, name)
+			}
+		}
+		seen := map[string]bool{}
+		for _, name := range order {
+			if seen[name] || !enrichment.Supported(enrichment.Job{Source: name, Type: typ}) {
+				continue
+			}
+			seen[name] = true
+			reason := enrichment.MappingReason(enrichment.Job{Source: name, Type: typ}, platform, registry, config)
+			for _, source := range config.Sources {
+				if source.Name != name {
+					continue
+				}
+				for _, key := range store.SourceRequiredCredentials(name) {
+					value, ok := store.CredentialValue(config, source, key)
+					if !ok && name == "screenscraper" && (typ == "artwork" || key == "dev_id" || key == "dev_password") && config.Secrets.Err == nil {
+						value = config.Secrets.Values[name][key]
+						ok = value != ""
+					}
+					hash.Write([]byte(name + "\x00" + key + "\x00" + value))
+					if (!ok || strings.TrimSpace(value) == "") && reason == "" && (typ == "metadata" || name == "screenscraper" || name == "emumovies") {
+						reason = "Credentials are missing. Configure this source on the server."
+					}
+				}
+			}
+			result.Choices = append(result.Choices, enrichmentChoice{Source: name, Type: typ, Available: reason == "", Default: reason == "" && slices.Contains(config.Fetch[typ], name), Reason: reason})
+		}
+	}
+	result.Revision = fmt.Sprintf("%x", hash.Sum(nil))
+	return result, config, &registry, nil
+}
+func (s *server) enrichmentOptions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if !s.allowEdit {
+		writeError(w, 403, fmt.Errorf("enrichment requires serve --edit"))
+		return
+	}
+	options, _, _, err := s.enrichmentChoices(r.URL.Query().Get("platform"))
+	if err != nil {
+		writeError(w, 400, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, options)
+}
+func (s *server) enrichmentPlan(w http.ResponseWriter, r *http.Request) {
+	var input enrichmentRequest
+	if !s.editRequest(w, r, &input) {
+		return
+	}
+	options, _, _, err := s.enrichmentChoices(input.Platform)
+	if err != nil {
+		writeError(w, 400, err)
+		return
+	}
+	if options.Revision != input.Revision {
+		writeError(w, 409, fmt.Errorf("library or source settings changed; reopen enrichment and review the choices"))
+		return
+	}
+	if len(input.Jobs) == 0 || len(input.Jobs) > 12 {
+		writeError(w, 400, fmt.Errorf("select at least one supported source and data type"))
+		return
+	}
+	selected := map[enrichmentSelection]bool{}
+	for _, job := range input.Jobs {
+		if selected[job] {
+			writeError(w, 400, fmt.Errorf("duplicate enrichment task"))
+			return
+		}
+		selected[job] = true
+	}
+	state := &enrichmentState{Jobs: []enrichmentTask{}}
+	// Stable CLI order: metadata before artwork before video; configured sources first.
+	for _, choice := range options.Choices {
+		key := enrichmentSelection{choice.Source, choice.Type}
+		if !selected[key] {
+			continue
+		}
+		if !choice.Available {
+			writeError(w, 400, fmt.Errorf("%s: %s", choice.Source, choice.Reason))
+			return
+		}
+		state.Jobs = append(state.Jobs, enrichmentTask{Source: choice.Source, Type: choice.Type, State: "pending"})
+		delete(selected, key)
+	}
+	if len(selected) > 0 {
+		writeError(w, 400, fmt.Errorf("unsupported enrichment source or data type"))
+		return
+	}
+	s.operationsMu.Lock()
+	s.expireOperationsLocked()
+	if len(s.operations)+s.uploads >= maxLibraryOperations {
+		s.operationsMu.Unlock()
+		writeError(w, 409, fmt.Errorf("dismiss an old operation before preparing another"))
+		return
+	}
+	op := &libraryOperation{ID: operationID(), Kind: "enrichment", Platform: input.Platform, State: "ready", Created: time.Now().UTC(), Updated: time.Now().UTC(), Revision: 1, Enrichment: state, stamp: options.Revision}
+	if s.operations == nil {
+		s.operations = map[string]*libraryOperation{}
+	}
+	s.operations[op.ID] = op
+	snapshot := cloneOperation(op)
+	s.operationsMu.Unlock()
+	w.WriteHeader(http.StatusAccepted)
+	writeJSON(w, snapshot)
+}
+func (s *server) enrichmentStart(w http.ResponseWriter, r *http.Request) {
+	var input importAction
+	if !s.editRequest(w, r, &input) {
+		return
+	}
+	if err := s.beginEnrichment(input.ID, input.Revision); err != nil {
+		message := strings.ReplaceAll(err.Error(), s.root, "library")
+		s.changeOperation(input.ID, func(op *libraryOperation) {
+			if op.Kind == "enrichment" {
+				op.Error = message
+			}
+		})
+		writeError(w, 409, fmt.Errorf("%s", message))
+		return
+	}
+	snapshot, _ := s.operationSnapshot(input.ID)
+	w.WriteHeader(http.StatusAccepted)
+	writeJSON(w, snapshot)
+}
+func (s *server) beginEnrichment(id string, revision int) error {
+	s.operationsMu.Lock()
+	defer s.operationsMu.Unlock()
+	op := s.operations[id]
+	if op == nil || op.Kind != "enrichment" {
+		return fmt.Errorf("enrichment plan is unavailable; prepare it again")
+	}
+	// All accepted starts, including terminal failures, are idempotent.
+	if op.State != "ready" {
+		return nil
+	}
+	if op.Revision != revision {
+		return fmt.Errorf("the plan changed; review the current operation")
+	}
+	if !s.editMu.TryLock() {
+		return fmt.Errorf("another catalog operation is running; try again when it finishes")
+	}
+	unlock, err := catalogedit.Lock(s.root)
+	if err != nil {
+		s.editMu.Unlock()
+		return err
+	}
+	options, config, registry, err := s.enrichmentChoices(op.Platform)
+	if err != nil || options.Revision != op.stamp {
+		unlock()
+		s.editMu.Unlock()
+		return fmt.Errorf("library or source settings changed; prepare enrichment again")
+	}
+	op.State = "enriching"
+	op.Error = ""
+	op.Updated = time.Now().UTC()
+	snapshot := cloneOperation(op)
+	go func() { defer s.editMu.Unlock(); defer unlock(); s.runEnrichment(snapshot, config, registry) }()
+	return nil
+}
+
+var enrichmentURLs = regexp.MustCompile(`(?i)(?:https?|ftp)://[^\s<>"']+`)
+
+func enrichmentText(config store.SourcesConfig, text string) string {
+	for _, values := range config.Secrets.Values {
+		for _, value := range values {
+			if value != "" {
+				text = strings.ReplaceAll(text, value, "[redacted]")
+				text = strings.ReplaceAll(text, url.QueryEscape(value), "[redacted]")
+			}
+		}
+	}
+	for _, source := range config.Sources {
+		for _, key := range source.Credentials {
+			if value, ok := store.CredentialValue(config, source, key.Name); ok && value != "" {
+				text = strings.ReplaceAll(text, value, "[redacted]")
+				text = strings.ReplaceAll(text, url.QueryEscape(value), "[redacted]")
+			}
+		}
+	}
+	text = enrichmentURLs.ReplaceAllStringFunc(text, func(raw string) string {
+		u, e := url.Parse(raw)
+		if e != nil {
+			return "[provider URL]"
+		}
+		u.User = nil
+		u.RawQuery = ""
+		u.Fragment = ""
+		return u.String()
+	})
+	if config.Root != "" {
+		text = strings.ReplaceAll(text, config.Root, "library")
+	}
+	if len(text) > 800 {
+		text = text[:800] + "…"
+	}
+	return text
+}
+func (s *server) runEnrichment(op libraryOperation, config store.SourcesConfig, registry *platformnames.Registry) {
+	run := s.enrichRun
+	if run == nil {
+		run = enrichment.Run
+	}
+	batch := catalogchanges.Begin(exporter.RefreshPlatformIndex)
+	failed, issues := 0, 0
+	quota := map[string]bool{}
+	for index, task := range op.Enrichment.Jobs {
+		if quota[task.Source] {
+			issues++
+			s.changeOperation(op.ID, func(current *libraryOperation) {
+				current.Enrichment.Jobs[index].State = "skipped"
+				current.Enrichment.Jobs[index].Error = "Daily quota reached earlier in this operation."
+			})
+			continue
+		}
+		s.changeOperation(op.ID, func(current *libraryOperation) {
+			current.Enrichment.Current = index
+			current.Enrichment.Progress = taskprogress.Snapshot{Stage: "starting"}
+			current.Enrichment.Jobs[index].State = "running"
+		})
+		progress := func(p taskprogress.Snapshot) {
+			p.Item = enrichmentText(config, p.Item)
+			if p.Transfers != nil {
+				copy := *p.Transfers
+				p.Transfers = &copy
+			}
+			s.changeOperation(op.ID, func(current *libraryOperation) {
+				previous := current.Enrichment.Progress
+				if p.Worker > 0 {
+					previous.Item = p.Item
+					previous.BytesCurrent = 0
+					previous.BytesTotal = 0
+					if p.Transfers != nil {
+						previous.Transfers = p.Transfers
+					}
+					current.Enrichment.Progress = previous
+					return
+				}
+				current.Enrichment.Progress = p
+			})
+		}
+		result, err := run(enrichment.Job{Source: task.Source, Type: task.Type, Platform: op.Platform, Automatic: true}, enrichment.Options{DataRoot: s.root, Platform: op.Platform, PlatformRegistry: registry, Apply: true}, config, progress)
+		counts := enrichment.Summarize(result)
+		status, message := "succeeded", ""
+		if err != nil {
+			issues++
+			message = enrichmentText(config, err.Error())
+			var partial *fetchstate.PartialError
+			if errors.As(err, &partial) || errors.Is(err, screenscraper.ErrDailyQuota) {
+				status = "incomplete"
+			} else {
+				status = "failed"
+				failed++
+			}
+			if errors.Is(err, screenscraper.ErrDailyQuota) {
+				quota[task.Source] = true
+			}
+		}
+		s.changeOperation(op.ID, func(current *libraryOperation) {
+			j := &current.Enrichment.Jobs[index]
+			j.State = status
+			j.Counts = counts
+			j.Error = message
+		})
+	}
+	s.changeOperation(op.ID, func(current *libraryOperation) {
+		current.Enrichment.Progress = taskprogress.Snapshot{Stage: "indexing"}
+	})
+	warning := ""
+	if err := batch.Finish(); err != nil {
+		warning = "Saved data is retained; index refresh needs attention: " + enrichmentText(config, err.Error())
+	}
+	s.summaryMu.Lock()
+	s.summaries = nil
+	s.summaryMu.Unlock()
+	s.changeOperation(op.ID, func(current *libraryOperation) {
+		current.State = "succeeded"
+		if issues > 0 {
+			current.State = "incomplete"
+		}
+		if failed == len(op.Enrichment.Jobs) {
+			current.State = "failed"
+		}
+		current.Warning = warning
+		current.Enrichment.Progress = taskprogress.Snapshot{Stage: "complete"}
+	})
+}
