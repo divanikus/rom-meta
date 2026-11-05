@@ -311,8 +311,9 @@ func ApplyTarget(data []byte, t Target, patch Patch) ([]byte, error) {
 }
 
 type Edit struct {
-	Target Target `json:"target"`
-	Fields Patch  `json:"fields"`
+	Target Target  `json:"target"`
+	Fields Patch   `json:"fields,omitempty"`
+	YAML   *string `json:"yaml,omitempty"`
 }
 
 func ApplyEdits(data []byte, edits []Edit) ([]byte, error) {
@@ -321,7 +322,17 @@ func ApplyEdits(data []byte, edits []Edit) ([]byte, error) {
 	}
 	var err error
 	for _, edit := range edits {
-		data, err = ApplyTarget(data, edit.Target, edit.Fields)
+		if edit.Target.Kind == "raw" {
+			if edit.YAML == nil || len(edit.Fields) != 0 {
+				return nil, fmt.Errorf("raw edit requires YAML only")
+			}
+			data, err = ValidateRaw(*edit.YAML)
+		} else {
+			if edit.YAML != nil {
+				return nil, fmt.Errorf("YAML requires a raw target")
+			}
+			data, err = ApplyTarget(data, edit.Target, edit.Fields)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -352,6 +363,9 @@ func SaveEdits(root, platform, folder, revision string, edits []Edit) (Card, err
 	}
 	updated, err := ApplyEdits(data, edits)
 	if err != nil {
+		return Card{}, err
+	}
+	if err = CheckRawReferences(root, platform, folder, edits, updated); err != nil {
 		return Card{}, err
 	}
 	if len(edits) == 0 {

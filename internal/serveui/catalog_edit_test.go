@@ -219,7 +219,7 @@ func TestInlineCorrectionsReachBothExportTargetsAndRestoreSources(t *testing.T) 
 			if restore {
 				developer, description, source = "Provider studio", "Provider English", "launchbox"
 			}
-			if f["developer"].Value != developer || f["description"].Value != description || f["description"].Source != source || f["title"].Value != "Regional name" || f["publisher"].Value != "Release publisher" {
+			if f["developer"].Value != developer || f["description"].Value != description || f["description"].Source != source || f["title"].Value != "Provider name" || f["publisher"].Value != "Release publisher" {
 				t.Fatal(target, f)
 			}
 		}

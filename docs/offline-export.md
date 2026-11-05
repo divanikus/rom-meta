@@ -253,7 +253,7 @@ titles:
 
 | Setting | Values | Behavior |
 | --- | --- | --- |
-| `mode` | `regional` (default) | Edition-local title; strip recognized trailing region/language/revision groups, retain meaningful parentheses. |
+| `mode` | `regional` (default) | Title from metadata source priorities, falling back to the edition-local title. Keep ordinary edition disambiguation. |
 | `mode` | `release` | Full authority name or release key; MAME uses the full human set description. |
 | `mode` | `filename` | Input launch filename without extension. |
 | `labels` | `keep` (default), `drop` | Preserve/remove balanced `[...]` blocks without interpreting contents. |
@@ -266,10 +266,18 @@ editions from the same card too, and names become `Contra (USA)`,
 `Probotector (Europe)`, `Gryzor (Japan)`. `[T+Rus]` remains unchanged. For literal
 filename names everywhere, use `mode: filename`, `variants: none`.
 
-Regional mode honors explicit release titles unless they equal the legacy DAT
-base; then it reconstructs from the full entry to retain meaningful parentheses.
-MAME uses human set descriptions. Unknown editions, including game-only matches,
-keep input names instead of borrowing the default edition's title.
+Regional mode selects `title` through `selection.fields.title`, defaulting to
+the library metadata source order just like developer/publisher. Named manual
+sources participate normally; an absent value falls through to the next source.
+The card's library title is not an unconditional export override. LaunchBox parent
+games use the primary version's selected source title when available.
+
+Without a selected source title, regional mode honors explicit release titles
+unless they equal the legacy DAT base; then it reconstructs from the full entry
+to retain meaningful parentheses. MAME falls back to human set descriptions.
+Unknown editions keep input names unless a selected source provides a display
+title. Prepared translation/hack variants keep their own titles. Source titles
+change display only, never binding, launch paths, game IDs or version IDs.
 
 Input labels retain bytes, order and repetitions. Missing member/release labels
 are appended; nested brackets form one block and unmatched brackets stay text.

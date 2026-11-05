@@ -92,20 +92,21 @@ fields the current consumers do not use.
 
 In **Library**, choose **Edit card** (or a pencil beside a value). The card stays
 in place and all fields of the selected record become inputs together.
-**Editing** identifies the destination: library fields, an exact provider record,
-or a named manual variant. Common metadata has ordinary controls; **Other source
+**Source tabs** identify the destination: Card fields, a provider, or your named
+variant. After choosing a source, **Record** appears only when it has several
+records or scopes; unrelated sources are not mixed into that list. Common metadata has ordinary controls; **Other source
 fields** exposes saved IDs and additional values, with JSON inputs for structured
 objects. You can add or remove source fields without replacing the whole record.
 
 Switching records retains their drafts. **Save changes** commits all edited
-records of this card in one atomic write; **Discard changes** discards them.
+records of this card in one atomic write; **Discard** discards them.
 **Finish editing** returns to the card. Leaving with unsaved changes asks before
 discarding them. Invalid or stale saves retain the drafts. Drafts are not saved
 across a page/server restart; this differs from server-owned import operations.
 
 ### Named manual variants
 
-Choose **New named variant**, enter your own name, then contribute the fields you
+Choose **+ Named variant**, enter your own name, then contribute the fields you
 want to curate. You can create several variants and reuse each across cards.
 Creating a variant saves its name immediately; **Save changes** saves its card
 fields. A variant stores only contributed values, never an implicit copy of the
@@ -121,7 +122,7 @@ for translations; shared description text applies to all languages.
 Enable and order variants in **Export → Advanced → Metadata sources**, or save
 library defaults in **Settings → Source priorities**. New variants start disabled.
 Saved export profiles reference stable IDs, so renaming keeps their selection
-valid. Developer, publisher, date, genres, players and descriptions use the same
+valid. Title, developer, publisher, date, genres, players and descriptions use the same
 resolver in the browser, CLI, ES-DE and LaunchBox.
 
 Names are stored in `config/curation.yaml`; values are ordinary
@@ -160,16 +161,42 @@ not its matches list. Refreshing that provider may replace its block; use a name
 variant when your version should survive provider refresh.
 
 Existing explicit library/release fields retain their previous precedence.
-The editor names library fields as overrides and flags their presence when
-editing a source. Clear the relevant library value to resume source selection.
+The **Card fields** tab edits these overrides. Clear the relevant library value
+to resume source selection. The library title identifies the card and is the
+exception: it does not override a title selected from sources.
 There is no automatic migration of earlier corrections.
 
 **Library title**, aliases and alternate names describe the catalog card.
-Provider/manual record titles and identifiers remain source evidence: exported
-names still follow release identity and export title settings. **Preview export**
-shows the actual saved projection. Editing a source title does not rename releases
-or fingerprints. Unsubmitted YAML fields, release identities, variants and media
-remain intact.
+In **Regional title** mode, provider/manual titles participate in metadata source
+priorities, with the edition-local title as fallback. CLI profiles can override
+`selection.fields.title.sources` independently. Missing titles fall through to
+the next enabled source. Full release and filename modes remain explicit naming
+choices. Prepared derivative titles retain their own identity; ordinary version
+disambiguation still adds region/revision/language where needed. LaunchBox uses
+the selected primary version's source title for its parent game.
+
+**Preview export** shows the saved projection. Changing a source title never
+renames release keys, ROMs, fingerprints, launch paths or native game/version IDs.
+
+### Edit Raw YAML
+
+In edit mode, **Raw** exposes the complete `game.yaml` as an editable text area.
+Form changes are included when switching to Raw; returning to Overview validates
+the YAML and restores source forms from that draft. **Validate YAML** changes no
+catalog data. **Save changes** always validates again before one atomic write.
+
+Validation checks one mapping document, duplicate keys, known field types,
+default/source release references, derivative relationships and existing
+fingerprint references. Errors include the YAML line or affected field. YAML
+aliases/custom tags are rejected; use explicit values. Unknown ordinary fields
+and comments are retained, and a Raw-only save preserves the submitted text.
+A renamed/removed release must not leave a registered fingerprint dangling.
+A newly added `manual.*` source needs an existing named variant in the registry.
+Invalid or stale input stays in the editor for correction; it is never written.
+
+Review duplicates and Statistics are in **Platform actions** in the Platforms
+pane. **Compare (N)** appears beside card comparison controls after adding cards,
+and becomes available with at least two selected cards.
 
 ## Let fold prepare the work
 

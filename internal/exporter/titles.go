@@ -303,6 +303,9 @@ func renderExportTitle(r Record, p TitlePolicy, mode string, qualifiers []string
 	if mode != "filename" && r.TitleContext != nil && r.Status == "matched" {
 		source = "release"
 		base = r.TitleContext.Regional
+		if mode == "regional" && r.Variant == "" && r.SelectedTitle != nil {
+			base, source = r.SelectedTitle.Value, r.SelectedTitle.Source
+		}
 		if mode == "release" {
 			base = r.TitleContext.Release
 		}
@@ -311,6 +314,9 @@ func renderExportTitle(r Record, p TitlePolicy, mode string, qualifiers []string
 		} else if mode == "regional" && r.TitleContext.Disc != "" && !titleHasQualifier(base, r.TitleContext.Disc) {
 			base += " (" + r.TitleContext.Disc + ")"
 		}
+	}
+	if mode == "regional" && r.Status == "matched" && r.TitleContext == nil && r.Variant == "" && r.SelectedTitle != nil {
+		source, base = r.SelectedTitle.Source, r.SelectedTitle.Value
 	}
 	// Filename mode is literal unless the user explicitly drops its labels.
 	if source == "filename" {
@@ -324,7 +330,9 @@ func renderExportTitle(r Record, p TitlePolicy, mode string, qualifiers []string
 	_, memberLabels := splitTitleLabels(titleStem(r.Member))
 	inputLabels = appendTitleLabels(inputLabels, memberLabels...)
 	labels = appendTitleLabels(inputLabels, labels...)
-	labels = appendTitleLabels(labels, r.TitleContext.Labels...)
+	if r.TitleContext != nil {
+		labels = appendTitleLabels(labels, r.TitleContext.Labels...)
+	}
 	var add []string
 	for _, q := range qualifiers {
 		if q != "" && !titleHasQualifier(base, q) {
@@ -343,6 +351,11 @@ func renderExportTitle(r Record, p TitlePolicy, mode string, qualifiers []string
 	}
 	if r.Variant != "" {
 		return Value{Value: strings.TrimSpace(base), Source: "variant", FromVariant: r.Variant, Selection: mode}
+	}
+	if mode == "regional" && r.Variant == "" && r.SelectedTitle != nil {
+		value := *r.SelectedTitle
+		value.Value = strings.TrimSpace(base)
+		return value
 	}
 	return Value{Value: strings.TrimSpace(base), Source: source, FromRelease: basis, Selection: mode}
 }

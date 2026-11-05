@@ -186,6 +186,7 @@ func (r *ExportResolver) resolvePlaylist(input ExportInput, profile Profile) (Re
 	record.Variant, record.VariantInfo = first.Variant, first.VariantInfo
 	record.Fields, record.Media = first.Fields, first.Media
 	record.TitleContext = first.TitleContext
+	record.SelectedTitle = first.SelectedTitle
 	record.MatchedBy, record.Reason = "playlist-name", "playlist members bind to one catalog game; release-name evidence"
 	if allHashes {
 		record.MatchedBy, record.Reason = "playlist-hash", "all playlist member payloads match catalog fingerprints"

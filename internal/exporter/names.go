@@ -229,13 +229,17 @@ func attachMetadataRecord(root string, g *game, release, basis string, record *R
 	record.Release = release
 	record.MetadataRelease = basis
 	record.Fields = resolveFields(g, basis, profile)
+	record.SelectedTitle = nil
+	if title := record.Fields["title"]; title.Source != "catalog" && title.Value != "" {
+		record.SelectedTitle = &title
+	}
 	if release != "" {
 		record.TitleContext = releaseTitleContext(g.root, release)
 	}
 	if err := applyDescriptionFallback(g, record, profile); err != nil {
 		return err
 	}
-	if release == "" {
+	if release == "" && record.SelectedTitle == nil {
 		record.Fields["title"] = Value{Value: g.name, Source: "catalog"}
 	}
 	media, warnings, err := resolveMedia(root, g, basis, record.ROM, profile, release != "", system)

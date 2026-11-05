@@ -259,3 +259,50 @@ func TestOriginalGameTitleUsesTheMetadataEdition(t *testing.T) {
 		t.Fatal("accepted absent original release")
 	}
 }
+
+func TestSelectedTitlesSurviveFinalizationAndKeepIdentity(t *testing.T) {
+	a := titleRecord(t, "Orbit", "Orbit (USA)", "a.rom", "Orbit")
+	b := titleRecord(t, "Orbit", "Orbit (Japan)", "b.rom", "Orbit")
+	a.SelectedTitle = &Value{Value: "Personal", Source: "manual.one", FromRelease: "Orbit (USA)"}
+	b.SelectedTitle = &Value{Value: "Personal", Source: "manual.one"}
+	plan := &Plan{Profile: Profile{Titles: TitlePolicy{}}, Records: []Record{a, b}}
+	if e := applyExportTitles(plan); e != nil {
+		t.Fatal(e)
+	}
+	if plan.Records[0].Fields["title"].Value != "Personal (USA)" || plan.Records[1].Fields["title"].Value != "Personal (Japan)" {
+		t.Fatal(plan.Records)
+	}
+	data, e := json.Marshal(plan)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var copied Plan
+	if e = json.Unmarshal(data, &copied); e != nil {
+		t.Fatal(e)
+	}
+	if e = applyExportTitles(&copied); e != nil {
+		t.Fatal(e)
+	}
+	for i, r := range copied.Records {
+		if r.Fields["title"] != plan.Records[i].Fields["title"] || r.ROM != plan.Records[i].ROM || r.Release != plan.Records[i].Release {
+			t.Fatal(r)
+		}
+	}
+	for _, tc := range []struct{ mode, want string }{{"release", "Orbit (USA)"}, {"filename", "a"}} {
+		got := renderExportTitle(a, TitlePolicy{}, tc.mode, nil, false)
+		if got.Value != tc.want {
+			t.Fatal(tc, got)
+		}
+	}
+	unselected := a
+	unselected.TitleContext = nil
+	unselected.Release = ""
+	if got := renderExportTitle(unselected, TitlePolicy{}, "regional", nil, false); got.Value != "Personal" || got.Source != "manual.one" {
+		t.Fatal(got)
+	}
+	a.Variant = "Translation"
+	a.TitleContext.Regional = "Translated title"
+	if got := renderExportTitle(a, TitlePolicy{}, "regional", nil, false); got.Value != "Translated title" || got.Source != "variant" {
+		t.Fatal(got)
+	}
+}

@@ -343,6 +343,9 @@ func buildLaunchBoxProjection(plan *Plan) (*LaunchBoxProjection, error) {
 		main := plan.Records[g.Versions[0].Records[0]]
 		if main.Status == "matched" {
 			g.Title = main.GameTitle
+			if main.Variant == "" && main.SelectedTitle != nil && (plan.Profile.Titles.Mode == "" || plan.Profile.Titles.Mode == "regional") {
+				g.Title = main.SelectedTitle.Value
+			}
 		}
 		if g.Title == "" && main.Status == "matched" && main.TitleContext != nil {
 			g.Title = main.TitleContext.Regional

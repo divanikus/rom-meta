@@ -204,6 +204,10 @@ func (s *server) catalogEditPreview(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, err)
 		return
 	}
+	if err = catalogedit.CheckRawReferences(s.root, request.Platform, request.Game, edits, data); err != nil {
+		writeError(w, 400, err)
+		return
+	}
 	preview, err := catalogedit.Inspect(data)
 	if err != nil {
 		writeError(w, 400, err)

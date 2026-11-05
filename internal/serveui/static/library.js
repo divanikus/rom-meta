@@ -29,6 +29,7 @@ function librarySyncNavigation(){
  document.querySelectorAll("[data-import-new]").forEach(el=>el.classList.toggle("hidden",!enabled));
  $("empty-readonly")?.classList.toggle("hidden",enabled);
  $("card-tools")?.classList.toggle("hidden",!enabled||!state.game||view!=="library");
+ $("platform-workspace-actions")?.classList.toggle("hidden",!state.platform||!["library","stats"].includes(view));
  $("platform-heading")?.replaceChildren(document.createTextNode(state.platform||"Library"));
 }
 function operationBusy(job){return job.state==="planning"||job.state==="importing"}

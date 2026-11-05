@@ -240,9 +240,9 @@ test('edit mode exposes every field and names the exact destination',()=>{
  const b=browser(async()=>json({}));b.run('catalogUI.enabled=true;Object.assign(catalogInline,{mode:true,platform:"Console",folder:"One",card:{fields:{title:"Orbit"},records:[],registry:{sources:[]}}})');
  const html=b.run('catalogRenderEditor({}, "")');
  for(const field of ['title','developer','publisher','release_date','genres','players'])assert.match(html,new RegExp('data-card-field="'+field+'"'));
- assert.match(b.run('catalogInlineBanner()'),/Library fields.*explicit overrides/);
+ assert.match(b.run('catalogInlineBanner()'),/Card fields/);
  b.run('catalogInline.target={kind:"source",source:"launchbox",match:1}');
- assert.match(b.run('catalogInlineBanner()'),/exact saved source record/);
+ assert.match(b.run('catalogInlineBanner()'),/Saved launchbox values/);
 });
 test('save commits drafts for multiple records and stays in edit mode',async()=>{
  let sent;const card={revision:'new',fields:{title:'Orbit'},profile:{title:'Orbit'},records:[],registry:{sources:[]}};
@@ -350,4 +350,41 @@ test('an untouched new release record remains the visible edit destination',()=>
  assert.equal(b.run('catalogEditorTargets().filter(r=>catalogTargetKey(r.target)===catalogTargetKey(catalogInline.target)).length'),1);
  assert.equal(b.run('catalogScopeExists("")'),true);assert.equal(b.run('catalogScopeExists("Japan")'),false);
  b.run('catalogInline.saving=true;catalogEditorChange("developer","Late draft")');assert.equal(b.run('catalogInline.edits.size'),0);
+});
+
+test('source navigation shows names once and keeps each record draft',()=>{
+ const b=browser(async()=>json({}));b.run('catalogUI.enabled=true;Object.assign(catalogInline,{mode:true,platform:"Console",folder:"One",card:{fields:{title:"Orbit"},registry:{sources:[{id:"manual.one",name:"Personal"}]},records:[{target:{kind:"source",source:"launchbox",match:-1},fields:{status:"matched"},label:"Source details"},{target:{kind:"source",source:"launchbox",match:0},fields:{title:"Provider"},label:"Record 1"},{target:{kind:"source",source:"launchbox",match:1},fields:{title:"Other"},label:"Record 2"}]}});catalogSelectSource("launchbox");catalogEditorChange("title","Corrected");catalogSelectSource("manual.one");catalogEditorChange("title","Personal title");catalogSelectSource("launchbox")');
+ assert.equal(b.run('catalogInline.target.match'),0);assert.equal(b.run('catalogTargetValues().title'),'Corrected');
+ assert.equal(b.run('catalogInline.edits.size'),2);
+ const html=b.run('catalogInlineBanner()');assert.equal((html.match(/data-editor-source="launchbox"/g)||[]).length,1);
+ assert.match(html,/Record<select/);assert.doesNotMatch(html,/>Editing<select/);
+});
+test('form to raw to form saves against original revision with all drafts',async()=>{
+ const requests=[];const card={revision:'draft',yaml:'title: Draft\n',fields:{title:'Draft'},records:[],registry:{sources:[]}};
+ const b=browser(async(path,options)=>{requests.push({path,body:JSON.parse(options.body)});return json(path.endsWith('edit-preview')?card:{card:{...card,revision:'saved'},saved:true});});
+ b.run('catalogUI.enabled=true;Object.assign(catalogInline,{mode:true,platform:"Console",folder:"One",baseRevision:"original",card:{revision:"original",yaml:"title: Orbit\\n",fields:{title:"Orbit"},records:[],registry:{sources:[]}}});catalogEditorChange("title","Draft")');
+ assert.equal(await b.run('catalogMaterializeDraft()'),true);
+ assert.equal(b.run('catalogInline.card.revision'),'draft');assert.equal(b.run('catalogInline.baseRevision'),'original');
+ b.run('catalogEditorChange("developer","Studio")');await b.run('catalogSaveInline()');
+ assert.equal(requests[1].body.revision,'original');assert.equal(requests[1].body.edits[0].target.kind,'raw');assert.equal(requests[1].body.edits[1].fields.developer,'Studio');
+ assert.equal(b.run('catalogInline.dirty'),false);assert.equal(b.run('catalogInline.raw'),null);
+});
+test('invalid raw keeps the draft and stays on Raw until corrected',async()=>{
+ const b=browser(async()=>({ok:false,json:async()=>({error:'line 3: duplicate title'})}));
+ b.run('catalogUI.enabled=true;state.detailTab="raw";Object.assign(catalogInline,{mode:true,platform:"Console",folder:"One",dirty:true,raw:"broken YAML",baseRevision:"original",card:{revision:"original",fields:{},registry:{sources:[]}}})');
+ assert.equal(await b.run('catalogSwitchDetailTab("preview")'),false);
+ assert.equal(b.run('catalogInline.raw'),'broken YAML');assert.equal(b.run('catalogInline.baseRevision'),'original');
+ assert.match(b.run('catalogInline.error'),/line 3: duplicate title/);
+ assert.equal(b.run('catalogInline.saving'),false);assert.equal(b.run('catalogInline.dirty'),true);
+});
+
+test('Raw materialization selects the newly created manual record for further form edits',async()=>{
+ const target={kind:'source',source:'manual.one',match:0};
+ const card={revision:'draft',yaml:'title: Orbit\n',fields:{title:'Orbit'},registry:{sources:[{id:'manual.one',name:'Personal'}]},records:[{target,fields:{title:'Personal title'}}]};
+ const b=browser(async()=>json(card));
+ b.run('Object.assign(catalogInline,{mode:true,platform:"Console",folder:"One",baseRevision:"saved",card:{revision:"saved",fields:{},registry:{sources:[]}},target:{kind:"manual",source:"manual.one",match:-1,scope:""}});catalogEditorChange("title","Personal title")');
+ await b.run('catalogMaterializeDraft()');
+ assert.equal(b.run('catalogInline.target.kind'),'source');assert.equal(b.run('catalogTargetValues().title'),'Personal title');
+ b.run('catalogEditorChange("title","Revised")');
+ assert.equal(b.run('catalogEditorEdits()[1].target.kind'),'source');assert.equal(b.run('catalogEditorEdits()[1].fields.title'),'Revised');
 });

@@ -987,10 +987,10 @@
         </div>
       </div>
       <div class="scroll" id="platform-list"></div>
+      <div class="platform-workspace-head hidden" id="platform-workspace-actions"><span class="secondary">Selected platform</span><h2 id="platform-heading">Library</h2><details id="platform-actions"><summary>Platform actions</summary><div class="platform-actions-menu"><div class="catalog-tools hidden" id="catalog-tools"><button class="tab-button" id="catalog-build-plan" type="button">Review duplicates</button></div><button class="tab-button" id="stats-tab" type="button">Statistics</button></div></details></div>
     </aside>
 
     <main class="games" id="game-pane">
-      <div class="platform-workspace-head"><h2 id="platform-heading">Library</h2><div class="catalog-tools hidden" id="catalog-tools"><button class="tab-button" id="catalog-build-plan" type="button">Review duplicates</button><button class="tab-button" id="catalog-compare" type="button" disabled>Compare (0)</button></div><button class="tab-button" id="stats-tab" type="button">Statistics</button></div>
       <div class="pane-head">
         <div class="pane-title">
           <span>Games</span>
@@ -1010,7 +1010,7 @@
       <div class="detail-head">
         <h1 id="detail-title">Select a game</h1>
         <div class="chips" id="detail-chips"></div>
-        <div class="card-tools hidden" id="card-tools"><button class="tab-button" id="catalog-edit-card" type="button">✎ Edit card</button><button class="tab-button" id="catalog-add-compare" type="button">Add to comparison</button></div>
+        <div class="card-tools hidden" id="card-tools"><button class="tab-button" id="catalog-edit-card" type="button">✎ Edit card</button><button class="tab-button" id="catalog-add-compare" type="button">Add to comparison</button><button class="tab-button hidden" id="catalog-compare" type="button" disabled>Compare (0)</button></div>
       </div>
       <div class="detail-body" id="detail-body">
         <div class="empty">Choose a platform and game from the lists.</div>
@@ -1816,7 +1816,8 @@
       return '<section class="section"><h3>Releases & fingerprints</h3><p class="secondary">Registered catalog files and hashes. No ROM scan is performed in this view.</p>' + register + filter + status + '<div class="fingerprint-list">' + rows + '</div>' + (data ? '<div class="secondary">Showing ' + records.length + ' of ' + data.total + ' matching records · ' + data.registered_total + ' registered</div>' : '') + (data && records.length < data.total ? '<button class="tab-button" type="button" data-fingerprint-more' + (state.fingerprintLoading ? ' disabled' : '') + '>' + (state.fingerprintLoading ? 'Loading…' : 'Show more fingerprints') + '</button>' : '') + '</section>';
     }
 
-    function setDetailTab(tab) {
+    async function setDetailTab(tab) {
+      if(typeof catalogSwitchDetailTab==="function" && !await catalogSwitchDetailTab(tab))return;
       if (!["preview","files","raw"].includes(tab)) return;
       state.detailTab = tab;
       $("detail-body").scrollTop = 0;
@@ -1852,8 +1853,8 @@
       if (state.detailTab === "files") content = renderFingerprintSection(stored.game);
       else if (state.exportMode && !ready) content = '<div class="' + (state.detailPreviewError ? 'error' : 'loading') + '">' + escapeHTML(state.detailPreviewError || 'Selecting export metadata…') + '</div>';
       else if (state.detailTab === "raw") {
-        content = state.exportMode ? renderExportRaw() + renderExportProvenance(response) : '<section class="section"><h3>Stored catalog YAML</h3><pre class="export-xml">' + escapeHTML(stored.catalog_yaml || '') + '</pre></section>';
-      } else content = '<div class="card-main">' + renderProfile(response) + (!state.exportMode ? renderSourceSection(stored) : "") + renderMediaSection(response) + '</div>';
+        content = !state.exportMode && typeof catalogEditorActive==="function" && catalogEditorActive() ? catalogRenderRaw() : state.exportMode ? renderExportRaw() + renderExportProvenance(response) : '<section class="section"><h3>Stored catalog YAML</h3><pre class="export-xml">' + escapeHTML(stored.catalog_yaml || '') + '</pre></section>';
+      } else content = '<div class="card-main">' + renderProfile(response) + (!state.exportMode && !(typeof catalogEditorActive==="function" && catalogEditorActive()) ? renderSourceSection(stored) : "") + renderMediaSection(response) + '</div>';
       $("detail-body").innerHTML = (typeof catalogInlineBanner==="function"?catalogInlineBanner():"") + tabs + (state.exportMode && state.detailTab !== "files" ? renderExportEdition(stored) : '') + '<div class="card-section">' + content + '</div>';
       bindExportEdition();
       if(typeof catalogBindInline==='function')catalogBindInline();

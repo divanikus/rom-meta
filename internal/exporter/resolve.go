@@ -31,15 +31,19 @@ func resolveFields(g *game, release string, profile Profile) map[string]Value {
 	}
 	result["title"] = Value{Value: title, Source: "catalog"}
 	releaseNode := catalogyaml.Value(catalogyaml.Value(g.root, "releases"), release)
-	for _, key := range []string{"description", "release_date", "developer", "publisher", "genres", "players"} {
+	for _, key := range []string{"title", "description", "release_date", "developer", "publisher", "genres", "players"} {
 		rule := profile.Selection.Fields[key]
 		if key == "description" {
 			rule = profile.Selection.Description
 		}
 		var values []candidate
 		// Explicit catalog/release fields override automatic provider candidates.
-		for _, node := range []*yaml.Node{releaseNode, g.root} {
-			values = append(values, fieldCandidates(node, key, "local", rule)...)
+		// The root title identifies the library card; it is not an unconditional
+		// export override. Display titles use source priorities, then release policy.
+		if key != "title" {
+			for _, node := range []*yaml.Node{releaseNode, g.root} {
+				values = append(values, fieldCandidates(node, key, "local", rule)...)
+			}
 		}
 		if len(values) == 0 {
 			for _, source := range rule.Sources {
@@ -56,7 +60,10 @@ func resolveFields(g *game, release string, profile Profile) map[string]Value {
 					}
 				} else {
 					for _, node := range sourceNodes(g.root, source, release) {
-						values = append(values, fieldCandidates(node, key, source, rule)...)
+						for _, value := range fieldCandidates(node, key, source, rule) {
+							value.fromRelease = field(node, "release")
+							values = append(values, value)
+						}
 					}
 				}
 			}

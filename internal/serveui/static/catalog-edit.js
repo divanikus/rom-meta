@@ -31,6 +31,7 @@ function catalogUpdateTools(){
  $("catalog-tools").classList.toggle("hidden",!catalogUI.enabled||state.view!=="browse"||state.exportMode);
  $("catalog-edit-card").disabled=!state.game;$("catalog-edit-card").textContent=catalogInline.mode?"✓ Finish editing":"✎ Edit card";$("catalog-build-plan").disabled=!state.platform;
  $("catalog-add-compare").disabled=!state.game;
+ $("catalog-compare").classList.toggle("hidden",catalogUI.compare.size===0);
  $("catalog-compare").disabled=catalogUI.compare.size<2;
  $("catalog-compare").textContent="Compare ("+catalogUI.compare.size+")";
  if(typeof librarySyncNavigation==="function")librarySyncNavigation();
@@ -429,7 +430,7 @@ catalogObserver.observe($("detail-title"),{childList:true});catalogObserver.obse
 
 // Editing is a mode: all inputs for the selected record appear together.
 // A card revision covers every target; one Save commits all its drafts atomically.
-const catalogInline={mode:false,dirty:false,saving:false,loading:false,version:0,card:null,platform:"",folder:"",target:{kind:"library",match:-1},edits:new Map(),invalid:new Map(),extra:new Set(),preferredSource:"",message:"",error:"",nameMode:"",nameDraft:""};
+const catalogInline={mode:false,dirty:false,saving:false,loading:false,version:0,card:null,savedCard:null,baseRevision:"",raw:null,platform:"",folder:"",target:{kind:"library",match:-1},edits:new Map(),invalid:new Map(),extra:new Set(),preferredSource:"",message:"",error:"",nameMode:"",nameDraft:""};
 const catalogRecordLabels={title:"Title",release_date:"Release date",developer:"Developer",publisher:"Publisher",genres:"Genres",players:"Players",max_players:"Maximum players",themes:"Themes",collections:"Collections",franchises:"Franchises",rating:"Rating",aliases:"Library aliases",alternate_titles:"Alternate titles",description:"Shared description",descriptions:"Descriptions"};
 const catalogRecordLists=new Set(["aliases","alternate_titles","genres","themes","collections","franchises","platforms"]);
 function catalogInlineAvailable(){return catalogUI.enabled&&!state.exportMode&&state.view==="browse";}
@@ -476,21 +477,57 @@ function catalogEditorTargets(){
  return result;
 }
 function catalogScopeExists(scope){return (catalogInline.card?.records||[]).some(r=>r.target.source===catalogInline.target.source&&r.target.match>=0&&r.target.release_index==null&&!r.fields.releases&&(r.fields.release||"")===scope);}
+function catalogEditorSources(){
+ const f=catalogInline,ids=new Set([...(f.card?.registry?.sources||[]).map(s=>s.id),...(f.card?.records||[]).map(r=>r.target.source)]);
+ return [{id:"",name:"Card fields"},...Array.from(ids,id=>({id,name:f.card.registry?.sources?.find(s=>s.id===id)?.name||sourceLabel(id)}))];
+}
+function catalogSelectSource(id){
+ const f=catalogInline,targets=catalogEditorTargets().filter(r=>(r.target.source||"")===id);
+ f.target=targets.find(r=>r.target.match>=0)?.target||targets[0]?.target||{kind:"library",match:-1};
+ f.extra=new Set();f.error="";f.message="";f.nameMode="";
+ if(f.card.registry.sources.some(s=>s.id===id))f.preferredSource=id;
+ catalogInlineRender();
+}
 function catalogInlineBanner(){
  const f=catalogInline;if(!catalogEditorActive())return "";
  if(f.loading)return '<div class="catalog-inline-banner" role="status">Opening editable fields…</div>';
  if(!f.card)return '<div class="catalog-inline-banner"><span role="alert">'+cEscape(f.error)+'</span><button class="tab-button" id="catalog-editor-reload">Retry</button></div>';
- const key=catalogTargetKey(f.target),targets=catalogEditorTargets(),source=f.card.registry?.sources?.find(s=>s.id===f.target.source),disabled=f.saving?' disabled':'';
- const count=f.edits.size,hasOverrides=Object.keys(f.card.fields||{}).some(k=>!["title","aliases","alternate_titles"].includes(k));
- const help=f.target.kind==="library"?"Library values override selected sources. Clear a value to resume normal source selection. Exported names still follow release/title settings.":source?"Only fields you change belong to this variant. Enable and order it in Export → Advanced → Metadata, or Settings → Source priorities.": "Editing this exact saved source record. Refreshing that provider can replace these changes; use a named variant to retain your own version.";
- return '<div class="catalog-inline-banner catalog-editor-bar"><div class="catalog-editor-heading"><strong>Edit card</strong><span id="catalog-editor-count">'+count+' changed '+(count===1?"record":"records")+'</span></div>'+
- '<label>Editing<select id="catalog-editor-target"'+disabled+'>'+targets.map(r=>'<option value="'+escapeAttr(catalogTargetKey(r.target))+'" '+(catalogTargetKey(r.target)===key?'selected':'')+'>'+cEscape(r.label)+(f.edits.has(catalogTargetKey(r.target))?' · edited':'')+'</option>').join("")+'</select></label>'+
- (f.target.kind==="manual"?'<label>Applies to<select id="catalog-editor-scope"'+disabled+'><option value="" '+(catalogScopeExists("")?'disabled':'')+'>Whole game</option>'+(f.card.releases||[]).map(r=>'<option value="'+escapeAttr(r)+'" '+(f.target.scope===r?'selected':'')+' '+(catalogScopeExists(r)?'disabled':'')+'>'+cEscape(r)+'</option>').join("")+'</select></label>':"")+
- '<div class="catalog-inline-actions"><button class="tab-button" id="catalog-new-source"'+disabled+'>New named variant</button>'+(source?'<button class="tab-button" id="catalog-rename-source"'+disabled+'>Rename variant</button>':"")+'</div>'+
+ const key=catalogTargetKey(f.target),targets=catalogEditorTargets().filter(r=>(r.target.source||"")===(f.target.source||"")),source=f.card.registry?.sources?.find(s=>s.id===f.target.source),disabled=f.saving?' disabled':'',raw=state.detailTab==="raw";
+ const help=raw?"Edit game.yaml directly. Validate checks the draft; Save changes validates again before writing.":f.target.kind==="library"?"Card identity and explicit metadata overrides. Choose a source below to edit its values.":source?"Your named variant. Select it in export metadata priorities to use these values, including Title.":"Saved "+sourceLabel(f.target.source)+" values. A provider refresh may replace them.";
+ return '<div class="catalog-inline-banner catalog-editor-bar"><div class="catalog-editor-heading"><strong>Edit card'+(raw?' · YAML':'')+'</strong><div class="catalog-inline-actions"><button class="catalog-primary" id="catalog-inline-save" '+(!f.dirty||f.saving||f.invalid.size?'disabled':'')+'>'+(f.saving?'Working…':'Save changes')+'</button><button class="tab-button" id="catalog-editor-discard" '+((!f.dirty&&!f.invalid.size)||f.saving?'disabled':'')+'>Discard</button><button class="tab-button" id="catalog-inline-cancel"'+disabled+'>Finish editing</button><button class="tab-button" id="catalog-inline-export"'+disabled+'>Preview export</button></div></div>'+
+ (!raw?'<nav class="catalog-source-tabs" aria-label="Edit source">'+catalogEditorSources().map(s=>'<button type="button" class="tab-button'+((f.target.source||"")===s.id?' active':'')+'" data-editor-source="'+escapeAttr(s.id)+'" aria-pressed="'+((f.target.source||"")===s.id)+'"'+disabled+'>'+cEscape(s.name)+'</button>').join("")+'<button class="tab-button" id="catalog-new-source"'+disabled+'>＋ Named variant</button></nav>'+
+ (targets.length>1?'<div class="catalog-record-choice"><label>Record<select id="catalog-editor-target"'+disabled+'>'+targets.map(r=>'<option value="'+escapeAttr(catalogTargetKey(r.target))+'" '+(catalogTargetKey(r.target)===key?'selected':'')+'>'+cEscape(r.label.replace(/^[^·]+ · /,""))+(f.edits.has(catalogTargetKey(r.target))?' · edited':'')+'</option>').join("")+'</select></label>'+(source?'<button class="tab-button" id="catalog-rename-source"'+disabled+'>Rename variant</button>':'')+'</div>':source?'<button class="tab-button catalog-rename" id="catalog-rename-source"'+disabled+'>Rename variant</button>':'')+
+ (f.target.kind==="manual"?'<label>Applies to<select id="catalog-editor-scope"'+disabled+'><option value="" '+(catalogScopeExists("")?'disabled':'')+'>Whole game</option>'+(f.card.releases||[]).map(r=>'<option value="'+escapeAttr(r)+'" '+(f.target.scope===r?'selected':'')+' '+(catalogScopeExists(r)?'disabled':'')+'>'+cEscape(r)+'</option>').join("")+'</select></label>':""):"")+
  (f.nameMode?'<div class="catalog-source-name"><label>Variant name<input id="catalog-source-name" maxlength="120" value="'+escapeAttr(f.nameDraft)+'"'+disabled+'></label><button class="tab-button" id="catalog-save-source-name"'+disabled+'>'+(f.nameMode==="rename"?"Save name":"Create variant")+'</button><button class="tab-button" id="catalog-cancel-source-name"'+disabled+'>Cancel</button></div>':"")+
- '<p>'+cEscape(help)+'</p>'+(hasOverrides&&f.target.kind!=="library"?'<p class="catalog-editor-hint">This card also has explicit library values. They still take priority; choose Library fields to review or clear them.</p>':"")+
- '<div class="catalog-inline-actions"><button class="catalog-primary" id="catalog-inline-save" '+(!f.dirty||f.saving||f.invalid.size?'disabled':'')+'>'+(f.saving?'Saving…':'Save changes')+'</button><button class="tab-button" id="catalog-editor-discard" '+((!f.dirty&&!f.invalid.size)||f.saving?'disabled':'')+'>Discard changes</button><button class="tab-button" id="catalog-inline-cancel"'+disabled+'>Finish editing</button><button class="tab-button" id="catalog-inline-export"'+disabled+'>Preview export</button></div>'+
- '<span id="catalog-editor-status" role="status">'+cEscape(f.error||f.message||(f.dirty?"Unsaved changes":""))+'</span></div>';
+ '<p>'+cEscape(help)+'</p><span id="catalog-editor-status" role="status">'+cEscape(f.error||f.message||(f.dirty?"Unsaved changes":""))+'</span></div>';
+}
+function catalogEditorEdits(){
+ const f=catalogInline;return [...(f.raw!==null?[{target:{kind:"raw",match:-1},yaml:f.raw}]:[]),...f.edits.values()];
+}
+function catalogRenderRaw(){
+ const f=catalogInline;
+ return '<section class="section catalog-raw-editor"><div class="catalog-inline-actions"><h3>Card YAML</h3><button class="tab-button" id="catalog-validate-raw" '+(f.saving?'disabled':'')+'>Validate YAML</button></div><label class="sr-only" for="catalog-raw-yaml">Card YAML</label><textarea id="catalog-raw-yaml" aria-label="Card YAML" spellcheck="false" '+(f.saving?'disabled':'')+'>'+cEscape(f.raw??f.card?.yaml??"")+'</textarea></section>';
+}
+async function catalogMaterializeDraft(){
+ const f=catalogInline;if(f.saving)return false;
+ if(f.invalid.size){f.error="Correct the structured field values first.";catalogEditorActions();return false;}
+ f.saving=true;f.error="";catalogInlineRender();
+ try{
+  const card=await catalogPost("/api/catalog/edit-preview",{platform:f.platform,game:f.folder,revision:f.baseRevision||f.card.revision,edits:catalogEditorEdits()});
+  // A preview revision belongs to the draft. Save still checks the opened revision.
+  if(f.dirty){
+   f.raw=card.yaml;f.card=card;f.edits=new Map();
+   if(f.target.kind==="manual")f.target=card.records?.find(r=>r.target.source===f.target.source&&r.target.match>=0&&r.target.release_index==null&&(r.fields.release||"")===(f.target.scope||""))?.target||f.target;
+   if(f.target.kind==="source"&&!card.records?.some(r=>catalogTargetKey(r.target)===catalogTargetKey(f.target)))f.target={kind:"library",match:-1};
+  }
+  f.message="YAML is valid. Nothing has been saved.";return true;
+ }catch(error){f.error=error.message;return false;}
+ finally{f.saving=false;catalogInlineRender();}
+}
+async function catalogSwitchDetailTab(tab){
+ if(!catalogEditorActive()||tab===state.detailTab)return true;
+ if(state.detailTab==="raw"||tab==="raw")return catalogMaterializeDraft();
+ return !catalogInline.saving;
 }
 function catalogEditorControl(key,value,label= catalogRecordLabels[key]||key){
  const f=catalogInline,disabled=f.saving?' disabled':'',base=catalogTargetBase(),exists=Object.hasOwn(base,key)||Object.hasOwn(catalogTargetValues(),key);
@@ -515,7 +552,7 @@ function catalogRenderEditor(response,coverHTML){
  return '<section class="game-overview catalog-record-editor"><div class="catalog-editor-layout"><div class="cover-panel">'+coverHTML+'</div><div><div class="catalog-record-grid">'+metadata+'</div>'+prose+
  (extra?'<details class="catalog-record-extra" '+(details?'open':'')+'><summary>Other source fields ('+Object.keys(fields).filter(k=>!omitted.has(k)).length+')</summary><div class="catalog-record-grid">'+extra+'</div></details>':"")+
  (!library?'<div class="catalog-inline-actions"><input id="catalog-extra-field" aria-label="New source field" placeholder="Additional field name"><button class="tab-button" id="catalog-add-field">Add field</button></div>':"")+
- '<p class="secondary">Empty or removed fields fall through to other selected sources. Record titles and identifiers remain source evidence; exported names follow the selected release and title settings.</p></div></div></section>';
+ '<p class="secondary">Empty or removed fields fall through to other selected sources. Title follows metadata priorities in Regional title mode; release and filename modes remain available.</p></div></div></section>';
 }
 function catalogEqualValue(a,b){
  const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==="object"?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
@@ -526,7 +563,7 @@ function catalogEditorChange(key,value){
  const f=catalogInline,token=catalogTargetKey(f.target),draft=f.edits.get(token)||{target:{...f.target},fields:Object.create(null)},base=catalogTargetBase();
  if(catalogEqualValue(value,base[key])||(value==null&&!Object.hasOwn(base,key)))delete draft.fields[key];else draft.fields[key]=value;
  if(Object.keys(draft.fields).length)f.edits.set(token,draft);else f.edits.delete(token);
- f.dirty=f.edits.size>0;f.error="";f.message="";catalogEditorActions();
+ f.dirty=f.raw!==null||f.edits.size>0;f.error="";f.message="";catalogEditorActions();
 }
 function catalogEditorDescription(lang,value){
  const descriptions={...(catalogTargetValues().descriptions||{})};
@@ -544,7 +581,7 @@ function catalogInlineRender(){const scroll=$("detail-body").scrollTop;renderDet
 function catalogLeaveInline(){
  const f=catalogInline;if(f.saving)return false;
  if((f.dirty||f.invalid.size)&&!window.confirm("Discard unsaved card changes?"))return false;
- f.version++;f.mode=false;f.loading=false;f.dirty=false;f.edits=new Map();f.invalid=new Map();f.extra=new Set();f.card=null;f.error="";f.message="";f.nameMode="";return true;
+ f.version++;f.mode=false;f.loading=false;f.dirty=false;f.edits=new Map();f.invalid=new Map();f.extra=new Set();f.card=null;f.savedCard=null;f.raw=null;f.baseRevision="";f.error="";f.message="";f.nameMode="";return true;
 }
 async function catalogEditCard(){
  if(!catalogInlineAvailable()||catalogUI.busy)return;
@@ -560,7 +597,7 @@ async function catalogStartInline(key){
   const card=await fetchJSON("/api/catalog/edit?"+new URLSearchParams({platform,game:folder}));
   if(version!==f.version||platform!==state.platform||folder!==state.selectedFolder)return;
   if(card.editor_error)throw new Error(card.editor_error);
-  f.card=card;f.target={kind:"library",match:-1};f.edits=new Map();f.invalid=new Map();f.extra=new Set();
+  f.card=card;f.savedCard=card;f.baseRevision=card.revision;f.raw=null;f.dirty=false;f.target={kind:"library",match:-1};f.edits=new Map();f.invalid=new Map();f.extra=new Set();
   if(f.preferredSource&&card.registry?.sources?.some(s=>s.id===f.preferredSource)){
    f.target=card.records?.find(r=>r.target.source===f.preferredSource&&r.target.match>=0&&r.target.release_index==null)?.target||{kind:"manual",source:f.preferredSource,match:-1,scope:""};
   }
@@ -572,8 +609,8 @@ async function catalogSaveInline(){
  const f=catalogInline;if(f.saving||!f.dirty||f.invalid.size||!catalogInlineCurrent())return;
  const platform=f.platform,folder=f.folder,target=f.target;f.saving=true;catalogUI.busy=true;f.error="";catalogInlineRender();
  try{
-  const response=await catalogPost("/api/catalog/edit",{platform,game:folder,revision:f.card.revision,edits:Array.from(f.edits.values())});
-  f.card=response.card;f.edits=new Map();f.invalid=new Map();f.dirty=false;f.message=response.warning||"Saved to your library.";
+  const response=await catalogPost("/api/catalog/edit",{platform,game:folder,revision:f.baseRevision||f.card.revision,edits:catalogEditorEdits()});
+  f.card=response.card;f.savedCard=response.card;f.baseRevision=response.card.revision;f.raw=null;f.edits=new Map();f.invalid=new Map();f.dirty=false;f.message=response.warning||"Saved to your library.";
   if(target.kind==="manual")f.target=f.card.records.filter(r=>r.target.source===target.source&&r.target.match>=0&&r.target.release_index==null).find(r=>(r.fields.release||"")===(target.scope||""))?.target||{kind:"library",match:-1};
   if(state.platform===platform&&state.selectedFolder===folder){
    state.game.profile=response.card.profile;state.game.catalog_fields=response.card.fields;state.game.catalog_yaml=response.card.yaml;
@@ -597,7 +634,7 @@ async function catalogSaveSourceName(){
  f.nameDraft=name;f.saving=true;catalogUI.busy=true;f.error="";catalogInlineRender();
  try{
   const response=await catalogPost("/api/catalog/curation",{revision:f.card.registry.revision,id,name});
-  f.card.registry=response.registry;f.nameMode="";f.preferredSource=response.source.id;
+  f.card.registry=response.registry;if(f.savedCard)f.savedCard.registry=response.registry;f.nameMode="";f.preferredSource=response.source.id;
   if(!id){f.target={kind:"manual",source:response.source.id,match:-1,scope:""};f.extra=new Set();}
   f.message=id?"Variant renamed. Saved profiles keep the same source.":"Variant created. Add its fields, then Save changes; enable it in your metadata priorities.";
   if(state.sourceDefaults)state.sourceDefaults.source_labels={...(state.sourceDefaults.source_labels||{}),[response.source.id]:response.source.name};
@@ -610,6 +647,9 @@ function catalogBindInline(){
  document.querySelectorAll("[data-inline-edit]").forEach(e=>e.addEventListener("click",()=>catalogStartInline(e.dataset.inlineEdit)));
  if(!catalogEditorActive())return;
  const f=catalogInline;
+ document.querySelectorAll("[data-editor-source]").forEach(el=>el.addEventListener("click",()=>catalogSelectSource(el.dataset.editorSource)));
+ $("catalog-raw-yaml")?.addEventListener("input",e=>{if(f.saving)return;f.raw=e.target.value;f.dirty=true;f.error="";f.message="";catalogEditorActions();});
+ $("catalog-validate-raw")?.addEventListener("click",catalogMaterializeDraft);
  $("catalog-editor-reload")?.addEventListener("click",()=>{f.mode=false;catalogStartInline();});
  $("catalog-editor-target")?.addEventListener("change",e=>{f.target=JSON.parse(e.target.value);f.extra=new Set();f.error="";f.message="";f.nameMode="";if(f.card.registry.sources.some(s=>s.id===f.target.source))f.preferredSource=f.target.source;catalogInlineRender();});
  $("catalog-editor-scope")?.addEventListener("change",e=>{f.target={...f.target,scope:e.target.value};f.extra=new Set();catalogInlineRender();});
@@ -620,7 +660,7 @@ function catalogBindInline(){
  $("catalog-cancel-source-name")?.addEventListener("click",()=>{f.nameMode="";catalogInlineRender();});
  $("catalog-inline-save")?.addEventListener("click",catalogSaveInline);
  $("catalog-inline-cancel")?.addEventListener("click",()=>{if(catalogLeaveInline())catalogInlineRender();});
- $("catalog-editor-discard")?.addEventListener("click",()=>{f.edits=new Map();f.invalid=new Map();f.dirty=false;f.error="";f.message="";catalogInlineRender();});
+ $("catalog-editor-discard")?.addEventListener("click",()=>{f.card=f.savedCard||f.card;f.raw=null;f.target={kind:"library",match:-1};f.edits=new Map();f.invalid=new Map();f.dirty=false;f.error="";f.message="";catalogInlineRender();});
  $("catalog-inline-export")?.addEventListener("click",()=>{if(catalogLeaveInline())setExportMode(true);});
  document.querySelectorAll("[data-card-field]").forEach(input=>input.addEventListener("input",()=>{
   if(f.saving)return;

@@ -30,7 +30,7 @@ func TestNamedSourceHTTPAndExport(t *testing.T) {
 	card, _ := catalogedit.Read(root, "Console", "One")
 	w, _ = catalogCall(t, h, "/api/catalog/edit", editRequest{Platform: "Console", Game: "One", Revision: card.Revision, Edits: []catalogedit.Edit{
 		{Target: catalogedit.Target{Kind: "source", Source: "launchbox", Match: 0}, Fields: catalogedit.Patch{"developer": "Fixed provider"}},
-		{Target: catalogedit.Target{Kind: "manual", Source: id}, Fields: catalogedit.Patch{"developer": "My studio", "descriptions": map[string]any{"en": "My prose"}}},
+		{Target: catalogedit.Target{Kind: "manual", Source: id}, Fields: catalogedit.Patch{"title": "My title", "developer": "My studio", "descriptions": map[string]any{"en": "My prose"}}},
 	}})
 	if w.Code != 200 {
 		t.Fatal(w.Body.String())
@@ -51,7 +51,7 @@ func TestNamedSourceHTTPAndExport(t *testing.T) {
 		}
 	}
 	w, _ = catalogCall(t, h, "/api/export-preview", exportPreviewRequest{Platform: "Console", Settings: exportSettings{Language: "en", Media: "none", MetadataSources: []string{id, "launchbox"}}, Games: []previewGameRequest{{Folder: "One"}}})
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "My studio") || !strings.Contains(w.Body.String(), "My prose") {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "My studio") || !strings.Contains(w.Body.String(), "My prose") || !strings.Contains(w.Body.String(), "My title") {
 		t.Fatal(w.Body.String())
 	}
 	r, _ = curation.Load(root)

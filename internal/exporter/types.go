@@ -122,6 +122,7 @@ type Record struct {
 	DiscVariants    []DiscVariant       `json:"disc_variants,omitempty"`
 	Variant         string              `json:"variant,omitempty"`
 	VariantInfo     *VariantInfo        `json:"variant_info,omitempty"`
+	SelectedTitle   *Value              `json:"selected_title,omitempty"`
 	TitleContext    *TitleContext       `json:"title_context,omitempty"`
 	Disc            *DiscObservation    `json:"disc,omitempty"`
 	Catalog         *CatalogObservation `json:"catalog,omitempty"`
@@ -267,11 +268,11 @@ func loadProfileReader(root string, input io.Reader) (Profile, error) {
 	if p.Selection.Fields == nil {
 		p.Selection.Fields = map[string]Rule{}
 	}
-	for _, field := range []string{"release_date", "developer", "publisher", "genres", "players"} {
+	for _, field := range []string{"title", "release_date", "developer", "publisher", "genres", "players"} {
 		p.Selection.Fields[field] = defaultRule(p.Selection.Fields[field], Rule{Scope: "release", Order: []string{"source"}, Sources: priorities["metadata"]})
 	}
 	for field, rule := range p.Selection.Fields {
-		if field != "release_date" && field != "developer" && field != "publisher" && field != "genres" && field != "players" {
+		if field != "title" && field != "release_date" && field != "developer" && field != "publisher" && field != "genres" && field != "players" {
 			return p, fmt.Errorf("unsupported export field: %s", field)
 		}
 		if err := validateRule(rule, false, false); err != nil {

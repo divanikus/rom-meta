@@ -29,19 +29,19 @@ func TestNamedVariantsUseSharedExportPriorities(t *testing.T) {
 		t.Fatal(e)
 	}
 	_, e = catalogedit.SaveEdits(options.DataRoot, "Nintendo - Nintendo 64", "Example", card.Revision, []catalogedit.Edit{
-		{Target: catalogedit.Target{Kind: "manual", Source: a.ID}, Fields: catalogedit.Patch{"developer": "Whole game", "descriptions": map[string]any{"en": "Literal &quot;short&quot;", "ru": "Кратко"}}},
-		{Target: catalogedit.Target{Kind: "manual", Source: a.ID, Scope: "Example (USA)"}, Fields: catalogedit.Patch{"developer": "USA studio"}},
-		{Target: catalogedit.Target{Kind: "manual", Source: b.ID}, Fields: catalogedit.Patch{"developer": "Long studio", "descriptions": map[string]any{"en": "Long prose"}}},
+		{Target: catalogedit.Target{Kind: "manual", Source: a.ID}, Fields: catalogedit.Patch{"title": "Short title", "developer": "Whole game", "descriptions": map[string]any{"en": "Literal &quot;short&quot;", "ru": "Кратко"}}},
+		{Target: catalogedit.Target{Kind: "manual", Source: a.ID, Scope: "Example (USA)"}, Fields: catalogedit.Patch{"title": "USA title", "developer": "USA studio"}},
+		{Target: catalogedit.Target{Kind: "manual", Source: b.ID}, Fields: catalogedit.Patch{"title": "Long title", "developer": "Long studio", "descriptions": map[string]any{"en": "Long prose"}}},
 	})
 	if e != nil {
 		t.Fatal(e)
 	}
-	for _, tc := range []struct{ order, developer, description, source string }{
-		{a.ID + ", " + b.ID + ", launchbox", "USA studio", "Literal &quot;short&quot;", a.ID},
-		{b.ID + ", " + a.ID + ", launchbox", "Long studio", "Long prose", b.ID},
-		{"launchbox", "First developer", "English & <safe> description", "launchbox"},
+	for _, tc := range []struct{ order, developer, description, source, title string }{
+		{a.ID + ", " + b.ID + ", launchbox", "USA studio", "Literal &quot;short&quot;", a.ID, "USA title"},
+		{b.ID + ", " + a.ID + ", launchbox", "Long studio", "Long prose", b.ID, "Long title"},
+		{"launchbox", "First developer", "English & <safe> description", "launchbox", "Example"},
 	} {
-		body := "schema_version: 1\nselection:\n  description:\n    languages: [en]\n    sources: [" + tc.order + "]\n  fields:\n    developer:\n      sources: [" + tc.order + "]\n"
+		body := "schema_version: 1\nselection:\n  description:\n    languages: [en]\n    sources: [" + tc.order + "]\n  fields:\n    title:\n      sources: [" + tc.order + "]\n    developer:\n      sources: [" + tc.order + "]\n"
 		profile(t, &options, body)
 		plan, e := Build(options)
 		if e != nil {
@@ -51,7 +51,7 @@ func TestNamedVariantsUseSharedExportPriorities(t *testing.T) {
 			t.Fatal(plan.Records)
 		}
 		fields := plan.Records[0].Fields
-		if fields["developer"].Value != tc.developer || fields["description"].Value != tc.description || fields["description"].Source != tc.source {
+		if fields["title"].Value != tc.title || fields["title"].Source != map[bool]string{true: "release", false: tc.source}[tc.source == "launchbox"] || fields["developer"].Value != tc.developer || fields["description"].Value != tc.description || fields["description"].Source != tc.source {
 			t.Fatal(fields)
 		}
 		data, _ := os.ReadFile(filepath.Join(path, "game.yaml"))
@@ -63,7 +63,7 @@ func TestNamedVariantsUseSharedExportPriorities(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		if preview.Fields["description"] != fields["description"] {
+		if preview.Fields["title"] != fields["title"] || preview.Fields["description"] != fields["description"] {
 			t.Fatal(preview.Fields, fields)
 		}
 		for _, target := range []string{"es-de", "launchbox"} {
@@ -73,12 +73,12 @@ func TestNamedVariantsUseSharedExportPriorities(t *testing.T) {
 			}
 			if target == "es-de" {
 				var list xmlList
-				if e = xml.Unmarshal([]byte(raw.XML), &list); e != nil || list.Games[0].Description != tc.description {
+				if e = xml.Unmarshal([]byte(raw.XML), &list); e != nil || list.Games[0].Description != tc.description || list.Games[0].Name != tc.title {
 					t.Fatal(raw.XML, e)
 				}
 			} else {
 				var list launchBoxList
-				if e = xml.Unmarshal([]byte(raw.XML), &list); e != nil || list.Games[0].Notes != tc.description {
+				if e = xml.Unmarshal([]byte(raw.XML), &list); e != nil || list.Games[0].Notes != tc.description || list.Games[0].Title != map[bool]string{true: "Example & Friends", false: tc.title}[tc.source == "launchbox"] {
 					t.Fatal(raw.XML, e)
 				}
 			}
