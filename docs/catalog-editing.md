@@ -22,8 +22,10 @@ rom-meta init "<catalog>"
 rom-meta serve --data-root "<catalog>" --edit
 ```
 
-**Library / Operations / Export / Settings** separate browsing, background work,
-export-profile preparation and library defaults. Check platforms in the sidebar,
+**Library / Operations / Settings** separate browsing, background work and
+library defaults. **Operations → Add job → Export** opens destination, ROM and
+profile preparation; there is no separate Export navigation tab. Read-only servers
+retain **Preview export** in Operations. Check platforms in the sidebar,
 then use the **Fetch metadata**, **Merge** or **Statistics** buttons above the
 platform list. These icon buttons have hover tooltips and accessible names.
 The action strip stays in that column and shows the selection
@@ -34,8 +36,8 @@ Settings edits library configuration, as described below. The sun/moon icon in t
 chooses a neutral dark or light palette, remembered by this browser.
 
 1. Choose **Import your first DAT** in an empty library or the **+** beside
-   **Platforms**. Operations offers a new import action when viewing an existing
-   operation; the upload screen itself has just its upload/prepare action.
+   **Platforms**, or **Operations → Add job → Import DAT**. The same menu also
+   offers Fetch metadata and Export when the library has platforms.
 2. Upload an ordinary XML DAT (`.dat` or `.xml`) or ZIP. For multiple DATs in a
    ZIP, choose the member. The optional platform name overrides detection.
 3. Review the prepared platform, card/release/fingerprint counts and sample
@@ -69,7 +71,7 @@ cannot be cancelled/dismissed in this first workflow.
 Check one or several platforms in the sidebar (or **Select all**), then choose
 **Fetch metadata** in the same column. The wizard receives that selection
 and lets you adjust it before choosing sources, data types and parallel workers.
-**Fetch metadata** in Operations opens the same wizard.
+**Operations → Add job → Fetch metadata** opens the same wizard.
 
 1. Select sources and data types: metadata, artwork and video. Defaults come from
    the library's acquisition settings. Unavailable choices explain missing
@@ -211,7 +213,10 @@ copies resolved values into overrides.
 **Source tabs** identify the destination: Card fields, a provider, or your named
 variant. **Entry** appears only when that source has several records or scopes.
 A short caption identifies what you are editing. Existing description languages
-have text areas; **Add a translation** adds another. **Other fields** keeps IDs,
+have text areas and a **× Remove translation** control; **Add a translation** adds
+another. Removal changes only the selected record and takes effect on Save;
+Discard restores it. Removing the last language removes its descriptions field.
+**Other fields** keeps IDs,
 service details and structured values out of the common form until needed.
 You can add or remove source fields without replacing the whole record.
 
@@ -317,8 +322,16 @@ A newly added `manual.*` source needs an existing named variant in the registry.
 Invalid or stale input stays in the editor for correction; it is never written.
 
 **Merge** and **Statistics** are in the platform action strip.
-**Compare (N)** appears beside card comparison controls after adding cards,
-and becomes available with at least two selected cards.
+**Select for merge** adds a card to a selection. On another card,
+**Compare for merge (N)** includes the open card automatically and opens their
+side-by-side merge review. The count includes that card, without duplicates.
+This compares game cards from the same platform, not ROM bytes or export output;
+opening it does not merge anything.
+
+**Releases & fingerprints** is a read-only register of releases, files and hashes.
+Raw can add or edit release definitions, and remove releases only when source,
+default-release and fingerprint references remain valid. The browser does not
+write `fingerprints.yaml`; register new fingerprints through supported imports.
 
 ## Let fold prepare the work
 
@@ -380,8 +393,9 @@ Platform counts and the current list refresh after completed changes, including 
 rejection of the displayed fold evidence, not a permanent ban on every future
 identity signal.
 
-For a pair the automatic plan does not propose, use **Add to comparison** on 2–12
-cards from one platform, then **Compare**. Manual groups need an explicit same-game
+For a group the automatic plan does not propose, use **Select for merge** on one
+or more cards, open the last card, then **Compare for merge** (2–12 cards total).
+The current card is included automatically. Manual groups need an explicit same-game
 confirmation. The recorded decision contains exact members, document hashes,
 previous content keys and release names under `fold.owner_reviews`; all original
 provider observations remain. No external evidence link is required. This explicit

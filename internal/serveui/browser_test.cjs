@@ -254,7 +254,8 @@ test('explicit modes keep provider descriptions outside export preview', () => {
   assert.match(b.element('detail-body').innerHTML,/Unselected provider prose/);
   assert.doesNotMatch(b.element('detail-body').innerHTML,/data-detail-tab="(?:media|sources)"/);
   assert.equal(b.element('library-mode').attributes['aria-pressed'],'true');
-  assert.equal(b.element('export-mode').attributes['aria-pressed'],'false');
+  assert.equal(b.run('state.exportMode'),false);
+  assert.doesNotMatch(html,/id="export-mode"/);
 });
 
 test('visual source chooser loads catalog defaults, reorders, disables all and resets without text input', async () => {

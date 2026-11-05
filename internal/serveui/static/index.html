@@ -930,7 +930,6 @@
       <nav class="nav" aria-label="views">
         <button class="tab-button active" id="browse-tab" type="button">Library</button>
         <button class="tab-button" id="operations-tab" type="button">Operations <span id="operations-count"></span></button>
-        <button class="tab-button" id="export-mode" type="button" aria-pressed="false">Export</button>
         <button class="tab-button" id="settings-tab" type="button">Settings</button>
       </nav>
       <div class="library-header-actions">
@@ -1001,7 +1000,7 @@
       <div class="detail-head">
         <h1 id="detail-title">Select a game</h1>
         <div class="chips" id="detail-chips"></div>
-        <div class="card-tools hidden" id="card-tools"><button class="tab-button" id="catalog-edit-card" type="button">✎ Edit card</button><button class="tab-button" id="catalog-add-compare" type="button">Add to comparison</button><button class="tab-button hidden" id="catalog-compare" type="button" disabled>Compare (0)</button></div>
+        <div class="card-tools hidden" id="card-tools"><button class="tab-button" id="catalog-edit-card" type="button">✎ Edit card</button><button class="tab-button" id="catalog-add-compare" type="button" title="Select this game card for merge review">Select for merge</button><button class="tab-button hidden" id="catalog-compare" type="button" disabled>Compare for merge (0)</button></div>
       </div>
       <div class="detail-body" id="detail-body">
         <div class="empty">Choose a platform and game from the lists.</div>
@@ -1077,14 +1076,11 @@
     const $ = (id) => document.getElementById(id);
 
     $("library-mode").addEventListener("click", () => setExportMode(false));
-    $("export-mode").addEventListener("click", () => typeof libraryNavigate==="function"?libraryNavigate("export"):setExportMode(true));
     function setExportMode(enabled) {
       if(typeof catalogLeaveInline==='function'&&!catalogLeaveInline())return;
       state.exportMode = enabled;
       $("library-mode").classList.toggle("active", !enabled);
-      $("export-mode").classList.toggle("active", enabled);
       $("library-mode").setAttribute("aria-pressed", String(!enabled));
-      $("export-mode").setAttribute("aria-pressed", String(enabled));
       $("export-controls").classList.toggle("hidden", !enabled);
       $("export-notice").classList.toggle("hidden", !enabled);
       if (enabled) loadExportSources();
@@ -1806,7 +1802,7 @@
         return '<details class="fingerprint-item"><summary><span class="primary">' + escapeHTML(record.name || "Unnamed file") + '</span><span class="secondary">' + escapeHTML(edition) + '</span><span class="secondary">' + escapeHTML(fingerprintSize(record.size)) + ' · ' + (hashes.length ? hashes.length + (hashes.length === 1 ? ' recorded hash' : ' recorded hashes') : 'No hashes recorded') + '</span></summary><dl class="fingerprint-hashes">' + fields.map(([key,value]) => '<dt>' + escapeHTML(key) + '</dt><dd><code>' + escapeHTML(value) + '</code></dd>').join("") + '</dl></details>';
       }).join("");
       const status = state.fingerprintError ? '<div class="error">' + escapeHTML(state.fingerprintError) + '</div><button class="tab-button" type="button" data-fingerprint-retry>Retry fingerprints</button>' : state.fingerprintLoading && !data ? '<div class="loading">Reading registered fingerprints…</div>' : !records.length ? '<div class="empty">' + (data?.registered_total ? 'No fingerprints match this filter.' : 'No fingerprints registered for this game.') + '</div>' : '';
-      return '<section class="section"><h3>Releases & fingerprints</h3><p class="secondary">Registered catalog files and hashes. No ROM scan is performed in this view.</p>' + register + filter + status + '<div class="fingerprint-list">' + rows + '</div>' + (data ? '<div class="secondary">Showing ' + records.length + ' of ' + data.total + ' matching records · ' + data.registered_total + ' registered</div>' : '') + (data && records.length < data.total ? '<button class="tab-button" type="button" data-fingerprint-more' + (state.fingerprintLoading ? ' disabled' : '') + '>' + (state.fingerprintLoading ? 'Loading…' : 'Show more fingerprints') + '</button>' : '') + '</section>';
+      return '<section class="section"><h3>Releases & fingerprints</h3><p class="secondary">Read-only register of releases, files and hashes; no ROM scan is performed.</p>' + (typeof catalogEditorActive==="function"&&catalogEditorActive()?'<p class="secondary">Release definitions can be changed in Raw. Referenced releases cannot be removed. Fingerprints are registered through import and are not editable here.</p>':'') + register + filter + status + '<div class="fingerprint-list">' + rows + '</div>' + (data ? '<div class="secondary">Showing ' + records.length + ' of ' + data.total + ' matching records · ' + data.registered_total + ' registered</div>' : '') + (data && records.length < data.total ? '<button class="tab-button" type="button" data-fingerprint-more' + (state.fingerprintLoading ? ' disabled' : '') + '>' + (state.fingerprintLoading ? 'Loading…' : 'Show more fingerprints') + '</button>' : '') + '</section>';
     }
 
     async function setDetailTab(tab) {

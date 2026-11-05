@@ -15,16 +15,15 @@ function libraryNavigate(view){
 }
 function librarySyncNavigation(){
  if(typeof libraryUI==="undefined")return;
- const view=state.view==="browse"?(state.exportMode?"export":"library"):state.view;
+ const view=state.view==="browse"?(state.exportMode?"export":"library"):state.view,navView=view==="export"?"operations":view;
  libraryUI.view=view;
  $("app")?.classList.toggle("export-preview",state.exportMode&&state.view==="browse");
  $("top-status")?.classList.toggle("hidden",state.view!=="browse");
- for(const [id,target] of [["browse-tab","library"],["operations-tab","operations"],["export-mode","export"],["settings-tab","settings"]]){
-  $(id)?.classList.toggle("active",view===target);$(id)?.setAttribute("aria-current",view===target?"page":"false");
+ for(const [id,target] of [["browse-tab","library"],["operations-tab","operations"],["settings-tab","settings"]]){
+  $(id)?.classList.toggle("active",navView===target);$(id)?.setAttribute("aria-current",navView===target?"page":"false");
  }
  $("operations-pane")?.classList.toggle("hidden",view!=="operations");
  $("native-export-pane")?.classList.toggle("hidden",state.view!=="export");
- $("export-mode")?.setAttribute("aria-pressed",String(view==="export"));
  $("settings-pane")?.classList.toggle("hidden",view!=="settings");
  const empty=state.platformsLoaded&&state.platforms.length===0&&state.view==="browse";
  $("library-empty")?.classList.toggle("hidden",!empty);
@@ -111,18 +110,33 @@ function operationDetail(job){
  (done?'<button class="catalog-primary" data-import-open="'+job.id+'">Open '+escapeHTML(job.summary?.platform||"platform")+'</button><span class="secondary">Saved to your library.</span>':"")+
  (!busy?'<button class="tab-button" data-import-dismiss="'+job.id+'">'+(done?"Dismiss result":"Discard upload")+'</button>':"")+'</div></article>';
 }
+function libraryJobMenu(open=false){
+ if(!catalogUI.enabled)return state.platforms?.length?'<button class="tab-button" data-new-job="preview">Preview export</button>':"";
+ const disabled=state.platforms?.length?"":" disabled";
+ return '<details class="operations-add-job" id="operations-add-job" '+(open?"open":"")+'><summary class="tab-button" id="operations-add-job-toggle">Add job <span aria-hidden="true">▾</span></summary><div class="operation-job-menu" role="group" aria-label="New operation"><button type="button" id="operation-job-import" data-new-job="import">Import DAT</button><button type="button" id="operation-job-fetch" data-new-job="fetch"'+disabled+'>Fetch metadata</button><button type="button" id="operation-job-export" data-new-job="export"'+disabled+'>Export</button></div></details>';
+}
+function libraryStartJob(kind){
+ const menu=$("operations-add-job");if(menu)menu.open=false;
+ if(kind==="preview"&&state.platforms?.length){exportPreviewProfile();return;}
+ if(!catalogUI.enabled)return;
+ if(kind==="import")libraryOpenImport();
+ else if(state.platforms?.length&&kind==="fetch")enrichmentOpen([]);
+ else if(state.platforms?.length&&kind==="export")libraryNavigate("export");
+}
 function libraryRenderOperations(force=false){
  const pane=$("operations-pane");if(!pane)return;
  // Keep a partially completed options form stable while background polling runs.
  const focused=document.activeElement;
  if(!force&&focused&&pane.contains?.(focused)&&["INPUT","SELECT"].includes(focused.tagName))return;
- const selected=libraryUI.jobs.find(j=>j.id===libraryUI.selected);
- pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">YOUR LIBRARY</span><h1>Operations</h1><p>Import, fetch metadata, export — return whenever you are ready.</p></div>'+'<div class="operation-actions">'+(catalogUI.enabled&&state.platforms?.length&&(selected||!enrichmentUI.draft)?'<button class="tab-button" data-enrichment-new>Fetch metadata</button>':'')+(selected?'<button class="tab-button" data-import-new>＋ Import DAT</button>':'')+'</div>'+'</div>'+
+ const selected=libraryUI.jobs.find(j=>j.id===libraryUI.selected),menu=$("operations-add-job"),menuOpen=!!menu?.open,menuFocus=menu?.contains?.(focused)?focused.id:"";
+ pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">YOUR LIBRARY</span><h1>Operations</h1><p>Import, fetch metadata, export — return whenever you are ready.</p></div>'+libraryJobMenu(menuOpen)+'</div>'+
  (libraryUI.error?'<p class="operation-error" role="alert">'+escapeHTML(libraryUI.error)+'</p>':"")+
  '<div class="operations-layout"><aside class="operations-list" aria-label="Library operations">'+
  (libraryUI.jobs.length?libraryUI.jobs.map(j=>'<button class="operation-row '+(j.id===libraryUI.selected?"active":"")+'" data-operation-select="'+j.id+'"><strong>'+escapeHTML(operationTitle(j))+'</strong>'+operationStatus(j.state,operationLabel(j))+'<small>'+escapeHTML(j.platform||j.summary?.platform||j.member||"DAT import")+'</small></button>').join(""):'<p class="secondary">Your operations will appear here.</p>')+
  '<p class="secondary operations-lifetime">Progress stays with the running server, even when you close this browser. Inactive operations expire after 24 hours. Restarting the server clears this list.</p></aside>'+
  (selected?operationDetail(selected):typeof enrichmentUI!=="undefined"&&enrichmentUI.draft?enrichmentWizard():'<section class="operation-detail import-welcome"><h2>Import a DAT</h2><p>Start with a DAT. RomMeta prepares the game cards and fingerprints; your ROM files stay where they are.</p><form id="dat-upload-form"><label class="upload-label">Choose a DAT or ZIP<input type="file" id="dat-upload-file" name="file" accept=".dat,.xml,.zip" '+(libraryUI.uploading?"disabled":"")+'></label><p class="secondary">Preferred datasets: <strong>No-Intro</strong> for cartridges, <strong>Redump</strong> for discs, and <strong>MAME</strong> for arcade systems. Upload No-Intro, Redump or compatible XML DATs here; MAME listxml currently uses the CLI. ZIPs can contain several DATs. Up to 256 MiB.</p><button class="catalog-primary" type="submit" '+(libraryUI.uploading?"disabled":"")+'>'+(libraryUI.uploading?"Uploading…":"Upload & prepare")+'</button><p id="dat-upload-progress" role="status">'+(libraryUI.uploading?"Uploading "+libraryUI.uploadPercent+"% — keep this page open until the upload finishes.":"Uploading prepares a plan. You choose when to import.")+'</p></form><details><summary>Prefer the command line?</summary><p>The CLI uses the same importer and catalog rules.</p><pre>rom-meta dat import &quot;&lt;file.dat-or-zip&gt;&quot; --data-root &quot;&lt;library&gt;&quot;\n# Add --apply after reviewing the plan.</pre><p class="secondary">Use the CLI for classified MAME listxml imports.</p></details></section>')+'</div>';
+ pane.querySelectorAll("[data-new-job]").forEach(button=>button.addEventListener("click",()=>libraryStartJob(button.dataset.newJob)));
+ if(menuFocus)$(menuFocus)?.focus({preventScroll:true});
  pane.querySelectorAll("[data-operation-select]").forEach(b=>b.addEventListener("click",()=>{libraryUI.selected=b.dataset.operationSelect;libraryRenderOperations();}));
  pane.querySelectorAll("[data-import-new]").forEach(b=>b.addEventListener("click",libraryOpenImport));
  $("dat-upload-form")?.addEventListener("submit",libraryUploadDAT);
@@ -148,6 +162,8 @@ async function libraryOpenCompleted(job){
  libraryNavigate("library");await selectPlatform(job.platform||job.summary?.platform);
  if(job.kind==="dat-import"&&job.state==="succeeded")await libraryImportAction("/api/operations/dismiss",{id:job.id,revision:job.revision});
 }
+document.addEventListener("click",event=>{const menu=$("operations-add-job");if(menu?.open&&!menu.contains(event.target))menu.open=false;});
+document.addEventListener("keydown",event=>{const menu=$("operations-add-job");if(event.key==="Escape"&&menu?.open){menu.open=false;$("operations-add-job-toggle")?.focus();event.preventDefault();}});
 function libraryRememberJob(job){
  const i=libraryUI.jobs.findIndex(j=>j.id===job.id);
  if(i<0)libraryUI.jobs.unshift(job);else libraryUI.jobs[i]=job;

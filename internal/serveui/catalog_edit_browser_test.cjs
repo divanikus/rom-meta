@@ -442,3 +442,43 @@ test('opening an editor uses displayed source values without copying them to lib
  b.run('catalogLeaveInline();state.editorCard.fields.developer="Override"');await b.run('catalogStartInline("developer")');
  assert.equal(b.run('catalogInline.target.kind'),'library');
 });
+
+test('removing a translation stays scoped to its source and supports removing the last language',()=>{
+ const b=browser(async()=>json({}));
+ b.run('catalogInline.card={fields:{descriptions:{en:"Library"}},records:[{target:{kind:"source",source:"ss",match:0},fields:{descriptions:{en:"English",ru:"Russian"}}}]};catalogInline.target={kind:"source",source:"ss",match:0};catalogInline.extra.add("ru");catalogRemoveDescription("ru")');
+ assert.deepEqual(JSON.parse(b.run('JSON.stringify(catalogTargetValues().descriptions)')),{en:'English'});
+ assert.equal(b.run('catalogInline.extra.has("ru")'),false);
+ assert.equal(b.run('catalogInline.card.fields.descriptions.en'),'Library');
+ assert.equal(b.run('catalogInline.card.records[0].fields.descriptions.ru'),'Russian');
+ let html=b.run('catalogRenderEditor({},"")');assert.match(html,/data-description-remove="en"/);assert.doesNotMatch(html,/data-card-description="ru"/);
+ b.run('catalogRemoveDescription("en")');
+ assert.equal(b.run('[...catalogInline.edits.values()][0].fields.descriptions'),null);
+ html=b.run('catalogRenderEditor({},"")');assert.doesNotMatch(html,/data-card-description=/);assert.match(html,/catalog-translation-tools" open/);
+ b.run('catalogDiscardInline()');
+ assert.equal(b.run('catalogTargetValues().descriptions.ru'),'Russian');assert.equal(b.run('catalogInline.dirty'),false);
+});
+test('removing an empty added translation creates no edit, and cannot change an in-flight save',()=>{
+ const b=browser(async()=>json({}));b.run('catalogInline.card={fields:{}};catalogInline.extra.add("en");catalogRemoveDescription("en")');
+ assert.equal(b.run('catalogInline.dirty'),false);assert.equal(b.run('catalogInline.extra.size'),0);
+ b.run('catalogInline.card.fields.descriptions={en:"Saved"};catalogInline.saving=true;catalogRemoveDescription("en")');
+ assert.equal(b.run('catalogTargetValues().descriptions.en'),'Saved');assert.equal(b.run('catalogInline.dirty'),false);
+});
+test('Compare includes the open card once and respects platform and unsaved-edit boundaries',async()=>{
+ const b=browser(async()=>json({}));
+ b.run('catalogUI.comparePlatform="Console";catalogUI.compare=new Set(["Other"]);catalogBuildPlan=async manual=>{state.planned=manual;state.cards=[...catalogUI.compare]};catalogUpdateTools()');
+ assert.equal(b.element('catalog-compare').disabled,false);assert.equal(b.element('catalog-compare').textContent,'Compare for merge (2)');
+ await b.run('catalogCompareCurrent()');
+ assert.deepEqual(JSON.parse(b.run('JSON.stringify(state.cards)')),['Other','One']);assert.equal(b.run('state.planned'),true);
+ await b.run('catalogCompareCurrent()');assert.equal(b.run('state.cards.length'),2);
+ b.run('state.planned=false;state.selectedFolder="Third";catalogLeaveInline=()=>false');
+ await b.run('catalogCompareCurrent()');assert.equal(b.run('state.planned'),false);assert.equal(b.run('catalogUI.compare.has("Third")'),false);
+ b.run('catalogLeaveInline=()=>true;state.platform="Different"');
+ await b.run('catalogCompareCurrent()');assert.equal(b.run('state.planned'),false);assert.equal(b.run('catalogUI.compare.size'),0);
+});
+test('manual card selection opens its comparison directly without applying it',async()=>{
+ const calls=[];const b=browser(async(path,options)=>{calls.push({path,body:JSON.parse(options.body)});return json({});});
+ b.run('catalogUI.compare=new Set(["One","Two"]);catalogReadPlan=async()=>({id:"plan",groups:[{id:7,status:"review"}]});catalogReviewGroup=async id=>{state.reviewed=id;state.busyOnOpen=catalogUI.busy};catalogRenderPlan=()=>{state.board=true}');
+ await b.run('catalogBuildPlan(true)');
+ assert.equal(b.run('state.reviewed'),7);assert.equal(b.run('state.busyOnOpen'),false);assert.equal(b.run('state.board'),undefined);
+ assert.deepEqual(calls.map(c=>c.path),['/api/catalog/fold-plan?stream=1']);assert.deepEqual(calls[0].body.games,['One','Two']);
+});

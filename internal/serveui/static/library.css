@@ -65,8 +65,8 @@
 @media(max-width:650px){.export-inline{grid-template-columns:1fr;gap:0}.export-prepare-bar{align-items:flex-start;flex-direction:column}.export-folder-dialog{padding:10px}.export-folder-box{padding:16px}}
 
 /* Shared neutral surfaces. Themes are local to this browser. */
-:root{color-scheme:dark;--bg:#282c34;--panel:#21252b;--panel2:#2c313a;--line:#3e4552;--text:#c4c9d2;--muted:#9da5b4;--accent:#6bb8ff;--accent2:#98c379;--warn:#e5c07b;--bad:#e06c75;--selected:#303e51;--success-bg:#2d3830;--warn-bg:#3d372c;--bad-bg:#402e34;--button-text:#20252c;--header:#293d52;--header-line:#455c74}
-:root[data-theme="light"]{color-scheme:light;--bg:#d6dbe0;--panel:#e1e5e9;--panel2:#cfd5dc;--line:#b6bec8;--text:#35404e;--muted:#566475;--accent:#2563eb;--accent2:#416846;--warn:#805d22;--bad:#9d404d;--selected:#c3d2e2;--success-bg:#cedccd;--warn-bg:#e3d9c2;--bad-bg:#e4cdd0;--button-text:#f0f2f5;--header:#b9cadd;--header-line:#98aec5}
+:root{color-scheme:dark;--bg:#282c34;--panel:#21252b;--panel2:#2c313a;--line:#3e4552;--text:#c4c9d2;--muted:#9da5b4;--accent:#6bb8ff;--accent2:#98c379;--warn:#e5c07b;--bad:#e06c75;--selected:#303e51;--success-bg:#2d3830;--warn-bg:#3d372c;--bad-bg:#402e34;--button-text:#20252c;--header:#293d52;--header-line:#455c74;--card-inset:#191d24}
+:root[data-theme="light"]{color-scheme:light;--bg:#d6dbe0;--panel:#e1e5e9;--panel2:#cfd5dc;--line:#b6bec8;--text:#35404e;--muted:#566475;--accent:#2563eb;--accent2:#416846;--warn:#805d22;--bad:#9d404d;--selected:#c3d2e2;--success-bg:#cedccd;--warn-bg:#e3d9c2;--bad-bg:#e4cdd0;--button-text:#f0f2f5;--header:#b9cadd;--header-line:#98aec5;--card-inset:#cfd5dc}
 body{font-size:14px}button,input,select,textarea{accent-color:var(--accent)}
 .empty{background:var(--panel2)}
 .app>header{background:var(--header);border-bottom-color:var(--header-line);box-shadow:none;padding:10px 16px;gap:12px}
@@ -146,3 +146,14 @@ body{font-size:14px}button,input,select,textarea{accent-color:var(--accent)}
 @media(min-width:1101px){.app{grid-template-columns:260px 300px minmax(0,1fr)}}
 .export-bar{background:var(--panel);margin:0 -16px -10px;padding:10px 16px;width:calc(100% + 32px);gap:8px}.export-options{gap:10px}.export-options>label{font-size:12px;gap:5px}.export-options select{max-width:160px}.export-preview-title{font-size:13px;color:var(--accent);margin-right:8px;white-space:nowrap}.export-options>.catalog-primary{margin-left:auto;font-size:12px;white-space:nowrap}.export-options>.tab-button{font-size:12px}.export-notice{display:none}.export-bar #export-error{flex-basis:100%}.export-context{border:0;border-left:3px solid var(--accent);border-radius:0;background:var(--panel2);padding:9px 12px}.description-choice.chips{font-size:11px}.description-choice .chip{border:0;padding:0 6px 0 0;color:var(--muted)}
 .catalog-platform-label{display:block;color:var(--muted);font-size:12px;font-weight:400;margin:4px 0}
+
+/* Recessed card records remain distinct from the main reading surface. */
+.detail-body .side-panel,.detail-body .title-item,.detail-body .release-item,.detail-body .match-item,.detail-body .description-item,.detail-body .fingerprint-item{background:var(--card-inset)}
+.operations-add-job{position:relative;flex-shrink:0;align-self:flex-start;margin-top:14px}
+.operations-add-job>summary{list-style:none;display:flex;align-items:center;gap:18px;cursor:pointer;color:var(--accent);border-color:var(--accent)}
+.operations-add-job>summary::-webkit-details-marker{display:none}
+.operation-job-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;min-width:190px;padding:5px;border:1px solid var(--line);border-radius:6px;background:var(--panel2);box-shadow:0 8px 24px #0004}
+.operation-job-menu button{display:block;width:100%;padding:10px 12px;text-align:left;border:0;border-radius:3px;background:transparent;color:var(--text);font:inherit;cursor:pointer}
+.operation-job-menu button:hover:not(:disabled),.operation-job-menu button:focus-visible{background:var(--selected);color:var(--accent)}
+.operation-job-menu button:disabled{opacity:.45;cursor:default}
+.catalog-language-field .catalog-reset:hover{color:var(--bad)}

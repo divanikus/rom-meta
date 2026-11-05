@@ -27,12 +27,14 @@ async function catalogClose(){
 }
 function catalogUpdateTools(){
  if(catalogUI.comparePlatform&&catalogUI.comparePlatform!==state.platform){catalogUI.compare.clear();catalogUI.comparePlatform=state.platform;}
- $("catalog-add-compare").textContent=catalogUI.compare.has(state.selectedFolder)?"Remove from comparison":"Add to comparison";
+ $("catalog-add-compare").textContent=catalogUI.compare.has(state.selectedFolder)?"Deselect card":"Select for merge";
  $("catalog-edit-card").disabled=!state.game;$("detail-pane").classList.toggle("catalog-editing",catalogEditorActive());
  $("catalog-add-compare").disabled=!state.game;
  $("catalog-compare").classList.toggle("hidden",catalogUI.compare.size===0);
- $("catalog-compare").disabled=catalogUI.compare.size<2;
- $("catalog-compare").textContent="Compare ("+catalogUI.compare.size+")";
+ const count=catalogUI.compare.size+(state.game&&state.selectedFolder&&!catalogUI.compare.has(state.selectedFolder)?1:0);
+ $("catalog-compare").disabled=count<2||!state.game||catalogUI.busy;
+ $("catalog-compare").textContent="Compare for merge ("+count+")";
+ $("catalog-compare").title=count<2?"Open another card from this platform to compare.":"Compare selected game cards, including this card, before deciding whether to merge. Nothing is saved until Apply.";
  if(typeof librarySyncNavigation==="function")librarySyncNavigation();
 }
 async function catalogCapabilities(){
@@ -109,7 +111,7 @@ async function catalogBuildPlan(manual=false,resume=false,platforms){
  try{
   const response=await fetch("/api/catalog/fold-plan?stream=1",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...scope.length>1?{platforms:scope}:{platform},games:manual?[...catalogUI.compare]:[]}),signal:catalogUI.controller.signal});
   const plan=await catalogReadPlan(response);if(catalogUI.version!==version){catalogPost("/api/catalog/fold-discard",{plan:plan.id}).catch(()=>{});return;}catalogUI.plan=plan;catalogUI.artwork=new Map();catalogUI.cardsCache=new Map();catalogUI.decisions=new Map();catalogUI.selected=new Set(catalogUI.plan.groups.filter(g=>g.status==="ready").map(g=>g.id));
-  if(resume&&!plan.groups.length)catalogFinishReview();else catalogRenderPlan();
+  if(manual&&plan.groups.length===1){catalogUI.busy=false;await catalogReviewGroup(plan.groups[0].id);}else if(resume&&!plan.groups.length)catalogFinishReview();else catalogRenderPlan();
  }catch(error){$("catalog-content").innerHTML=catalogSessionSummary()+catalogNotice(error.message,"error");if(resume)catalogResumeButton();}finally{catalogUI.busy=false;}
 }
 function catalogGroupReason(pg){if(pg.status==="review"&&pg.conflicts?.length)return "Choose the saved values to keep: "+[...new Set(pg.conflicts.map(key=>catalogLabels[key.split(".")[0]]||key))].join(", ")+ ".";return (pg.reason||"").replace("confirm regional titles, edition and content with --interactive","compare the regional titles, edition and content before confirming");}
@@ -267,7 +269,7 @@ function catalogAcceptGroup(group){
 function catalogRenderReview(){
  const pg=catalogUI.group,g=pg.group,blocked=pg.status==="blocked",included=catalogIncluded(),enough=included.size>=2,pendingIdentity=(pg.needs_identity&&!g.ReviewAccepted)||catalogUI.selectionDirty;
  const oldScroll=document.querySelector?.(".catalog-candidates");const scrollLeft=oldScroll?.scrollLeft||0,scrollTop=oldScroll?.scrollTop||0;
- catalogHeader("Compare games",((catalogUI.platforms||[]).length>1?pg.group.Platform+" · ":"")+included.size+" of "+catalogUI.cards.length+" cards selected · "+(catalogUI.selectionDirty?"Selection changed":catalogStatus[pg.status])+". "+(blocked&&!catalogUI.selectionDirty?"Resolve the data conflict or change the selection.":"Choose the cards to keep together. Unselected cards stay unchanged."));
+ catalogHeader("Compare cards for merging",((catalogUI.platforms||[]).length>1?pg.group.Platform+" · ":"")+included.size+" of "+catalogUI.cards.length+" cards selected · "+(catalogUI.selectionDirty?"Selection changed":catalogStatus[pg.status])+". "+(blocked&&!catalogUI.selectionDirty?"Resolve the data conflict or change the selection.":"Choose the cards to keep together. Unselected cards stay unchanged."));
  $("catalog-content").innerHTML=catalogSessionSummary()+catalogQueueNotice()+'<div class="catalog-queue-toolbar"><button class="tab-button" id="catalog-skip-group">Skip for now →</button><button class="tab-button" id="catalog-review-decisions">Review decisions</button></div><button class="catalog-back" id="catalog-back">← Back to plan</button><div id="catalog-feedback">'+(pg.reason?catalogNotice(catalogGroupReason(pg),pg.status==="blocked"?"error":"warn"):'')+'</div><div class="catalog-comparison"><section class="catalog-candidate-area"><p class="catalog-scroll-hint">Scroll sideways to compare cards →</p><div class="catalog-candidates" tabindex="0" role="region" aria-label="Candidate cards; scroll horizontally to compare">'+catalogUI.cards.map((card,i)=>catalogCandidate(card,i,["title","alternate_titles","description","descriptions","developer","publisher","release_date","genres","players"])).join("")+'</div></section><section class="catalog-result"><span class="catalog-eyebrow">'+(blocked?"Merge status":"Result")+'</span><h3>'+cEscape(blocked?"Merge blocked":g.Keep.Title||g.Keep.Folder)+'</h3>'+
  (blocked?'':g.NativeDigest?'<p>MAME chooses its primary from the accepted snapshot. Edit individual cards in the library before rebuilding this plan.</p>':'<details><summary>Correct the result</summary><div id="catalog-form-host"></div></details>')+
  (!blocked&&pendingIdentity?'<div class="catalog-notice warn">'+cEscape(pg.identity_reason||"Confirm that these cards belong together as one game.")+'</div><p class="secondary">Agree & next queues this selection. Changes are saved together after the final review. Releases, source IDs and media are retained.</p>':!blocked&&g.ReviewAccepted&&pg.status==="ready"?'<p class="secondary">This selection is ready for the final batch. Nothing has been saved yet.</p>':'')+
@@ -418,11 +420,17 @@ function catalogRenderDecisions(){
 $("catalog-dialog").addEventListener("cancel",event=>{event.preventDefault();catalogClose();});
 $("catalog-close").addEventListener("click",catalogClose);
 $("catalog-edit-card").addEventListener("click",catalogEditCard);
-$("catalog-compare").addEventListener("click",()=>catalogBuildPlan(true));
+async function catalogCompareCurrent(){
+ if(!state.game||!state.selectedFolder||catalogUI.busy||!catalogLeaveInline())return;
+ if(catalogUI.comparePlatform!==state.platform){catalogUI.compare.clear();catalogUI.comparePlatform=state.platform;}
+ const selected=new Set([...catalogUI.compare,state.selectedFolder]);if(selected.size<2)return;
+ catalogUI.compare=selected;catalogUpdateTools();await catalogBuildPlan(true);
+}
+$("catalog-compare").addEventListener("click",catalogCompareCurrent);
 $("catalog-add-compare").addEventListener("click",()=>{
  if(!state.selectedFolder)return;if(catalogUI.comparePlatform!==state.platform){catalogUI.compare.clear();catalogUI.comparePlatform=state.platform;}
  if(catalogUI.compare.has(state.selectedFolder))catalogUI.compare.delete(state.selectedFolder);else catalogUI.compare.add(state.selectedFolder);
- $("catalog-add-compare").textContent=catalogUI.compare.has(state.selectedFolder)?"Remove from comparison":"Add to comparison";catalogUpdateTools();
+ catalogUpdateTools();
 });
 const catalogObserver=new MutationObserver(catalogUpdateTools);
 catalogObserver.observe($("detail-title"),{childList:true});catalogObserver.observe($("export-bar"),{attributes:true,attributeFilter:["class"]});
@@ -555,11 +563,10 @@ function catalogRenderEditor(response,coverHTML){
  const common=details?[]:["release_date","developer","publisher","genres",(!library&&Object.hasOwn(fields,"max_players")&&!Object.hasOwn(fields,"players")?"max_players":"players")];
  const metadata=common.map(k=>catalogEditorControl(k,fields[k])).join("");
  const descriptions=fields.descriptions&&!Array.isArray(fields.descriptions)?fields.descriptions:{},langs=Array.from(new Set([...Object.keys(descriptions),...f.extra])).sort();
- if(!langs.length&&!Object.hasOwn(fields,"description"))langs.push("en");
  const prose=details?"":'<div class="catalog-description-fields">'+
  (Object.hasOwn(fields,"description")?catalogEditorControl("description",fields.description,"Description"):"")+
- langs.map(lang=>'<label><span>Description · '+cEscape(catalogLanguages[lang]||lang)+'</span><textarea rows="9" data-card-description="'+escapeAttr(lang)+'" aria-label="Description '+escapeAttr(lang)+'" '+(f.saving?'disabled':'')+'>'+cEscape(descriptions[lang]||"")+'</textarea></label>').join("")+
- '<details class="catalog-translation-tools"><summary>Add a translation</summary><div class="catalog-inline-actions"><input id="catalog-description-language" aria-label="Add description language" placeholder="Language code, e.g. ru"><button class="tab-button" id="catalog-add-language">Add language</button></div></details></div>';
+ langs.map(lang=>'<div class="catalog-record-field catalog-language-field"><label><span>Description · '+cEscape(catalogLanguages[lang]||lang)+'</span><textarea rows="9" data-card-description="'+escapeAttr(lang)+'" aria-label="Description '+escapeAttr(lang)+'" '+(f.saving?'disabled':'')+'>'+cEscape(descriptions[lang]||"")+'</textarea></label><button type="button" class="catalog-reset" data-description-remove="'+escapeAttr(lang)+'" title="Remove translation" aria-label="Remove '+escapeAttr(catalogLanguages[lang]||lang)+' translation" '+(f.saving?'disabled':'')+'>×</button></div>').join("")+
+ '<details class="catalog-translation-tools" '+(!langs.length?'open':'')+'><summary>Add a translation</summary><div class="catalog-inline-actions"><input id="catalog-description-language" aria-label="Add description language" placeholder="Language code, e.g. ru"><button class="tab-button" id="catalog-add-language">Add language</button></div></details></div>';
  const omitted=new Set([...common,"title","descriptions","description",...(library?["aliases","alternate_titles"]:[])]);
  const keys=Object.keys(fields).filter(k=>!omitted.has(k));
  const extra=keys.map(k=>catalogEditorControl(k,fields[k])).join("");
@@ -598,6 +605,10 @@ function catalogEditorDescription(lang,value){
  const descriptions={...(catalogTargetValues().descriptions||{})};
  if(value.trim())descriptions[lang]=value;else delete descriptions[lang];
  catalogEditorChange("descriptions",Object.keys(descriptions).length?descriptions:null);
+}
+function catalogRemoveDescription(lang){
+ if(catalogInline.saving)return;
+ catalogInline.extra.delete(lang);catalogEditorDescription(lang,"");catalogInlineRender();
 }
 function catalogEditorActions(){
  const f=catalogInline;
@@ -700,6 +711,7 @@ function catalogBindInline(){
   }catch(error){f.invalid.set(token,input.value);f.error="Check "+key+": "+error.message;catalogEditorActions();}
  }));
  document.querySelectorAll("[data-card-description]").forEach(input=>input.addEventListener("input",()=>{if(!f.saving)catalogEditorDescription(input.dataset.cardDescription,input.value);}));
+ document.querySelectorAll("[data-description-remove]").forEach(button=>button.addEventListener("click",()=>catalogRemoveDescription(button.dataset.descriptionRemove)));
  document.querySelectorAll("[data-card-remove]").forEach(button=>button.addEventListener("click",()=>{if(f.saving)return;f.invalid.delete(catalogTargetKey(f.target)+"|"+button.dataset.cardRemove);catalogEditorChange(button.dataset.cardRemove,null);catalogInlineRender();}));
  $("catalog-add-language")?.addEventListener("click",()=>{if(f.saving)return;const lang=$("catalog-description-language").value.trim().toLowerCase();if(!/^[a-z]{2,3}(-[a-z0-9]{2,8})*$/.test(lang)){f.error="Use a language code such as en, ru or pt-BR.";catalogEditorActions();return;}f.extra.add(lang);catalogInlineRender();});
  $("catalog-add-field")?.addEventListener("click",()=>{if(f.saving)return;const key=$("catalog-extra-field").value.trim();if(!key||["matches","__proto__","constructor","prototype"].includes(key)||Object.hasOwn(catalogTargetValues(),key))return;catalogEditorChange(key,"");catalogInlineRender();});

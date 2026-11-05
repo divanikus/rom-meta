@@ -67,11 +67,21 @@ test('ready plan offers explicit import and keeps changed options separate',()=>
  assert.match(html,/Import into library/);assert.match(html,/The plan has not changed your cards/);
 });
 
-test('import entry is not duplicated on the upload screen',()=>{
- const b=browser();b.run('libraryRenderOperations()');
- assert.doesNotMatch(b.element('operations-pane').innerHTML,/data-import-new/);
- b.run('libraryUI.jobs=[{id:"job",state:"ready",filename:"a.dat"}];libraryUI.selected="job";libraryRenderOperations()');
- assert.match(b.element('operations-pane').innerHTML,/data-import-new/);
+test('operations has one Add job menu on both empty and selected-job screens',()=>{
+ const b=browser();
+ for(const selected of [false,true]){
+  if(selected)b.run('libraryUI.jobs=[{id:"job",state:"ready",filename:"a.dat"}];libraryUI.selected="job"');
+  b.run('libraryRenderOperations()');
+  const html=b.element('operations-pane').innerHTML;
+  assert.equal((html.match(/id="operations-add-job"/g)||[]).length,1);
+  assert.doesNotMatch(html,/data-import-new|data-enrichment-new/);
+  assert.match(html,/data-new-job="import"/);assert.match(html,/data-new-job="fetch" disabled/);assert.match(html,/data-new-job="export" disabled/);
+ }
+ b.run('state.platforms=[{platform:"Console"}];libraryRenderOperations()');
+ assert.doesNotMatch(b.element('operations-pane').innerHTML,/data-new-job="(?:fetch|export)" disabled/);
+ b.run('catalogUI.enabled=false;libraryRenderOperations()');
+ assert.doesNotMatch(b.element('operations-pane').innerHTML,/data-new-job="(?:import|fetch|export)"/);
+ assert.match(b.element('operations-pane').innerHTML,/data-new-job="preview"/);
 });
 function configureSettings(b){
  b.run('state.view="settings";librarySettingsUI.sections=[{id:"priorities",title:"Source priorities",help:"Saved defaults",file:"config/sources.yaml",revision:"before",fields:[{id:"metadata",label:"Metadata",kind:"list",value:["launchbox","igdb"],choices:["launchbox","igdb"]}]}]');
@@ -296,4 +306,33 @@ test('platform actions fall back to the browsed platform and respect read-only m
  assert.equal(b.element('platform-action-fold').disabled,false);
  b.run('catalogUI.enabled=false;librarySyncPlatformSelection()');assert.equal(b.element('platform-action-fold').disabled,true);assert.equal(b.element('platform-action-stats').disabled,false);
  assert.equal(b.calls.filter(x=>x[0]==='POST').length,0);
+});
+
+test('Add job opens the chosen setup without starting a mutation',()=>{
+ const b=browser();b.run('libraryOpenImport=()=>{state.setup="import"};enrichmentOpen=platforms=>{state.setup="fetch";state.chosen=platforms};libraryNavigate=view=>{state.setup=view}');
+ b.run('libraryStartJob("import")');assert.equal(b.run('state.setup'),'import');
+ b.run('libraryStartJob("fetch")');assert.equal(b.run('state.setup'),'import');
+ b.run('state.platforms=[{platform:"Console"}];libraryStartJob("fetch")');assert.equal(b.run('state.setup'),'fetch');assert.equal(b.run('state.chosen.length'),0);
+ b.run('libraryStartJob("export")');assert.equal(b.run('state.setup'),'export');
+ b.run('catalogUI.enabled=false;libraryStartJob("import")');assert.equal(b.run('state.setup'),'export');
+ assert.equal(b.calls.filter(c=>c[0]==='POST').length,0);
+});
+test('operation refresh keeps an open Add job menu and keyboard focus',()=>{
+ const b=browser(),menu=b.element('operations-add-job'),item=b.element('operation-job-fetch');
+ menu.open=true;menu.contains=e=>e===item;item.id='operation-job-fetch';
+ b.context.document.activeElement=item;let focused=false;item.focus=()=>{focused=true};
+ b.run('libraryRenderOperations()');
+ assert.match(b.element('operations-pane').innerHTML,/id="operations-add-job" open/);assert.equal(focused,true);
+});
+
+test('export setup and profile preview belong to Operations in the header',()=>{
+ const b=browser();b.run('state.view="export";librarySyncNavigation()');
+ assert.equal(b.element('operations-tab').classes.has('active'),true);
+ assert.equal(b.element('browse-tab').classes.has('active'),false);
+ b.run('state.view="browse";state.exportMode=true;librarySyncNavigation()');
+ assert.equal(b.element('operations-tab').classes.has('active'),true);
+ b.run('state.exportMode=false;librarySyncNavigation()');
+ assert.equal(b.element('browse-tab').classes.has('active'),true);
+ b.run('catalogUI.enabled=false;state.platforms=[{platform:"Console"}];exportPreviewProfile=()=>{state.preview=true};libraryStartJob("preview")');
+ assert.equal(b.run('state.preview'),true);assert.equal(b.calls.filter(c=>c[0]==='POST').length,0);
 });
