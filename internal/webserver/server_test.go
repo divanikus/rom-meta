@@ -102,7 +102,7 @@ func TestFaviconIsPublicWithoutExposingCatalog(t *testing.T) {
 	}
 	for _, path := range []string{"/", "/docs"} {
 		w := request(s, path, "Bearer "+strings.Repeat("s", 32))
-		if !strings.Contains(w.Body.String(), `href="/favicon.svg?v=2"`) || !strings.Contains(w.Body.String(), `href="/favicon.ico?v=2"`) {
+		if !strings.Contains(w.Body.String(), `href="/favicon.svg?v=3"`) || !strings.Contains(w.Body.String(), `href="/favicon.ico?v=3"`) {
 			t.Fatalf("missing favicon links: %s", path)
 		}
 	}
