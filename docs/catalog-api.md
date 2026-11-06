@@ -617,9 +617,21 @@ or automatic retry loop is enabled.
 policy and reusable YAML. Native export plans retain this effective policy.
 The operation response includes only unresolved/uncertain input issues for review;
 the downloadable full plan includes every scanned input. `POST /api/export/review`
-accepts an operation ID, revision and excluded issue input IDs, then rebuilds
-native output from the retained scan without writing the destination. Restoring an
-input uses the same endpoint. Apply accepts only the resulting reviewed revision.
+accepts an operation ID, revision, excluded issue input IDs and optional
+`bindings`: each has `id`, catalog-relative `game`, optional `release` and
+`game_revision`. GET `/api/export/match-options` takes the operation `id`,
+`revision` and `input`; `q` searches same-platform game folders in pages of
+40 with `offset`. Supplying `game` instead returns its title, release keys and
+SHA256 revision for selection. Both routes require editable mode.
+
+Review rebuilds native output from the retained scan without destination writes
+or ROM payload reads. Manual choices have `matched_by: manual` and never create
+fingerprints or persistent bindings. Selected card revisions, platform scope and
+ROM guards are checked; unsupported inputs cannot be overridden. Omit a binding
+to restore the original automatic result. A binding and exclusion cannot target
+the same input. Reviewed choices remain in Operations and the downloadable plan
+after browser reconnection, for this operation only. Apply accepts only the
+resulting reviewed revision and rechecks the selected documents.
 See interactive [OpenAPI documentation](#openapi-and-interactive-documentation)
 for request schemas and [browser workflows](catalog-editing.md) for the UI.
 

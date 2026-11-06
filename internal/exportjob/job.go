@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"rommeta/internal/exportclient"
@@ -138,8 +139,24 @@ func Build(options exporter.Options, api string, systems []string, all bool, des
 	return &Job{Native: plan, Plans: plans, Skipped: skipped, rebuild: rebuild}, nil
 }
 
-// Excluding an input only rebuilds native output from the retained scan.
+type ManualBinding struct {
+	ID string `json:"id"`
+	exporter.ManualMatch
+}
+
+// Review rebuilds native output from the retained scan without reading ROM payloads.
 func (j *Job) WithExcluded(excluded map[string]bool) (*Job, error) {
+	return j.WithReview(excluded, nil)
+}
+func (j *Job) WithReview(excluded map[string]bool, bindings []ManualBinding) (*Job, error) {
+	choices := map[string]exporter.ManualMatch{}
+	for _, b := range bindings {
+		if _, exists := choices[b.ID]; exists || excluded[b.ID] {
+			return nil, fmt.Errorf("duplicate or excluded manual selection")
+		}
+		choices[b.ID] = b.ManualMatch
+	}
+	used := 0
 	if j.rebuild == nil {
 		return nil, fmt.Errorf("this plan cannot be revised; prepare it again")
 	}
@@ -150,10 +167,25 @@ func (j *Job) WithExcluded(excluded map[string]bool) (*Job, error) {
 		copy.LaunchBox = nil
 		for _, r := range p.Records {
 			if !excluded[InputKey(p.Platform, r.ROM)] {
+				if choice, ok := choices[InputKey(p.Platform, r.ROM)]; ok {
+					var err error
+					r, err = exporter.BindManual(p, r, choice)
+					if err != nil {
+						return nil, err
+					}
+					used++
+				}
+				r.Fields = maps.Clone(r.Fields)
 				copy.Records = append(copy.Records, r)
 			}
 		}
+		if err := exporter.FinalizeExport(&copy); err != nil {
+			return nil, err
+		}
 		plans = append(plans, &copy)
+	}
+	if used != len(choices) {
+		return nil, fmt.Errorf("manual selection refers to an unknown input")
 	}
 	native, err := j.rebuild(plans)
 	if err != nil {

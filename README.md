@@ -127,7 +127,8 @@ export mode shows selected media and a native XML preview. Variants use readable
 translation labels.
 Add `--edit` for DAT import, enrichment, card/source editing, reviewed folds and
 native export on the serve host. **Export** saves named destinations, selects ROMs
-and a profile, then prepares a plan before applying. **Operations** keeps progress
+and a profile, then prepares a plan before applying. Uncertain ROMs can be assigned
+to a library game and optional release during review. **Operations** keeps progress
 available after browser closure. See [library management](docs/catalog-editing.md).
 
 ## HTTP API

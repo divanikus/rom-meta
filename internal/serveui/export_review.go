@@ -3,7 +3,9 @@ package serveui
 import (
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"rommeta/internal/catalogedit"
+	"rommeta/internal/exporter"
 	"rommeta/internal/exportjob"
 	"rommeta/internal/taskprogress"
 	"strings"
@@ -11,6 +13,7 @@ import (
 )
 
 type exportIssue struct {
+	CanBind    bool     `json:"can_bind"`
 	ID         string   `json:"id"`
 	Platform   string   `json:"platform"`
 	ROM        string   `json:"rom"`
@@ -35,20 +38,21 @@ func exportInputs(job *exportjob.Job, onlyIssues bool, excluded []string) []expo
 	}
 	for _, p := range job.Plans {
 		for _, r := range p.Records {
-			if onlyIssues && r.Status == "matched" && r.MatchedBy != "game-name" && len(r.Candidates) < 2 {
+			if onlyIssues && r.Status == "matched" && r.MatchedBy != "game-name" && r.MatchedBy != "manual" && len(r.Candidates) < 2 {
 				continue
 			}
 			id := exportjob.InputKey(p.Platform, r.ROM)
-			result = append(result, exportIssue{ID: id, Platform: p.Platform, ROM: r.ROM, Status: r.Status, Reason: r.Reason, Game: r.Game, Release: r.Release, MatchedBy: r.MatchedBy, Candidates: r.Candidates, Warnings: r.Warnings, Excluded: omit[id]})
+			result = append(result, exportIssue{CanBind: exporter.CanManuallyMatch(r), ID: id, Platform: p.Platform, ROM: r.ROM, Status: r.Status, Reason: r.Reason, Game: r.Game, Release: r.Release, MatchedBy: r.MatchedBy, Candidates: r.Candidates, Warnings: r.Warnings, Excluded: omit[id]})
 		}
 	}
 	return result
 }
 
 type exportReviewRequest struct {
-	ID       string   `json:"id"`
-	Revision int      `json:"revision"`
-	Excluded []string `json:"excluded"`
+	Bindings []exportjob.ManualBinding `json:"bindings,omitempty"`
+	ID       string                    `json:"id"`
+	Revision int                       `json:"revision"`
+	Excluded []string                  `json:"excluded"`
 }
 
 func (s *server) exportReview(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +63,7 @@ func (s *server) exportReview(w http.ResponseWriter, r *http.Request) {
 	s.operationsMu.Lock()
 	defer s.operationsMu.Unlock()
 	op := s.operations[input.ID]
-	if op == nil || op.Kind != "export" || op.exportReviewJob == nil || op.exportStarted || (op.State != "ready" && op.State != "needs_review") {
+	if !reviewableExport(op) {
 		writeError(w, 409, fmt.Errorf("reviewable export plan is unavailable"))
 		return
 	}
@@ -79,6 +83,14 @@ func (s *server) exportReview(w http.ResponseWriter, r *http.Request) {
 		}
 		excluded[id] = true
 	}
+	seen := map[string]bool{}
+	for _, b := range input.Bindings {
+		if !allowed[b.ID] || excluded[b.ID] || seen[b.ID] {
+			writeError(w, 400, fmt.Errorf("select each unresolved input once, either a card or exclusion"))
+			return
+		}
+		seen[b.ID] = true
+	}
 	if !s.editMu.TryLock() {
 		writeError(w, 409, fmt.Errorf("another library operation is running; update this plan after it finishes"))
 		return
@@ -96,32 +108,65 @@ func (s *server) exportReview(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		err = checkExportDocuments(op.exportDocuments)
 	}
+	if err == nil {
+		for _, b := range input.Bindings {
+			p, record, ok := exportReviewInput(op.exportReviewJob, b.ID)
+			if !ok {
+				err = fmt.Errorf("unknown input")
+				break
+			}
+			if err = exporter.ValidateManualMatch(p, record, b.ManualMatch); err != nil {
+				break
+			}
+		}
+	}
 	if err != nil {
 		unlock()
 		s.editMu.Unlock()
 		writeError(w, 409, err)
 		return
 	}
+	previousState := op.State
 	op.State = "planning"
 	op.Updated = time.Now().UTC()
 	op.Export.Progress = taskprogress.Snapshot{Stage: "reviewing", Item: "Rebuilding selected inputs"}
 	op.Error = ""
 	op.Revision++
-	op.Export.Excluded = append([]string(nil), input.Excluded...)
 	snapshot := cloneOperation(op)
 	go func() {
 		defer s.editMu.Unlock()
 		defer unlock()
-		job, err := snapshot.exportReviewJob.WithExcluded(excluded)
+		job, err := snapshot.exportReviewJob.WithReview(excluded, input.Bindings)
+		var documents map[string]string
+		if err == nil {
+			documents, err = exportDocuments(job)
+		}
+		if err == nil {
+			// Compare the selected document with the bytes actually used by the projection.
+			for _, b := range input.Bindings {
+				p, _, _ := exportReviewInput(snapshot.exportReviewJob, b.ID)
+				if documents[filepath.Join(p.DataRoot, filepath.FromSlash(b.Game), "game.yaml")] != b.GameRevision {
+					err = fmt.Errorf("selected card changed; choose it again")
+					break
+				}
+			}
+		}
 		s.changeOperation(snapshot.ID, func(current *libraryOperation) {
 			if err != nil {
-				current.State = "failed"
+				current.State = previousState
 				current.Error = strings.ReplaceAll(err.Error(), s.root, "library")
 				return
 			}
 			current.exportJob = job
+			current.Export.Excluded = append([]string(nil), input.Excluded...)
+			current.Export.Bindings = append([]exportjob.ManualBinding(nil), input.Bindings...)
+			// Retain original document guards as well: restoring must remain safe.
+			for path, digest := range snapshot.exportDocuments {
+				documents[path] = digest
+			}
+			current.exportDocuments = documents
 			current.Export.Totals = summarizeExport(job)
-			current.Export.Totals.Issues = exportInputs(current.exportReviewJob, true, current.Export.Excluded)
+			current.Export.Totals.Issues = reviewedExportInputs(current.exportReviewJob, job, true, current.Export.Excluded)
 			current.State = "ready"
 			if len(job.Native.Conflicts) > 0 {
 				current.State = "needs_review"

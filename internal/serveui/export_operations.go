@@ -38,11 +38,12 @@ type exportTotals struct {
 	Skipped     []exporter.SkippedSystem `json:"skipped"`
 }
 type exportState struct {
-	Excluded    []string              `json:"excluded,omitempty"`
-	Destination exportDestination     `json:"destination"`
-	Totals      *exportTotals         `json:"totals,omitempty"`
-	Progress    taskprogress.Snapshot `json:"progress"`
-	Written     int                   `json:"written"`
+	Bindings    []exportjob.ManualBinding `json:"bindings,omitempty"`
+	Excluded    []string                  `json:"excluded,omitempty"`
+	Destination exportDestination         `json:"destination"`
+	Totals      *exportTotals             `json:"totals,omitempty"`
+	Progress    taskprogress.Snapshot     `json:"progress"`
+	Written     int                       `json:"written"`
 }
 
 func (s *server) exportStamp() (string, error) {
@@ -354,5 +355,5 @@ func (s *server) exportPlanDetails(w http.ResponseWriter, r *http.Request) {
 	sort.Strings(files)
 	w.Header().Set("Content-Disposition", "attachment; filename=rommeta-export-plan.json")
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, map[string]any{"destination": op.Export.Destination, "totals": op.Export.Totals, "games": n.Changes, "inputs": exportInputs(op.exportReviewJob, false, op.Export.Excluded), "changed_files": files, "conflicts": n.Conflicts, "warnings": n.Warnings})
+	writeJSON(w, map[string]any{"destination": op.Export.Destination, "totals": op.Export.Totals, "games": n.Changes, "bindings": op.Export.Bindings, "inputs": reviewedExportInputs(op.exportReviewJob, op.exportJob, false, op.Export.Excluded), "changed_files": files, "conflicts": n.Conflicts, "warnings": n.Warnings})
 }

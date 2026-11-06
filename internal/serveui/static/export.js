@@ -150,29 +150,104 @@ function nativeExportBindOperation(job){
 
 function exportIssueDraft(job){
  let d=nativeExportUI.reviewDrafts.get(job.id);
- if(!d||d.revision!==job.revision){d={revision:job.revision,excluded:new Set(job.export.excluded||[]),query:"",page:0};nativeExportUI.reviewDrafts.set(job.id,d);}
+ const saved=JSON.stringify([job.export.excluded||[],job.export.bindings||[]]);
+ if(!d||d.revision!==job.revision||d.saved!==saved){d={saved,revision:job.revision,excluded:new Set(job.export.excluded||[]),bindings:new Map((job.export.bindings||[]).map(x=>[x.id,{...x}])),query:"",page:0};nativeExportUI.reviewDrafts.set(job.id,d);}
  return d;
 }
-function exportReviewDirty(job){const d=exportIssueDraft(job),saved=job.export.excluded||[];return d.excluded.size!==saved.length||saved.some(id=>!d.excluded.has(id));}
+function exportBindingKey(x){return JSON.stringify([x.game,x.release||"",x.game_revision]);}
+function exportReviewDirty(job){
+ const d=exportIssueDraft(job),saved=job.export.excluded||[],bindings=job.export.bindings||[];
+ return d.excluded.size!==saved.length||saved.some(id=>!d.excluded.has(id))||d.bindings.size!==bindings.length||bindings.some(x=>!d.bindings.has(x.id)||exportBindingKey(x)!==exportBindingKey(d.bindings.get(x.id)));
+}
+function exportReviewHint(job){const d=exportIssueDraft(job);return exportReviewDirty(job)?"Update the plan to review these choices.":d.bindings.size+" manually assigned · "+d.excluded.size+" excluded from this export.";}
+function exportIssueRow(x,d,review){
+ const binding=d.bindings.get(x.id),game=binding?.game||x.game,release=binding?binding.release:x.release;
+ return '<div class="export-issue"><div class="export-issue-heading"><strong>'+escapeHTML(x.rom)+'</strong><span class="secondary">'+escapeHTML(binding?"Manual choice":x.matched_by==="manual"?"Automatic match will be restored":x.status)+'</span></div>'+
+ '<small>'+escapeHTML(x.platform)+' · '+escapeHTML(binding?"Selected by you; not verified by fingerprint":x.reason||x.warnings?.join("; ")||"Review match evidence")+'</small>'+
+ (game?'<small>'+(binding?'Selected: ':'Matched: ')+escapeHTML(game)+(release?' / '+escapeHTML(release):binding?' · game only':"")+'</small>':"")+
+ (!binding&&x.candidates?.length?'<small>Candidates: '+escapeHTML(x.candidates.join("; "))+'</small>':"")+
+ '<div class="export-issue-actions">'+(review&&x.can_bind?'<button type="button" class="tab-button" data-export-match="'+escapeAttr(x.id)+'">'+(binding?'Change game':'Choose game')+'</button>':"")+
+ (review&&binding?'<button type="button" class="tab-button" data-export-match-reset="'+escapeAttr(x.id)+'">Use automatic match</button>':"")+
+ '<label><input type="checkbox" data-export-exclude="'+escapeAttr(x.id)+'" '+(d.excluded.has(x.id)?'checked ':'')+(!review?'disabled ':'')+'aria-label="'+escapeAttr("Exclude "+x.rom)+'">Exclude from export</label></div></div>';
+}
 function exportIssues(job){
  const issues=job.export.totals?.issues||[],d=exportIssueDraft(job),review=["ready","needs_review"].includes(job.state),q=d.query.toLowerCase();
- const filtered=issues.filter(x=>[x.rom,x.game,x.reason,x.platform,...(x.candidates||[])].join(" ").toLowerCase().includes(q)),pages=Math.max(1,Math.ceil(filtered.length/40));d.page=Math.min(d.page,pages-1);
+ const filtered=issues.filter(x=>[x.rom,d.bindings.get(x.id)?.game,x.game,x.reason,x.platform,...(x.candidates||[])].join(" ").toLowerCase().includes(q)),pages=Math.max(1,Math.ceil(filtered.length/40));d.page=Math.min(d.page,pages-1);
  return '<section class="export-review"><h3>Inputs needing attention ('+issues.length+')</h3>'+
- (!issues.length?'<p>No unresolved or ambiguous ROMs. Recognized inputs are included automatically.</p>':'<p>Review filenames and match evidence. You can exclude inputs from this export; ROMs and library cards stay unchanged.</p><div class="export-issue-tools"><input id="export-issue-search" aria-label="Filter problem inputs" placeholder="Filter filenames or reasons" value="'+escapeAttr(d.query)+'">'+(review?'<button type="button" class="tab-button" data-export-exclude-all>Exclude all unresolved</button><button type="button" class="tab-button" data-export-restore-all>Restore all</button>':'')+'</div><div class="export-issues">'+filtered.slice(d.page*40,(d.page+1)*40).map(x=>'<div class="export-issue"><label><input type="checkbox" data-export-exclude="'+escapeAttr(x.id)+'" '+(d.excluded.has(x.id)?'checked ':'')+(!review?'disabled ':'')+'aria-label="'+escapeAttr("Exclude "+x.rom)+'"><span>Exclude <strong>'+escapeHTML(x.rom)+'</strong> · '+escapeHTML(x.status)+'</span></label><small>'+escapeHTML(x.platform)+' · '+escapeHTML(x.reason||x.warnings?.join("; ")||"Review match evidence")+'</small>'+(x.game?'<small>Matched: '+escapeHTML(x.game)+(x.release?' / '+escapeHTML(x.release):"")+(x.matched_by?' · '+escapeHTML(x.matched_by):"")+'</small>':"")+(x.candidates?.length?'<small>Candidates: '+escapeHTML(x.candidates.join("; "))+'</small>':"")+'</div>').join("")+'</div><div class="operation-actions">'+(pages>1?'<button class="tab-button" data-export-issue-page="-1" '+(!d.page?'disabled':'')+'>Previous</button><span>'+(d.page+1)+' / '+pages+' · '+filtered.length+' inputs</span><button class="tab-button" data-export-issue-page="1" '+(d.page===pages-1?'disabled':'')+'>Next</button>':"")+(review?'<button class="tab-button" data-export-review-update '+(!exportReviewDirty(job)?'disabled':'')+'>Update plan</button>':'')+'<span id="export-review-hint" class="secondary">'+(exportReviewDirty(job)?'Update the plan to review these exclusions.':d.excluded.size+' excluded from this export.')+'</span></div>')+'</section>';
+ (!issues.length?'<p>No unresolved or ambiguous ROMs. Recognized inputs are included automatically.</p>':'<p>Choose a library card for an uncertain ROM, or exclude it. These choices apply to this export only.</p><div class="export-issue-tools"><input id="export-issue-search" aria-label="Filter problem inputs" placeholder="Filter filenames or reasons" value="'+escapeAttr(d.query)+'">'+(review?'<button type="button" class="tab-button" data-export-exclude-all>Exclude all unresolved</button><button type="button" class="tab-button" data-export-restore-all>Reset all choices</button>':'')+'</div><div class="export-issues">'+filtered.slice(d.page*40,(d.page+1)*40).map(x=>exportIssueRow(x,d,review)).join("")+'</div><div class="operation-actions">'+(pages>1?'<button class="tab-button" data-export-issue-page="-1" '+(!d.page?'disabled':'')+'>Previous</button><span>'+(d.page+1)+' / '+pages+' · '+filtered.length+' inputs</span><button class="tab-button" data-export-issue-page="1" '+(d.page===pages-1?'disabled':'')+'>Next</button>':"")+(review?'<button class="tab-button" data-export-review-update '+(!exportReviewDirty(job)?'disabled':'')+'>Update plan</button>':'')+'<span id="export-review-hint" class="secondary">'+exportReviewHint(job)+'</span></div>')+'</section>';
 }
 function exportBindReview(job){
  const d=exportIssueDraft(job);
- const update=()=>{document.querySelectorAll("[data-native-export-apply]").forEach(b=>b.disabled=exportReviewDirty(job));document.querySelectorAll("[data-export-review-update]").forEach(b=>b.disabled=!exportReviewDirty(job));const hint=$("export-review-hint");if(hint)hint.textContent=exportReviewDirty(job)?"Update the plan to review these exclusions.":d.excluded.size+" excluded from this export.";};
- document.querySelectorAll("[data-export-exclude]").forEach(c=>c.addEventListener("change",()=>{c.checked?d.excluded.add(c.dataset.exportExclude):d.excluded.delete(c.dataset.exportExclude);update();}));
- document.querySelectorAll("[data-export-exclude-all]").forEach(b=>b.addEventListener("click",()=>{for(const x of job.export.totals.issues||[])if(x.status!=="matched")d.excluded.add(x.id);libraryRenderOperations();}));
- document.querySelectorAll("[data-export-restore-all]").forEach(b=>b.addEventListener("click",()=>{d.excluded.clear();libraryRenderOperations();}));
+ const update=()=>{document.querySelectorAll("[data-native-export-apply]").forEach(b=>b.disabled=exportReviewDirty(job));document.querySelectorAll("[data-export-review-update]").forEach(b=>b.disabled=!exportReviewDirty(job));const hint=$("export-review-hint");if(hint)hint.textContent=exportReviewHint(job);};
+ document.querySelectorAll("[data-export-exclude]").forEach(c=>c.addEventListener("change",()=>{if(c.checked){d.excluded.add(c.dataset.exportExclude);d.bindings.delete(c.dataset.exportExclude);}else d.excluded.delete(c.dataset.exportExclude);libraryRenderOperations();}));
+ document.querySelectorAll("[data-export-match]").forEach(b=>b.addEventListener("click",()=>exportOpenMatch(job,b.dataset.exportMatch)));
+ document.querySelectorAll("[data-export-match-reset]").forEach(b=>b.addEventListener("click",()=>{d.bindings.delete(b.dataset.exportMatchReset);libraryRenderOperations();}));
+ document.querySelectorAll("[data-export-exclude-all]").forEach(b=>b.addEventListener("click",()=>{for(const x of job.export.totals.issues||[])if(x.status!=="matched"&&!d.bindings.has(x.id))d.excluded.add(x.id);libraryRenderOperations();}));
+ document.querySelectorAll("[data-export-restore-all]").forEach(b=>b.addEventListener("click",()=>{d.excluded.clear();d.bindings.clear();libraryRenderOperations();}));
  document.querySelectorAll("[data-export-issue-page]").forEach(b=>b.addEventListener("click",()=>{d.page+=Number(b.dataset.exportIssuePage);libraryRenderOperations();}));
  $("export-issue-search")?.addEventListener("input",event=>{d.query=event.target.value;d.page=0;const pos=event.target.selectionStart;event.target.blur();libraryRenderOperations();$("export-issue-search")?.focus();$("export-issue-search")?.setSelectionRange(pos,pos);});
- document.querySelectorAll("[data-export-review-update]").forEach(b=>b.addEventListener("click",async()=>{b.disabled=true;await libraryImportAction("/api/export/review",{id:job.id,revision:job.revision,excluded:[...d.excluded]});}));
+ document.querySelectorAll("[data-export-review-update]").forEach(b=>b.addEventListener("click",async()=>{b.disabled=true;await libraryImportAction("/api/export/review",{id:job.id,revision:job.revision,excluded:[...d.excluded],bindings:[...d.bindings.values()]});}));
  update();
 }
-
-
+function exportOpenMatch(job,id){
+ const issue=job.export.totals.issues.find(x=>x.id===id);
+ if(!issue?.can_bind)return;
+ nativeExportUI.match={job,id,rom:issue.rom,query:"",offset:0,games:[],total:0,target:null,release:"",returnFocus:document.activeElement};
+ exportLoadMatch();
+}
+function exportCloseMatch(){
+ const previous=nativeExportUI.match?.returnFocus;
+ nativeExportUI.match=null;$("export-match-dialog").classList.add("hidden");$("app").inert=false;
+ if(previous?.isConnected)previous.focus();
+}
+async function exportLoadMatch(game=""){
+ const m=nativeExportUI.match;if(!m)return;
+ const request=(m.request||0)+1;m.request=request;m.loading=true;m.error="";exportRenderMatch();
+ try{
+  const data=await fetchJSON("/api/export/match-options?"+new URLSearchParams({id:m.job.id,revision:m.job.revision,input:m.id,q:m.query,offset:m.offset,...(game?{game}:{})}));
+  if(nativeExportUI.match!==m||m.request!==request)return;
+  if(game){m.target=data.target;m.release="";}else{m.games=data.games;m.total=data.total;m.target=null;}
+ }catch(error){if(nativeExportUI.match!==m||m.request!==request)return;m.error=error.message;}
+ finally{if(nativeExportUI.match===m&&m.request===request){m.loading=false;exportRenderMatch();}}
+}
+function exportUseMatch(){
+ const m=nativeExportUI.match;if(!m?.target||m.loading||m.error)return;
+ const current=libraryUI.jobs.find(x=>x.id===m.job.id);
+ if(!current||current.revision!==m.job.revision||!["ready","needs_review"].includes(current.state)){m.error="Plan changed. Close this selection and reopen it.";exportRenderMatch();return;}
+ const d=exportIssueDraft(current);
+ d.bindings.set(m.id,{id:m.id,game:m.target.game,release:m.release,game_revision:m.target.game_revision});d.excluded.delete(m.id);
+ exportCloseMatch();libraryRenderOperations();
+}
+function exportRenderMatch(){
+ const m=nativeExportUI.match;if(!m)return;
+ const dialog=$("export-match-dialog");dialog.classList.remove("hidden");$("app").inert=true;
+ dialog.innerHTML='<div class="export-folder-box export-match-box"><div class="management-heading"><h2>Choose a library game</h2><button type="button" class="tab-button" id="export-match-close">Close</button></div><p class="export-match-rom">'+escapeHTML(m.rom)+'</p><p class="secondary">Select the card whose metadata and artwork should be used for this ROM.</p>'+
+ (m.error?'<p class="operation-error" role="alert">'+escapeHTML(m.error)+'</p>':"")+
+ '<form id="export-match-search" class="export-path-control"><input id="export-match-query" aria-label="Search game folders" placeholder="Search games in this platform" value="'+escapeAttr(m.query)+'"><button class="tab-button">Search</button></form>'+
+ (m.loading?'<p role="status">Loading games…</p>':m.target?'<section class="export-match-selection"><h3>'+escapeHTML(m.target.title)+'</h3><small>'+escapeHTML(m.target.game)+'</small><label>Release<select id="export-match-release"><option value="">Game only — use default metadata</option>'+m.target.releases.map(x=>'<option value="'+escapeAttr(x)+'" '+(x===m.release?'selected':'')+'>'+escapeHTML(x)+'</option>').join("")+'</select></label><p class="secondary">Choose a release when you know the edition. This records your choice, not a fingerprint match.</p><div class="operation-actions"><button class="tab-button" id="export-match-back">Back to games</button><button class="catalog-primary" id="export-match-use">Use this game</button></div></section>':
+ '<div class="export-match-results">'+(m.games.length?m.games.map(x=>'<button type="button" class="export-match-result" data-export-match-game="'+escapeAttr(x.game)+'"><strong>'+escapeHTML(x.name)+'</strong><small>'+escapeHTML(x.platform)+'</small><span aria-hidden="true">→</span></button>').join(""):'<p>No games found. Try another name.</p>')+'</div><div class="operation-actions"><button class="tab-button" id="export-match-prev" '+(!m.offset?'disabled':'')+'>Previous</button><span>'+m.total+' games</span><button class="tab-button" id="export-match-next" '+(m.offset+40>=m.total?'disabled':'')+'>Next</button></div>')+
+ '<p class="secondary">Use Update plan after choosing. Nothing is written until you apply the reviewed export.</p></div>';
+ $("export-match-close").addEventListener("click",exportCloseMatch);
+ $("export-match-search").addEventListener("submit",e=>{e.preventDefault();m.query=$("export-match-query").value;m.offset=0;exportLoadMatch();});
+ dialog.querySelectorAll("[data-export-match-game]").forEach(b=>b.addEventListener("click",()=>exportLoadMatch(b.dataset.exportMatchGame)));
+ if(!m.loading&&m.target){
+  $("export-match-release").addEventListener("change",e=>m.release=e.target.value);
+  $("export-match-back").addEventListener("click",()=>{m.target=null;exportRenderMatch();});
+  $("export-match-use").addEventListener("click",exportUseMatch);
+ }else if(!m.loading){
+  $("export-match-prev").addEventListener("click",()=>{m.offset=Math.max(0,m.offset-40);exportLoadMatch();});
+  $("export-match-next").addEventListener("click",()=>{m.offset+=40;exportLoadMatch();});
+ }
+ dialog.onkeydown=e=>{
+  if(e.key==="Escape"){e.preventDefault();exportCloseMatch();}
+  if(e.key==="Tab"){
+   const controls=[...dialog.querySelectorAll("button:not(:disabled),input,select")],first=controls[0],last=controls.at(-1);
+   if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}
+   else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}
+  }
+ };
+ if(!m.loading)(m.target?$("export-match-release"):$("export-match-query")).focus();
+}
 
 const exportArtworkVariants={original:["original","unknown","reconstructed","fanart"],reconstructed:["reconstructed","original","unknown","fanart"]};
 const exportArtworkOrder=["region","variant","source","format"];

@@ -148,6 +148,7 @@ func HandlerWithEditing(dataRoot string, allowEdit bool) (http.Handler, error) {
 	mux.HandleFunc("/api/export/prepare", server.exportPlan)
 	mux.HandleFunc("/api/export/apply", server.exportApply)
 	mux.HandleFunc("/api/export/review", server.exportReview)
+	mux.HandleFunc("/api/export/match-options", server.exportMatchOptions)
 	mux.HandleFunc("/api/export/profile", server.exportDefaultProfile)
 	mux.HandleFunc("/api/export/plan", server.exportPlanDetails)
 	mux.HandleFunc("/api/operations", server.operationsList)

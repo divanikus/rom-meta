@@ -162,9 +162,15 @@ LaunchBox. The CLI remains available through the same exporter.
 5. **Prepare export plan** starts a background scan. Operations shows its progress,
    matching counts, native file count, game actions, conflicts and skipped systems.
    **Inputs needing attention** lists unresolved, ambiguous and game-only matches
-   with filenames, reasons and candidate evidence. Search/page these inputs and
-   optionally exclude them from this export, then **Update plan**. This rebuilds
-   native output from the retained scan without writing or re-scanning ROMs.
+   with filenames, reasons and candidate evidence. **Choose game** searches cards
+   in the input's platform; select a release when known, or **Game only** to use
+   default metadata. **Use this game** stages the choice. You can change it,
+   restore the automatic match, or exclude the input. **Update plan** recalculates
+   metadata, artwork and native files from the retained scan without writing or
+   re-scanning ROMs. Manual choices are labelled explicitly, not hash-verified.
+   Unsupported inputs still require correcting their reader/file problem.
+   Choices stay with this operation after browser closure; they do not modify
+   cards/fingerprints or carry over into a new export or a server restart.
    Recognized inputs are included automatically; **Download full plan** includes
    all native changes and filenames. Preparing writes no destination files.
 6. Close the target frontend and choose **Apply export** after review. The server

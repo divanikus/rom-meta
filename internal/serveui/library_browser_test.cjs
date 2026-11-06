@@ -575,3 +575,41 @@ test('retry setup errors remain attached to the stage after progress polling',as
  await b.run('libraryPollOperations()');
  assert.match(b.run('enrichmentRetryAction(parent,parent.enrichment.jobs[0],0)'),/Credentials are missing/);
 });
+
+test('manual export choice clears exclusion, stays a draft and is restored from Operations',()=>{
+ const b=browser();b.run('libraryRenderOperations=()=>{};const job={id:"job",revision:3,state:"ready",kind:"export",export:{excluded:["input"],totals:{issues:[{id:"input",rom:"Unclear.z64",status:"unmatched",can_bind:true}]}}};libraryUI.jobs=[job];nativeExportUI.match={job,id:"input",target:{game:"platforms/n64/Chosen",game_revision:"digest"},release:"Chosen (USA)"};exportUseMatch()');
+ assert.equal(b.run('exportIssueDraft(job).excluded.size'),0);
+ assert.equal(b.run('exportReviewDirty(job)'),true);
+ assert.equal(b.calls.length,0);
+ const html=b.run('exportIssues(job)');
+ assert.match(html,/Manual choice/);assert.match(html,/Change game/);assert.match(html,/Use automatic match/);assert.match(html,/Update the plan/);
+ b.run('const choices=[...exportIssueDraft(job).bindings.values()];job.revision++;job.export.excluded=[];job.export.bindings=choices;nativeExportUI.reviewDrafts.clear()');
+ assert.equal(b.run('exportReviewDirty(job)'),false);
+ assert.equal(b.run('exportIssueDraft(job).bindings.get("input").release'),'Chosen (USA)');
+ b.run('exportIssueDraft(job).bindings.clear()');
+ assert.equal(b.run('exportReviewDirty(job)'),true);
+});
+test('manual picker escapes card data and shows release choices, never offers unsupported inputs',()=>{
+ const b=browser();
+ b.run('nativeExportUI.match={job:{},id:"input",rom:"<bad>",query:"",target:{title:"<script>",game:"platforms/x/<game>",releases:["<edition>"]},release:""};exportRenderMatch()');
+ const html=b.element('export-match-dialog').innerHTML;
+ assert.match(html,/&lt;script>/);assert.match(html,/&lt;edition>/);assert.doesNotMatch(html,/<script>/);assert.match(html,/Game only/);assert.match(html,/not a fingerprint match/);
+ const rows=b.run('exportIssues({id:"x",revision:1,state:"ready",export:{totals:{issues:[{id:"unsupported",rom:"bad.zip",status:"unsupported",can_bind:false}]}}})');
+ assert.doesNotMatch(rows,/data-export-match=/);
+});
+test('late manual search cannot replace a newer selection or reopen a closed picker',async()=>{
+ const b=browser();b.run('const replies=[];fetchJSON=()=>new Promise(resolve=>replies.push(resolve));nativeExportUI.match={job:{id:"j",revision:1},id:"i",query:"",offset:0,games:[],total:0};const first=exportLoadMatch();const second=exportLoadMatch("platforms/x/Chosen")');
+ b.run('replies[1]({target:{title:"Chosen",game:"platforms/x/Chosen",releases:[],game_revision:"hash"}})');await b.run('second');
+ b.run('replies[0]({games:[{name:"Old",game:"old"}],total:1})');await b.run('first');
+ assert.equal(b.run('nativeExportUI.match.target.title'),'Chosen');
+ b.run('const pending=exportLoadMatch();exportCloseMatch();replies[2]({games:[],total:0})');await b.run('pending');
+ assert.equal(b.run('nativeExportUI.match'),null);assert.equal(b.element('export-match-dialog').classes.has('hidden'),true);
+});
+test('changed export revision cannot accept a stale manual selection',()=>{
+ const b=browser();b.run('const old={id:"j",revision:1,state:"ready",export:{}};libraryUI.jobs=[{...old,revision:2}];nativeExportUI.match={job:old,id:"i",rom:"file",target:{title:"Chosen",releases:[],game:"platforms/x/Chosen",game_revision:"hash"},query:"",release:""};exportUseMatch()');
+ assert.match(b.run('nativeExportUI.match.error'),/Plan changed/);assert.equal(b.run('nativeExportUI.reviewDrafts.size'),0);assert.equal(b.calls.length,0);
+});
+test('review polling picks up committed bindings after planning at the same revision',()=>{
+ const b=browser();b.run('const job={id:"j",revision:2,state:"planning",export:{totals:{issues:[]}}};exportIssues(job);job.state="ready";job.export.bindings=[{id:"input",game:"platforms/n64/Chosen",game_revision:"digest"}];exportIssues(job)');
+ assert.equal(b.run('exportIssueDraft(job).bindings.size'),1);assert.equal(b.run('exportReviewDirty(job)'),false);
+});
