@@ -271,7 +271,7 @@ test('enrichment platform changes fetch all choices and preserve explicit source
 test('export review shows evidence, pages problem inputs and keeps exclusions across renders',()=>{
  const b=browser();b.context.op={id:"review",revision:1,kind:"export",state:"ready",export:{excluded:[],totals:{issues:Array.from({length:81},(_,i)=>({id:"id"+i,rom:"Problem "+i+".bin",platform:"Console",status:"ambiguous",reason:"Multiple releases",candidates:["One","Two"]}))}}};
  const html=b.run('exportIssues(op)');assert.match(html,/Candidates: One; Two/);assert.match(html,/1 \/ 3/);assert.doesNotMatch(html,/Problem 40/);
- b.run('exportIssueDraft(op).excluded.add("id0")');assert.equal(b.run('exportReviewDirty(op)'),true);assert.match(b.run('exportIssues(op)'),/data-export-exclude="id0" checked/);
+ b.run('exportIssueDraft(op).excluded.add("id0")');assert.equal(b.run('exportReviewDirty(op)'),true);assert.doesNotMatch(b.run('exportIssues(op)').match(/data-export-include="id0"([^>]*)/)[1],/checked/);
  b.run('op.revision=2;op.export.excluded=["id0"]');assert.equal(b.run('exportReviewDirty(op)'),false);
 });
 test('inline defaults load library policy without using compact browser settings',async()=>{
@@ -576,13 +576,13 @@ test('retry setup errors remain attached to the stage after progress polling',as
  assert.match(b.run('enrichmentRetryAction(parent,parent.enrichment.jobs[0],0)'),/Credentials are missing/);
 });
 
-test('manual export choice clears exclusion, stays a draft and is restored from Operations',()=>{
- const b=browser();b.run('libraryRenderOperations=()=>{};const job={id:"job",revision:3,state:"ready",kind:"export",export:{excluded:["input"],totals:{issues:[{id:"input",rom:"Unclear.z64",status:"unmatched",can_bind:true}]}}};libraryUI.jobs=[job];nativeExportUI.match={job,id:"input",target:{game:"platforms/n64/Chosen",game_revision:"digest"},release:"Chosen (USA)"};exportUseMatch()');
+test('included manual export choice stays a draft and is restored from Operations',()=>{
+ const b=browser();b.run('libraryRenderOperations=()=>{};const job={id:"job",revision:3,state:"ready",kind:"export",export:{excluded:[],totals:{issues:[{id:"input",rom:"Unclear.z64",status:"unmatched",can_bind:true}]}}};libraryUI.jobs=[job];nativeExportUI.match={job,id:"input",target:{game:"platforms/n64/Chosen",game_revision:"digest"},release:"Chosen (USA)"};exportUseMatch()');
  assert.equal(b.run('exportIssueDraft(job).excluded.size'),0);
  assert.equal(b.run('exportReviewDirty(job)'),true);
  assert.equal(b.calls.length,0);
  const html=b.run('exportIssues(job)');
- assert.match(html,/Manual choice/);assert.match(html,/Change game/);assert.match(html,/Use automatic match/);assert.match(html,/Update the plan/);
+ assert.match(html,/Manual choice/);assert.match(html,/Change game/);assert.match(html,/Reset match/);assert.match(html,/Update the plan/);
  b.run('const choices=[...exportIssueDraft(job).bindings.values()];job.revision++;job.export.excluded=[];job.export.bindings=choices;nativeExportUI.reviewDrafts.clear()');
  assert.equal(b.run('exportReviewDirty(job)'),false);
  assert.equal(b.run('exportIssueDraft(job).bindings.get("input").release'),'Chosen (USA)');
@@ -690,7 +690,7 @@ test('typing invalidates a response even before the debounce timer runs',async()
 });
 
 test('translation suggestion is explicit, escaped and stays a game-only draft',async()=>{
- const b=browser();b.run('libraryRenderOperations=()=>{};const job={id:"j",revision:1,state:"ready",export:{excluded:["i"],totals:{issues:[{id:"i",rom:"Translation.zip",status:"ambiguous",can_bind:true,suggestions:[{game:"platforms/x/Quest",title:"<Quest>"}]}]}}};libraryUI.jobs=[job]');
+ const b=browser();b.run('libraryRenderOperations=()=>{};const job={id:"j",revision:1,state:"ready",export:{excluded:[],totals:{issues:[{id:"i",rom:"Translation.zip",status:"ambiguous",can_bind:true,suggestions:[{game:"platforms/x/Quest",title:"<Quest>"}]}]}}};libraryUI.jobs=[job]');
  const html=b.run('exportIssues(job)');
  assert.match(html,/Needs confirmation/);assert.match(html,/&lt;Quest>/);assert.match(html,/Accept match/);assert.match(html,/catalog-primary export-accept-suggestion/);assert.equal(b.calls.length,0);
  b.run('fetchJSON=async()=>({target:{game:"platforms/x/Quest",game_revision:"digest"}})');
@@ -756,4 +756,41 @@ test('bulk stops on a new plan and cannot overwrite a newer individual choice',a
   if(change.startsWith('libraryUI'))assert.equal(b.run('d.bindings.size'),0);else assert.equal(b.run('d.bindings.get("i4").game'),'owner');
   assert.equal(b.run('d.suggestionPending.size'),0);
  }
+});
+
+
+test('row checkboxes include by default and unchecked rows cannot accept or choose',async()=>{
+ const b=browser(),checkbox=b.element('include');checkbox.dataset={exportInclude:'i'};
+ b.context.document.querySelectorAll=s=>s==='[data-export-include]'?[checkbox]:[];
+ b.run('libraryRenderOperations=()=>{};exportRenderMatch=()=>{};const job={id:"j",revision:1,state:"ready",export:{totals:{issues:[{id:"i",rom:"Game.zip",can_bind:true,status:"ambiguous",suggestions:[{game:"g",title:"Game"}]}]}}};libraryUI.jobs=[job];exportBindReview(job)');
+ assert.match(b.run('exportIssues(job)'),/data-export-include="i" checked/);
+ assert.doesNotMatch(b.run('exportIssues(job)'),/Exclude from export/);
+ checkbox.checked=false;checkbox.listeners.change();
+ const html=b.run('exportIssues(job)');assert.match(html,/is-excluded/);assert.match(html,/data-export-match="i" disabled/);assert.match(html,/data-export-suggestion-game="g" disabled/);
+ assert.doesNotMatch(html.match(/data-export-include="i"([^>]*)/)[1],/checked/);
+ await b.run('exportAcceptSuggestion(job,"i","g")');await b.run('exportAcceptSingleSuggestions(job)');b.run('exportOpenMatch(job,"i")');
+ assert.equal(b.calls.length,0);assert.equal(b.run('Boolean(nativeExportUI.match)'),false);
+ b.run('nativeExportUI.match={job,id:"i",target:{game:"g",game_revision:"r"},release:""};exportUseMatch()');
+ assert.equal(b.run('exportIssueDraft(job).bindings.size'),0);assert.equal(b.run('exportIssueDraft(job).excluded.has("i")'),true);assert.match(b.run('nativeExportUI.match.error'),/Check this file/);
+ checkbox.checked=true;checkbox.listeners.change();
+ assert.equal(b.run('exportIssueDraft(job).excluded.size'),0);assert.match(b.run('exportIssues(job)'),/data-export-include="i" checked/);
+ assert.doesNotMatch(b.run('exportIssues(job)'),/data-export-match="i" disabled/);
+});
+
+test('unchecking cancels pending acceptance even when the row is checked again',async()=>{
+ const b=browser(),checkbox=b.element('include');checkbox.dataset={exportInclude:'i'};
+ b.context.document.querySelectorAll=s=>s==='[data-export-include]'?[checkbox]:[];
+ b.run('libraryRenderOperations=()=>{};const job={id:"j",revision:1,state:"ready",export:{totals:{issues:[{id:"i",rom:"Game.zip",can_bind:true,suggestions:[{game:"g",title:"G"}]}]}}};libraryUI.jobs=[job];let reply;fetchJSON=()=>new Promise(resolve=>reply=resolve);const pending=exportAcceptSuggestion(job,"i","g");exportBindReview(job)');
+ checkbox.checked=false;checkbox.listeners.change();checkbox.checked=true;checkbox.listeners.change();
+ b.run('reply({target:{game:"g",game_revision:"r"}})');await b.run('pending');
+ assert.equal(b.run('exportIssueDraft(job).bindings.size'),0);assert.equal(b.run('exportIssueDraft(job).excluded.size'),0);
+});
+
+test('uncheck unresolved keeps confirmed choices and reset checks every row',()=>{
+ const b=browser(),uncheck=b.element('uncheck'),reset=b.element('reset');
+ b.context.document.querySelectorAll=s=>s==='[data-export-uncheck-unresolved]'?[uncheck]:s==='[data-export-restore-all]'?[reset]:[];
+ b.run('libraryRenderOperations=()=>{};const job={id:"j",revision:1,state:"ready",export:{bindings:[{id:"chosen",game:"g",game_revision:"r"}],totals:{issues:[{id:"chosen",rom:"chosen",status:"ambiguous"},{id:"unknown",rom:"unknown",status:"unmatched"},{id:"matched",rom:"matched",status:"matched"}]}}};libraryUI.jobs=[job];exportBindReview(job)');
+ uncheck.listeners.click();assert.deepEqual(JSON.parse(b.run('JSON.stringify([...exportIssueDraft(job).excluded])')),['unknown']);assert.equal(b.run('exportIssueDraft(job).bindings.size'),1);
+ reset.listeners.click();assert.equal(b.run('exportIssueDraft(job).excluded.size'),0);assert.equal(b.run('exportIssueDraft(job).bindings.size'),0);assert.equal(b.calls.length,0);
+ assert.equal((b.run('exportIssues(job)').match(/data-export-include="[^"]+" checked/g)||[]).length,3);
 });

@@ -172,9 +172,15 @@ LaunchBox. The CLI remains available through the same exporter.
 5. **Prepare export plan** starts a background scan. Operations shows its progress,
    matching counts, native file count, game actions, conflicts and skipped systems.
    **Inputs needing attention** lists unresolved, ambiguous and game-only matches
-   with filenames, reasons and candidate evidence. Unrecognized translated ROMs
+   with filenames, reasons and candidate evidence. Each row starts checked for
+   inclusion; uncheck it to exclude the input. Excluded rows are dimmed and their
+   match actions are disabled until checked again. **Uncheck unresolved** skips
+   inputs still without a confirmed match; **Reset choices** clears manual choices
+   and checks all inputs. These actions and search share one toolbar.
+   Unrecognized translated ROMs
    can show **Suggested by name** cards: full titles and aliases are compared
-   after removing filename tags. **Accept match** beside the title confirms a
+   after removing filename tags. **Accept match** and **Choose game** sit together
+   beside the suggested title. **Accept match** confirms a
    suggestion. **Accept all with one candidate** stages every remaining unique
    suggestion across all pages, keeping existing choices and exclusions. Inputs
    with multiple candidates remain for individual review. Both actions select
