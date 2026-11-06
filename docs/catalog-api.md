@@ -127,7 +127,10 @@ offers cartridges, discs, box spines, banners and icons. A checked role needs an
 eligible local asset; it does not download missing artwork. Switching to ES-DE
 removes LaunchBox-only roles from a custom draft. Default presets are unchanged.
 
-**Artwork** offers Auto, Originals first and Reconstructions first. Auto retains
+**Artwork** is available both in native export setup and the compact preview.
+Native setup offers Loaded profile priorities, Original images first and
+Reconstructed images first; Save profile downloads its validated current YAML.
+The compact preview offers Auto, Originals first and Reconstructions first. Auto retains
 existing priorities. The other choices rank explicit filename artwork labels
 inside regional priority, before source and format, and fall back when that kind
 is unavailable. Video/manual rules are unaffected. Save profile writes ordinary

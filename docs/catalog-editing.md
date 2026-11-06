@@ -130,9 +130,15 @@ LaunchBox. The CLI remains available through the same exporter.
    all platform folders. Select the catalog platform for the single-platform case.
    Batch mode uses the CLI folder recognition and reports skipped systems.
 3. Edit **Selection profile** directly in this setup: titles, description language
-   order and scope, media types, and source priorities per field/media role.
+   order and scope, media types, artwork preference, and source priorities per field/media role.
    Start from library settings or **Load YAML** (up to 1 MiB). Advanced profile
    YAML is editable with **Validate & use YAML**. Other profile rules are retained.
+   **Artwork** selects original or reconstructed images first, with fallback when
+   unavailable; video/manual rules are unchanged. **Loaded profile priorities**
+   restores the image ranking from the loaded profile or library settings.
+   **Save profile** validates and downloads the current YAML for **Load YAML** or
+   CLI `--profile`. It includes artwork choices, source order and all other rules,
+   without ROM/destination paths. It does not require a destination or start an export.
    **Preview in new tab** opens an independent snapshot of this exact profile;
    the original setup keeps its paths, ROM selection and edits. Change settings
    in setup and open another preview to compare. The preview is a catalog projection;

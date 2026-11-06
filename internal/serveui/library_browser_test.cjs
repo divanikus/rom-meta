@@ -370,6 +370,65 @@ test('profile form has direct fields and one separate-preview action',()=>{
 });
 
 
+
+test('artwork preferences preserve custom rules, skip video/manual and restore loaded priorities',()=>{
+ const b=browser();profileSetup(b);
+ b.run('nativeExportUI.draft.policy.selection.media={cover:{scope:"release",order:["source","region","format"],sources:["launchbox"],styles:["scan"],formats:["png"],variants:[]},screenshot:{scope:"game",order:["source"],sources:["igdb"]},video:{order:["source"],sources:["emumovies"]},manual:{order:["source"],formats:["pdf"]}}');
+ const before=b.run('JSON.stringify(nativeExportUI.draft.policy.selection.media)');
+ b.run('exportChangeArtwork("reconstructed")');
+ assert.equal(b.run('nativeExportUI.draft.policy.selection.media.cover.variants[0]'),'reconstructed');
+ assert.equal(b.run('nativeExportUI.draft.policy.selection.media.screenshot.order.join(",")'),'region,variant,source,format');
+ assert.equal(b.run('nativeExportUI.draft.policy.selection.media.cover.styles[0]'),'scan');
+ assert.equal(b.run('nativeExportUI.draft.policy.selection.media.video.variants'),undefined);
+ assert.equal(b.run('nativeExportUI.draft.policy.selection.media.manual.variants'),undefined);
+ b.run('exportChangeArtwork("original")');assert.equal(b.run('nativeExportUI.draft.policy.selection.media.cover.variants[0]'),'original');
+ b.run('exportChangeArtwork("auto")');assert.equal(b.run('JSON.stringify(nativeExportUI.draft.policy.selection.media)'),before);
+ b.run('exportChangeArtwork("reconstructed");exportInstallPolicy(nativeExportUI.draft,{profile:nativeExportUI.draft.policy,profile_yaml:"saved"})');
+ assert.equal(b.run('exportArtworkPreference(nativeExportUI.draft)'),'reconstructed');
+ assert.equal(b.run('nativeExportUI.draft.artworkBase'),undefined);
+});
+
+test('newly enabled images inherit artwork preference and disabled roles keep their original rules',()=>{
+ const b=browser();profileSetup(b);
+ b.run('nativeExportUI.draft.policy.selection.media={cover:{scope:"release",order:["source","format"],sources:["launchbox"]}};nativeExportUI.profileOptions.artwork_sources=["igdb"];exportChangeArtwork("original")');
+ let change;const control={dataset:{profileMedia:'cover'},checked:false,addEventListener:(event,fn)=>change=fn};
+ b.context.document.querySelectorAll=selector=>selector==='[data-profile-media]'?[control]:[];
+ b.run('exportBindProfile()');change();
+ b.run('exportChangeArtwork("reconstructed")');control.checked=true;change();
+ assert.equal(b.run('nativeExportUI.draft.policy.selection.media.cover.variants[0]'),'reconstructed');
+ control.dataset.profileMedia='screenshot';change();
+ assert.equal(b.run('nativeExportUI.draft.policy.selection.media.screenshot.variants[0]'),'reconstructed');
+ assert.equal(b.run('nativeExportUI.draft.policy.selection.media.screenshot.sources[0]'),'igdb');
+ b.run('exportChangeArtwork("auto")');
+ assert.equal(b.run('nativeExportUI.draft.policy.selection.media.cover.order.join(",")'),'source,format');
+ assert.equal(b.run('nativeExportUI.draft.policy.selection.media.screenshot.variants'),undefined);
+});
+
+test('Save profile downloads validated current YAML without saving paths or preparing an export',async()=>{
+ const b=browser();profileSetup(b);let payload,blob,clicked=false,revoked=false;
+ b.context.Blob=Blob;b.context.URL={createObjectURL:value=>{blob=value;return 'blob:profile'},revokeObjectURL:url=>{assert.equal(url,'blob:profile');revoked=true}};
+ b.context.setTimeout=fn=>fn();const link={click(){clicked=true}};
+ b.context.document.createElement=name=>{assert.equal(name,'a');return link};
+ b.context.catalogPost=async(path,body)=>{assert.equal(path,'/api/export/profile');payload=body;return{target:'es-de',profile_yaml:'schema_version: 1\n# validated policy\n'}};
+ b.run('nativeExportUI.draft.policy.selection.media.cover={order:["source"],sources:["launchbox"]};exportChangeArtwork("original")');await b.run('exportDownloadProfile()');
+ assert.equal(clicked,true);assert.equal(link.download,'rommeta-es-de-export.yaml');
+ assert.equal(await blob.text(),'schema_version: 1\n# validated policy\n');assert.equal(revoked,true);
+ assert.equal(payload.profile.selection.media.cover.variants[0],'original');assert.equal(payload.path,undefined);
+ assert.equal(b.run('nativeExportUI.draft.path'),'/output');assert.equal(b.run('state.view'),'export');
+ assert.equal(b.element('export-profile-download').disabled,false);
+});
+
+test('Save profile rejects pending or invalid YAML without a download and keeps the draft',async()=>{
+ const b=browser();profileSetup(b);let downloads=0,requests=0;
+ b.context.document.createElement=()=>{downloads++;return{click(){}}};
+ b.context.catalogPost=async()=>{requests++;throw Error('Invalid profile')};
+ b.run('nativeExportUI.draft.profileRaw="bad: ["');await b.run('exportDownloadProfile()');
+ assert.equal(requests,0);assert.equal(downloads,0);assert.match(b.run('nativeExportUI.error'),/Validate your YAML/);
+ b.run('delete nativeExportUI.draft.profileRaw');await b.run('exportDownloadProfile()');
+ assert.equal(requests,1);assert.equal(downloads,0);assert.equal(b.run('nativeExportUI.error'),'Invalid profile');
+ assert.equal(b.run('nativeExportUI.draft.path'),'/output');
+});
+
 test('typed profile languages are captured before save without a blur event',async()=>{
  const b=browser();profileSetup(b);const listeners={};
  b.context.document.querySelectorAll=selector=>selector==='[data-profile-field]'?[{tagName:'INPUT',dataset:{profileField:'selection.description.languages'},value:'ja, en',addEventListener:(type,fn)=>listeners[type]=fn}]:[];

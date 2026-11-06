@@ -166,9 +166,13 @@ body{font-size:14px}button,input,select,textarea{accent-color:var(--accent)}
 .export-profile-tools>span{margin-right:auto}
 .export-profile-upload{position:relative;overflow:hidden;cursor:pointer;margin:0!important;display:inline-block!important}
 .export-profile-upload input{position:absolute;opacity:0;inset:0;cursor:pointer;width:100%}
-.export-policy-media{display:flex;flex-wrap:wrap;gap:8px 18px;border:1px solid var(--line)!important;border-radius:4px;padding:12px!important;margin:16px 0!important}
+.export-policy-media{border:1px solid var(--line)!important;border-radius:4px;padding:12px!important;margin:16px 0!important}
 .export-policy-media label,.export-policy-source label{display:flex!important;flex-direction:row!important;align-items:center;gap:8px;margin:0!important}
 .export-policy-media input,.export-policy-source input{width:auto!important}
+.export-policy-media-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:10px 16px}
+.export-policy-media-options label{align-items:flex-start;min-width:0;line-height:1.5}
+.export-policy-media-options input{flex:0 0 auto;margin:3px 0 0}
+.export-policy-media-options span{min-width:0;overflow-wrap:anywhere}
 .export-policy-priorities,.export-policy-raw{margin-top:12px;border-top:1px solid var(--line);padding-top:12px}
 .export-policy-priorities>summary,.export-policy-raw>summary{cursor:pointer;color:var(--accent);margin-bottom:12px}
 .export-policy-source{display:flex;justify-content:space-between;align-items:center;min-height:36px;border-bottom:1px solid var(--line);padding:4px 0}
