@@ -285,6 +285,9 @@ func Fetch(options Options) (result Result, returnErr error) {
 		return result, err
 	}
 	stopErr := err
+	if options.Apply && err == nil {
+		transfers.FinishDiscovery()
+	}
 
 	if downloader != nil {
 		downloaded, failed, failures, err := downloader.CloseAndWait()

@@ -459,3 +459,10 @@ test('separate-tab snapshot preview sends exact YAML for cards and XML downloads
  b.run('state.exportMode=false');await b.run('requestPreview([])');
  assert.equal(calls[1].profile_yaml,undefined);
 });
+
+test('statistics distinguishes platform totals, zero progress and unknown game totals',()=>{
+ const b=browser(async()=>json({}));
+ assert.equal(b.run('statsStageProgress({Stage:"scanning catalog",Current:1,Total:4})'),' | 1 / 4 platforms');
+ assert.equal(b.run('statsStageProgress({Stage:"checking media",Current:0,Total:200})'),' | 0 / 200 games');
+ assert.equal(b.run('statsStageProgress({Stage:"counting games",Current:18,Total:0})'),' | 18 games; total not known yet');
+});

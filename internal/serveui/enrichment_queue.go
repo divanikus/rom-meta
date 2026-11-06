@@ -35,13 +35,17 @@ func (s *server) beginEnrichment(id string, revision int) error {
 			return fmt.Errorf("source settings changed; use Change selection to review and prepare this task again")
 		}
 	}
+	s.queueEnrichmentLocked(op)
+	return nil
+}
+
+func (s *server) queueEnrichmentLocked(op *libraryOperation) {
 	now := time.Now().UTC()
 	op.State, op.Error, op.Updated, op.QueuedAt = "queued", "", now, &now
 	if !s.enrichmentQueueRunning {
 		s.enrichmentQueueRunning = true
 		go s.drainEnrichmentQueue()
 	}
-	return nil
 }
 
 func (s *server) drainEnrichmentQueue() {

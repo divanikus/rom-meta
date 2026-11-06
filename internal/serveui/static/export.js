@@ -2,6 +2,10 @@
 const nativeExportUI={reviewDrafts:new Map(),loaded:false,loading:false,busy:false,error:"",revision:"",destinations:[],host:"",os:"",draft:null,folder:null,folderVersion:0};
 const exportStates={planning:"Preparing export plan",ready:"Ready to export",needs_review:"Conflicts to resolve",exporting:"Exporting",succeeded:"Complete",incomplete:"Stopped after partial write",failed:"Could not finish"};
 function exportStageLabel(stage){const labels={catalog:"Opening library",checking:"Checking reviewed inputs",starting:"Starting",planned:"Plan ready",complete:"Complete",write:"Writing files","native fields":"Preparing frontend metadata","read destination":"Reading destination"};return labels[stage]||((stage||"Starting").replace(/^./,s=>s.toUpperCase()));}
+function exportProgressUnit(stage){
+ const part=(stage||"").split(" / ").at(-1);
+ return ({"ROMs":"ROM files","hash ROMs":"ROM files",write:"files",index:"cards",reindexing:"cards","catalog-index":"cards","metadata/media":"ROM entries","plan library/media":"games"})[part]||"items";
+}
 function exportDraft(){return {id:"",name:"",target:state.exportSettings?.target||"es-de",path:"",rom_root:"",media_root:"",platform:state.platform||"",all:false,profile_yaml:"",profile_name:"Library settings",profile_mode:"defaults"}}
 async function exportOpen(){
  if(!nativeExportUI.draft)nativeExportUI.draft=exportDraft();
@@ -124,7 +128,7 @@ function nativeExportDetail(job){
  const x=job.export,d=x.destination,n=x.totals,p=x.progress||{},busy=operationBusy(job),review=["ready","needs_review"].includes(job.state);
  return '<article class="operation-detail"><div class="operation-eyebrow">FRONTEND EXPORT · '+operationStatus(job.state,exportStates[job.state]||job.state)+'</div><h2>'+escapeHTML(d.name)+'</h2>'+
  '<dl class="operation-facts"><dt>Frontend</dt><dd>'+escapeHTML(d.target)+'</dd><dt>Destination</dt><dd>'+escapeHTML(d.path)+'</dd><dt>ROMs</dt><dd>'+escapeHTML(d.rom_root)+'</dd><dt>Scope</dt><dd>'+escapeHTML(d.all?"All platform folders":d.platform)+'</dd><dt>Profile</dt><dd>'+escapeHTML(d.profile_name)+'</dd>'+(d.media_root?'<dt>Media</dt><dd>'+escapeHTML(d.media_root)+'</dd>':"")+'</dl>'+
- (busy?'<div class="operation-progress" role="status"><strong>'+escapeHTML(exportStageLabel(p.Stage))+'</strong><span>'+escapeHTML(p.Item||"")+'</span>'+(p.Total>0?'<progress value="'+Math.min(p.Total,Math.max(0,p.Current||0))+'" max="'+p.Total+'"></progress><span>'+formatNumber(p.Current)+' / '+formatNumber(p.Total)+'</span>':'<progress aria-label="Export in progress"></progress>')+'<p>You can close the browser and return to this operation.</p></div>':"")+
+ (busy?'<div class="operation-progress" role="status"><strong>'+escapeHTML(exportStageLabel(p.Stage))+'</strong><span>'+escapeHTML(p.Item||"")+'</span>'+operationProgressMeter(p.Current,p.Total,exportProgressUnit(p.Stage))+'<p>You can close the browser and return to this operation.</p></div>':"")+
  (job.error?'<p class="operation-error" role="alert">'+escapeHTML(job.error)+'</p>':"")+
  (n?'<div class="operation-summary"><div><strong>'+formatNumber(n.matched)+'</strong><span>matched ROM entries</span></div><div><strong>'+formatNumber(n.files)+'</strong><span>files in the plan</span></div><div><strong>'+formatNumber(x.written)+'</strong><span>files written</span></div></div><p class="secondary">'+formatNumber(n.unmatched)+' unmatched · '+formatNumber(n.ambiguous)+' ambiguous · '+formatNumber(n.unsupported)+' unsupported</p>'+
  (n.conflicts?.length?'<div class="operation-error"><strong>Resolve conflicts and prepare a new plan</strong><ul>'+n.conflicts.map(v=>'<li>'+escapeHTML(v)+'</li>').join("")+'</ul></div>':"")+
@@ -134,7 +138,7 @@ function nativeExportDetail(job){
  (review?'<p>The destination is unchanged. Apply writes the reviewed files using the normal additive export rules. Close the frontend before applying.</p>':job.state==="succeeded"?'<p>'+(x.written?"Export completed.":"The destination is already up to date; no files were written.")+'</p>':job.state==="incomplete"?'<p>Some files were written before the error. Prepare another plan against the current destination.</p>':"")+
  '<div class="operation-actions">'+(job.state==="ready"?'<button class="catalog-primary" data-native-export-apply="'+job.id+'">'+(n?.files?"Apply export":"Finish — already up to date")+'</button>':"")+
  (review?'<a class="tab-button" href="/api/export/plan?id='+encodeURIComponent(job.id)+'" download>Download full plan</a>':"")+
- (!busy?'<button class="tab-button" data-native-export-again>Prepare another plan</button><button class="tab-button" data-import-dismiss="'+job.id+'">Dismiss</button>':"")+'</div></article>';
+ (!busy?'<button class="tab-button" data-native-export-again>'+(["failed","incomplete"].includes(job.state)?"Retry — review a new plan":"Prepare another plan")+'</button><button class="tab-button" data-import-dismiss="'+job.id+'">Dismiss</button>':"")+'</div></article>';
 }
 function nativeExportBindOperation(job){
  if(job?.kind!=="export")return;

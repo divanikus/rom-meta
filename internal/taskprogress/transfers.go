@@ -11,6 +11,10 @@ type TransferSnapshot struct {
 	Bytes                                int64
 	Elapsed                              time.Duration
 	Done                                 bool
+	// DiscoveryComplete means Queued is the final download count, not a growing queue.
+	DiscoveryComplete                bool
+	DiscoveryCurrent, DiscoveryTotal int
+	DiscoveryStage                   string
 }
 type Transfers struct {
 	mu      sync.Mutex
@@ -29,6 +33,11 @@ func NewTransfers(output Func) *Transfers {
 }
 func (t *Transfers) Progress(s Snapshot) {
 	t.mu.Lock()
+	if s.Worker == 0 && (s.Stage == "scanning" || s.Stage == "checking packages") {
+		t.state.DiscoveryStage = s.Stage
+		t.state.DiscoveryCurrent = s.Current
+		t.state.DiscoveryTotal = s.Total
+	}
 	if s.Stage == "preparing" {
 		delete(t.workers, s.Worker)
 	}
@@ -60,6 +69,14 @@ func (t *Transfers) Record(status string) {
 	case "failed":
 		t.state.Failed++
 	}
+	t.mu.Unlock()
+	t.Progress(Snapshot{Stage: "files"})
+}
+
+// FinishDiscovery freezes the denominator before waiting for outstanding downloads.
+func (t *Transfers) FinishDiscovery() {
+	t.mu.Lock()
+	t.state.DiscoveryComplete = true
 	t.mu.Unlock()
 	t.Progress(Snapshot{Stage: "files"})
 }

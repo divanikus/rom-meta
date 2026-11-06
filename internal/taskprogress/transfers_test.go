@@ -37,3 +37,34 @@ func TestTransfersCountsConcurrentFilesAndUnknownSizeBytes(t *testing.T) {
 		t.Fatalf("incorrect totals: %#v", final)
 	}
 }
+
+func TestDiscoveryTotalStaysUnknownUntilEnumerationFinishes(t *testing.T) {
+	var last Snapshot
+	tracker := NewTransfers(func(s Snapshot) { last = s })
+	tracker.Progress(Snapshot{Stage: "scanning", Current: 3, Total: 20})
+	tracker.Record("queued")
+	tracker.Record("downloaded")
+	if last.Transfers.DiscoveryComplete || last.Transfers.DiscoveryCurrent != 3 || last.Transfers.DiscoveryTotal != 20 {
+		t.Fatalf("lost discovery progress: %#v", last.Transfers)
+	}
+	tracker.Record("queued")
+	tracker.FinishDiscovery()
+	if !last.Transfers.DiscoveryComplete || last.Transfers.Queued != 2 || last.Transfers.Downloaded != 1 || last.Transfers.Done {
+		t.Fatalf("final total unavailable while download is active: %#v", last.Transfers)
+	}
+	tracker.Progress(Snapshot{Stage: "extracting", Current: 1, Total: 5})
+	if last.Current != 1 || last.Total != 5 || last.Stage != "extracting" {
+		t.Fatalf("transfers overwrote later stage: %#v", last)
+	}
+}
+
+func TestFailedDiscoveryDoesNotClaimAFinalTotal(t *testing.T) {
+	var last Snapshot
+	tracker := NewTransfers(func(s Snapshot) { last = s })
+	tracker.Record("queued")
+	tracker.Record("failed")
+	tracker.Done()
+	if last.Transfers.DiscoveryComplete {
+		t.Fatal("an aborted scan is not a full inventory")
+	}
+}

@@ -2,10 +2,24 @@
 
 Set up accounts, keys and secret/env mappings with [source setup](source-setup.md).
 
-For a guided selected-platform workflow, use **Platform actions → Enrich platform**
+For a guided selected-platform workflow, use **Fetch metadata**
 in `serve --edit`. The [browser workflow](catalog-editing.md#enrich-a-platform)
 shares these provider routines and keeps progress available after browser closure.
 CLI fetch remains available independently, including its advanced options.
+
+Operations shows numeric counts beside each stage: games, packages, files or bytes.
+Media discovery and downloads run together. While discovery is still running,
+the number of files found is provisional and the download bar is indeterminate;
+the catalog scan keeps its own game count. Once discovery finishes, downloads
+show the final processed/total file count. Processed includes failed attempts;
+downloaded, already present, failed and pending remain separate. Later extraction
+and materialization stages use their own totals, not the earlier download count.
+
+A failed, incomplete or skipped source stage offers **Retry this stage**. This
+queues only that platform/source/type, even while the original operation continues.
+A normal pass reuses saved matches and media; it does not force overwrite or replay
+the entire batch. Quota, configuration and provider failures can still require
+attention. Import and export failures return to a new reviewed plan before writes.
 
 Omit `--source` to use `fetch.metadata`, `fetch.artwork` and `fetch.video` from
 `config/sources.yaml`, in that order. `--type` selects lists. Unlisted sources are

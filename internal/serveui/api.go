@@ -15,7 +15,7 @@ func (s *server) apiIndex(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{
 		"mode": "browser", "read_only": !s.allowEdit, "documentation": "/docs", "openapi": "/openapi.json",
 		"endpoints": map[string]string{
-			"operations": "/api/operations", "operation_dismiss": "POST /api/operations/dismiss", "enrichment_options": "/api/catalog/enrichment-options", "enrichment_plan": "POST /api/catalog/enrichment-plan", "enrichment_start": "POST /api/catalog/enrichment-start", "dat_upload": "POST /api/catalog/import-upload", "dat_plan": "POST /api/catalog/import-plan", "dat_apply": "POST /api/catalog/import-apply", "dat_dismiss": "POST /api/catalog/import-dismiss",
+			"operations": "/api/operations", "operation_dismiss": "POST /api/operations/dismiss", "enrichment_options": "/api/catalog/enrichment-options", "enrichment_plan": "POST /api/catalog/enrichment-plan", "enrichment_start": "POST /api/catalog/enrichment-start", "enrichment_retry": "POST /api/catalog/enrichment-retry", "dat_upload": "POST /api/catalog/import-upload", "dat_plan": "POST /api/catalog/import-plan", "dat_apply": "POST /api/catalog/import-apply", "dat_dismiss": "POST /api/catalog/import-dismiss",
 			"catalog": "/api/catalog", "settings": "GET/POST /api/catalog/settings", "curation": "GET/POST /api/catalog/curation", "edit": "GET/POST /api/catalog/edit", "fold_plan": "POST /api/catalog/fold-plan", "fold_preview": "POST /api/catalog/fold-preview", "fold_apply": "POST /api/catalog/fold-apply",
 			"platforms": "/api/platforms", "names": "/api/games?platform=<folder>&names=1",
 			"summaries":           "/api/games?platform=<folder>&game=<folder>",

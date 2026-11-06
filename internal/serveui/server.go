@@ -154,6 +154,7 @@ func HandlerWithEditing(dataRoot string, allowEdit bool) (http.Handler, error) {
 	mux.HandleFunc("/api/catalog/enrichment-options", server.enrichmentOptions)
 	mux.HandleFunc("/api/catalog/enrichment-plan", server.enrichmentPlan)
 	mux.HandleFunc("/api/catalog/enrichment-start", server.enrichmentStart)
+	mux.HandleFunc("/api/catalog/enrichment-retry", server.enrichmentRetry)
 	mux.HandleFunc("/api/catalog/import-upload", server.importUpload)
 	mux.HandleFunc("/api/catalog/import-plan", server.importPlan)
 	mux.HandleFunc("/api/catalog/import-apply", server.importApply)

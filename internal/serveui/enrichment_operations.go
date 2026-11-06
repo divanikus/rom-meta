@@ -50,13 +50,14 @@ type enrichmentRequest struct {
 	Jobs        []enrichmentSelection `json:"jobs"`
 }
 type enrichmentTask struct {
-	Platform string            `json:"platform"`
-	Workers  int               `json:"workers"`
-	Source   string            `json:"source"`
-	Type     string            `json:"type"`
-	State    string            `json:"state"`
-	Counts   enrichment.Counts `json:"counts"`
-	Error    string            `json:"error,omitempty"`
+	RetryOperation string            `json:"retry_operation,omitempty"`
+	Platform       string            `json:"platform"`
+	Workers        int               `json:"workers"`
+	Source         string            `json:"source"`
+	Type           string            `json:"type"`
+	State          string            `json:"state"`
+	Counts         enrichment.Counts `json:"counts"`
+	Error          string            `json:"error,omitempty"`
 }
 type enrichmentState struct {
 	Platforms   []string                      `json:"platforms"`

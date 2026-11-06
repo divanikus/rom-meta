@@ -601,6 +601,13 @@ writers, revalidate source settings, and start automatically. Catalog changes
 from earlier acquisition do not invalidate them. A queued operation can be dismissed;
 an actively running operation cannot.
 
+`POST /api/catalog/enrichment-retry` takes an operation `id` and zero-based `task`
+index. It queues one failed, incomplete or skipped stage with its original
+source/type/platform and concurrency, using current validated settings and normal
+reuse rules. Repeated requests return the same child operation while it remains
+in Operations. Use Retry on that child for another attempt. No force overwrite
+or automatic retry loop is enabled.
+
 `GET /api/export/profile?target=es-de` (also `launchbox`) returns resolved library
 policy and reusable YAML. Native export plans retain this effective policy.
 The operation response includes only unresolved/uncertain input issues for review;

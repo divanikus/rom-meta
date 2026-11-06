@@ -1592,6 +1592,11 @@
       }
     }
 
+    function statsStageProgress(p) {
+      if (!p.Current && !p.Total) return "";
+      const unit = /platforms|scanning catalog/i.test(p.Stage) ? "platforms" : "games";
+      return " | " + formatNumber(p.Current || 0) + (p.Total ? " / " + formatNumber(p.Total) : "") + " " + unit + (p.Total ? "" : "; total not known yet");
+    }
     async function fetchStats(platform, signal, onProgress) {
       const response = await fetch("/api/stats?platform=" + encodeURIComponent(platform) + "&stream=1", {signal, headers: {Accept: "application/x-ndjson"}});
       if (!response.ok) { let message = response.statusText; try { message = (await response.json()).error || message; } catch {} throw new Error(message); }
@@ -1652,7 +1657,7 @@
           renderStats();
           const part = await fetchStats(platform, controller.signal, (progress) => {
             if (controller.signal.aborted || state.statsController !== controller) return;
-            state.statsProgress = "Scanning " + platform + " (" + (index + 1) + "/" + platforms.length + "): " + progress.Stage + (progress.Current ? " | " + formatNumber(progress.Current) + (progress.Total ? "/" + formatNumber(progress.Total) : "") + " games" : "") + ". Return to Browse to cancel.";
+            state.statsProgress = "Scanning " + platform + " (" + (index + 1) + "/" + platforms.length + "): " + progress.Stage + statsStageProgress(progress) + ". Return to Browse to cancel.";
             renderStats();
           });
           if (controller.signal.aborted || state.statsController !== controller) return;

@@ -257,6 +257,9 @@ func FetchArtwork(options ArtworkOptions) (result ArtworkResult, returnErr error
 		planItems = append(planItems, packageWithParts(pkg, missingParts))
 	}
 
+	if options.Apply {
+		transfers.FinishDiscovery()
+	}
 	if options.Apply && len(planItems) > 0 {
 		downloaded, failed, failures := downloadArtworkPackages(client, planItems, options.Concurrency, progress)
 		result.DownloadedPackageCount = downloaded

@@ -1,5 +1,5 @@
 /* Operations and the FIFO enrichment queue belong to the server. */
-const enrichmentUI={draft:null,version:0,busy:false,error:"",tasks:new Map()};
+const enrichmentUI={draft:null,version:0,busy:false,error:"",tasks:new Map(),retryErrors:new Map()};
 const enrichmentTypes={metadata:"Metadata",artwork:"Artwork",video:"Video"};
 const enrichmentStates={pending:"Waiting",queued:"Queued",running:"Running",ready:"Ready to fetch",needs_review:"Review settings",enriching:"Fetching metadata",succeeded:"Complete",incomplete:"Finished with issues",failed:"Could not finish",skipped:"Skipped"};
 const enrichmentStages={starting:"Starting source",matching:"Matching games",scanning:"Reading catalog",reading:"Reading catalog",downloading:"Downloading",files:"Downloading files",indexing:"Updating library index",complete:"Complete"};
@@ -52,21 +52,46 @@ async function enrichmentPrepare(event){
  catch(error){enrichmentUI.error=error.message;}
  finally{enrichmentUI.busy=false;libraryRenderOperations(true);libraryPollOperations();}
 }
+function enrichmentUnit(stage,task){
+ if(["checking packages","planning packages","extracting","indexing files"].includes(stage))return "packages";
+ if(["listing artwork","listing videos","scanning platforms","scanning catalog"].includes(stage))return "platforms";
+ if(stage==="materializing"||(stage==="scanning"&&task?.source==="emumovies"&&task?.type==="video"))return "files";
+ return ["matching","reading","reading catalog","scanning"].includes(stage)?"games":"items";
+}
 function enrichmentProgress(job){
  const e=job.enrichment,p=e.progress||{},task=e.jobs[e.current],t=p.Transfers;
- const bytes=n=>formatNumber(Math.round(Number(n||0)/104857.6)/10)+" MiB";
- const total=t?t.Queued:p.Total,current=t?t.Downloaded+t.Failed:p.Current;
- return '<div class="operation-progress" role="status"><strong>'+escapeHTML(enrichmentStages[p.Stage]||p.Stage||"Starting")+'</strong>'+
- (total>0?'<progress aria-label="Current stage" value="'+Math.min(total,Math.max(0,current||0))+'" max="'+total+'"></progress>':'<progress aria-label="Fetch in progress"></progress>')+
- (t?'<span>'+formatNumber(t.Downloaded)+' downloaded · '+formatNumber(t.Existing)+' existing · '+formatNumber(t.Failed)+' failed · '+formatNumber(Math.max(0,t.Queued-t.Downloaded-t.Failed))+' pending</span><small>'+bytes(t.Bytes)+' transferred · '+formatNumber(t.Queued)+' files discovered; total may grow while scanning</small>':p.Total>0?'<span>'+formatNumber(p.Current)+' / '+formatNumber(p.Total)+' games</span>':p.BytesTotal>0?'<span>'+bytes(p.BytesCurrent)+' / '+bytes(p.BytesTotal)+'</span>':"")+
+ const downloading=!!t&&["files","downloading","preparing","waiting","scanning","checking packages"].includes(p.Stage);
+ let meter="";
+ if(downloading){
+  if(!t.DiscoveryComplete&&t.DiscoveryTotal>0)meter+='<div class="progress-section"><span>Checking for files</span>'+operationProgressMeter(t.DiscoveryCurrent,t.DiscoveryTotal,enrichmentUnit(t.DiscoveryStage,task))+'</div>';
+  meter+='<div class="progress-section"><span>Downloads</span>'+operationProgressMeter(Number(t.Downloaded||0)+Number(t.Failed||0),t.Queued,"files processed",{known:!!t.DiscoveryComplete,unknown:"Final file count is not known yet; still checking the catalog."})+'</div>';
+ }else if(p.BytesTotal>0||p.Stage==="downloading")meter=operationProgressMeter(p.BytesCurrent,p.BytesTotal,"received",{bytes:true});
+ else meter=operationProgressMeter(p.Current,p.Total,enrichmentUnit(p.Stage,task));
+ return '<div class="operation-progress" role="status"><strong>'+escapeHTML(downloading?"Downloading files":enrichmentStages[p.Stage]||p.Stage||"Starting")+'</strong>'+meter+
+ (t?'<span>'+formatNumber(t.Downloaded)+' downloaded · '+formatNumber(t.Existing)+' already present · '+formatNumber(t.Failed)+' failed · '+formatNumber(Math.max(0,t.Queued-t.Downloaded-t.Failed))+' pending</span><small>'+operationBytes(t.Bytes)+' transferred · '+formatNumber(t.Queued)+(t.DiscoveryComplete?' files to download in this task':' files found to download so far')+'</small>':"")+
  (p.Item?'<span class="secondary">'+escapeHTML(p.Item)+'</span>':"")+
- '<div class="enrichment-transfers">'+Object.entries(e.workers||{}).map(([id,w])=>'<div><span>Worker '+Number(id)+'</span><span>'+escapeHTML(w.Item||"Working")+'</span>'+(w.BytesTotal>0?'<progress aria-label="Worker '+Number(id)+' download" value="'+Math.max(0,w.BytesCurrent||0)+'" max="'+w.BytesTotal+'"></progress><small>'+bytes(w.BytesCurrent)+' / '+bytes(w.BytesTotal)+'</small>':'')+'</div>').join("")+'</div><small>Up to '+(task?.workers||1)+' worker'+((task?.workers||1)===1?'':'s')+' for this task.</small></div>';
+ '<div class="enrichment-transfers">'+Object.entries(e.workers||{}).map(([id,w])=>'<div><span>Worker '+Number(id)+'</span><span>'+escapeHTML(w.Item||"Working")+'</span>'+(w.Stage==="downloading"||w.BytesTotal>0?operationProgressMeter(w.BytesCurrent,w.BytesTotal,"received",{bytes:true,label:"Worker "+Number(id)+" download"}):'')+'</div>').join("")+'</div><small>Up to '+(task?.workers||1)+' worker'+((task?.workers||1)===1?'':'s')+' for this task.</small></div>';
 }
 function enrichmentTaskResult(t){
  const c=t.counts||{};
  return '<p>'+operationStatus(t.state,enrichmentStates[t.state]||t.state)+'</p>'+
  (["pending","running","skipped"].includes(t.state)?"":'<dl class="operation-facts">'+(t.type==="metadata"?'<dt>Matched</dt><dd>'+formatNumber(c.matched||0)+'</dd><dt>Not found</dt><dd>'+formatNumber(c.not_found||0)+'</dd><dt>Files written</dt><dd>'+formatNumber(c.written||0)+'</dd>':'<dt>Downloaded</dt><dd>'+formatNumber(c.downloaded||0)+'</dd>')+'<dt>Existing</dt><dd>'+formatNumber(c.existing||0)+'</dd><dt>Failed</dt><dd>'+formatNumber(c.failed||0)+'</dd></dl>')+
  (t.error?'<p class="operation-error">'+escapeHTML(t.error)+'</p>':"");
+}
+function enrichmentRetryAction(job,task,index){
+ if(!catalogUI.enabled||!["failed","incomplete","skipped"].includes(task?.state))return "";
+ const previous=libraryUI.jobs.find(j=>j.id===task.retry_operation),error=enrichmentUI.retryErrors.get(job.id+":"+index);
+ return (error?'<p class="operation-error" role="alert">'+escapeHTML(error)+'</p>':'')+'<div class="operation-actions">'+(previous?'<button class="tab-button" data-enrichment-retry-open="'+escapeAttr(previous.id)+'">View retry</button>':'<button class="tab-button" data-enrichment-retry-task="'+index+'" '+(enrichmentUI.retrying?'disabled':'')+'>Retry this stage</button><span class="secondary">Saved results are reused. The retry starts when the library is free.</span>')+'</div>';
+}
+async function enrichmentRetryTask(job,index){
+ if(enrichmentUI.retrying)return;
+ enrichmentUI.retrying=true;enrichmentUI.retryErrors.delete(job.id+":"+index);libraryRenderOperations(true);
+ try{
+  const op=await catalogPost("/api/catalog/enrichment-retry",{id:job.id,task:index});
+  job.enrichment.jobs[index].retry_operation=op.id;
+  libraryRememberJob(op);
+ }catch(error){enrichmentUI.retryErrors.set(job.id+":"+index,error.message);}
+ finally{enrichmentUI.retrying=false;libraryRenderOperations(true);libraryPollOperations();}
 }
 function enrichmentWillQueue(job){return libraryUI.jobs.some(other=>other.id!==job.id&&operationBusy(other));}
 function enrichmentDetail(job){
@@ -78,13 +103,15 @@ function enrichmentDetail(job){
  (platforms.length>1?'<details><summary>Selected platforms</summary><ul>'+platforms.map(p=>'<li>'+escapeHTML(p)+'</li>').join("")+'</ul></details>':"")+
  (queued?'<p class="queue-status" role="status">Queue position '+Math.max(1,queue.findIndex(j=>j.id===job.id)+1)+'. Starts automatically when the current library operation finishes. You can close the browser.</p>':ready?'<p>'+(willQueue?'Another operation is active or queued. These tasks will start automatically when it is their turn.':'Review the tasks, then start fetching metadata.')+' No downloads have started.</p>':'<p>'+finished+' / '+e.jobs.length+' tasks finished. Progress remains available in Operations.</p>')+
  '<div class="enrichment-layout"><nav aria-label="Fetch stages"><ol class="enrichment-tasks">'+e.jobs.map((t,i)=>'<li><button class="enrichment-stage '+(i===index?'active':'')+'" data-enrichment-task="'+i+'"><span>'+escapeHTML(sourceLabel(t.source))+' · '+enrichmentTypes[t.type]+'</span>'+(platforms.length>1?'<small>'+escapeHTML(t.platform)+'</small>':"")+'<span>'+operationStatus(t.state,enrichmentStates[t.state]||t.state)+'</span></button></li>').join("")+'</ol></nav><section class="enrichment-stage-detail"><h3>'+escapeHTML(task?sourceLabel(task.source)+" · "+enrichmentTypes[task.type]:"Tasks")+'</h3>'+
- (task?'<p class="secondary">'+escapeHTML(task.platform||job.platform)+' · '+(task.workers||1)+' worker'+((task.workers||1)===1?'':'s')+'</p>'+((job.state==="enriching"&&index===e.current)?enrichmentProgress(job):enrichmentTaskResult(task)):"")+
+ (task?'<p class="secondary">'+escapeHTML(task.platform||job.platform)+' · '+(task.workers||1)+' worker'+((task.workers||1)===1?'':'s')+'</p>'+((job.state==="enriching"&&index===e.current)?enrichmentProgress(job):enrichmentTaskResult(task)+enrichmentRetryAction(job,task,index)):"")+
  (job.state==="enriching"&&index!==e.current?'<button class="tab-button" data-enrichment-follow>Show current task</button>':"")+'</section></div>'+
  (job.error?'<p class="operation-error" role="alert">'+escapeHTML(job.error)+'</p>':"")+(job.warning?'<p class="operation-error">'+escapeHTML(job.warning)+'</p>':"")+
  '<div class="operation-actions">'+(ready?'<button class="catalog-primary" data-enrichment-start="'+job.id+'">'+(willQueue?'Enqueue':'Start fetching')+'</button><button class="tab-button" data-enrichment-retry>Change selection</button>':!busy?'<button class="tab-button" data-import-open="'+job.id+'">Open platform</button><button class="tab-button" data-enrichment-retry>'+(job.state==='needs_review'?'Change selection':'Prepare another pass')+'</button>':"")+
  (!busy||queued?'<button class="tab-button" data-import-dismiss="'+job.id+'">'+(queued?'Remove from queue':ready?'Discard plan':'Dismiss result')+'</button>':"")+'</div></article>';
 }
 function enrichmentBind(selected){
+ document.querySelectorAll("[data-enrichment-retry-task]").forEach(b=>b.addEventListener("click",()=>enrichmentRetryTask(selected,Number(b.dataset.enrichmentRetryTask))));
+ document.querySelectorAll("[data-enrichment-retry-open]").forEach(b=>b.addEventListener("click",()=>{libraryUI.selected=b.dataset.enrichmentRetryOpen;libraryRenderOperations(true);}));
  document.querySelectorAll("[data-enrichment-platform]").forEach(input=>input.addEventListener("change",()=>{const f=enrichmentUI.draft,p=input.dataset.enrichmentPlatform;if(input.checked)f.platforms.push(p);else f.platforms=f.platforms.filter(v=>v!==p);enrichmentLoadChoices(!f.choices.length);}));
  document.querySelectorAll("[data-enrichment-platforms]").forEach(b=>b.addEventListener("click",()=>{enrichmentUI.draft.platforms=b.dataset.enrichmentPlatforms==="all"?state.platforms.map(p=>p.platform):[];enrichmentLoadChoices(!enrichmentUI.draft.choices.length);}));
  document.querySelectorAll("[data-enrichment-choice]").forEach(input=>input.addEventListener("change",()=>{const f=enrichmentUI.draft,key=input.dataset.enrichmentChoice;input.checked?f.selected.add(key):f.selected.delete(key);$("enrichment-prepare").disabled=!enrichmentSelected().length;}));

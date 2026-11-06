@@ -319,6 +319,9 @@ func FetchVideo(options VideoOptions) (result VideoResult, returnErr error) {
 		}
 	}
 
+	if options.Apply {
+		transfers.FinishDiscovery()
+	}
 	if downloader != nil {
 		downloaded, failed, failures := downloader.CloseAndWait()
 		result.DownloadedFileCount = downloaded

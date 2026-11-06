@@ -92,10 +92,14 @@ function catalogProfilePreview(card,emptyMessage="Preview the result to inspect 
   const value=catalogFieldValue(key,{},profile);return value?'<div class="catalog-field"><div class="catalog-field-label">'+cEscape(catalogLabels[key])+'</div><div class="catalog-field-value">'+cEscape(value)+'</div></div>':'';
  }).join("")+(profile.description?'<div class="catalog-field"><div class="catalog-field-label">Description'+(profile.description_language?' · '+cEscape(profile.description_language):'')+'</div><div class="catalog-field-value">'+cEscape(profile.description)+'</div></div>':'')+'<details class="raw-details"><summary>Catalog details</summary><pre>'+cEscape(card.yaml||"")+'</pre></details>';
 }
+function catalogStageProgress(p){
+ const unit=/platforms|committing/i.test(p.Stage)?"platforms":/groups|checking files|applying|writing ignore/i.test(p.Stage)?"groups":"games";
+ return p.Total?" · "+formatNumber(p.Current||0)+" / "+formatNumber(p.Total)+" "+unit:p.Current>0?" · "+formatNumber(p.Current)+" "+unit+"; total not known yet":"";
+}
 async function catalogReadPlan(response){
  if(!response.ok){const data=await response.json();throw new Error(data.error||"Could not build a plan");}
  const reader=response.body.getReader(),decoder=new TextDecoder();let buffer="",result;
- const frame=line=>{if(!line.trim())return;const value=JSON.parse(line);if(value.error)throw new Error(value.error);if(value.result)result=value.result;if(value.progress){const p=value.progress;const el=$("catalog-progress-text");if(el)el.textContent=(p.Stage||"Preparing")+(p.Total?" · "+p.Current+" / "+p.Total:"")+(p.Item?" · "+p.Item:"");}};
+ const frame=line=>{if(!line.trim())return;const value=JSON.parse(line);if(value.error)throw new Error(value.error);if(value.result)result=value.result;if(value.progress){const p=value.progress;const el=$("catalog-progress-text");if(el)el.textContent=(p.Stage||"Preparing")+catalogStageProgress(p)+(p.Item?" · "+p.Item:"");}};
  try{for(;;){const {value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});let end;while((end=buffer.indexOf("\n"))>=0){frame(buffer.slice(0,end));buffer=buffer.slice(end+1);}}buffer+=decoder.decode();frame(buffer);if(!result)throw new Error("Planning stopped before completion. Build a new plan.");return result;}finally{reader.releaseLock?.();}
 }
 function catalogScopeLabel(){const scope=catalogUI.platforms||[catalogUI.platform];return scope.length>1?scope.length+" platforms":scope[0];}
@@ -358,7 +362,7 @@ async function catalogApply(decisions){
  const excluded=new Set(oldGroups.filter(g=>g.status==="ready"&&!catalogUI.selected.has(g.id)).map(catalogGroupKey));
  catalogUI.busy=true;catalogUI.mode="applying";
  catalogHeader("Saving and preparing the next groups","Keep this window open. The review will continue automatically.");
- $("catalog-content").innerHTML='<div class="catalog-progress"><span class="catalog-spinner"></span><span>Saving selected groups and checking what remains…</span></div>';
+ $("catalog-content").innerHTML='<div class="catalog-progress"><span class="catalog-spinner"></span><span>Saving '+formatNumber(decisions.length)+' decisions and checking what remains…</span></div>';
  try{
   const response=await catalogPost("/api/catalog/fold-apply",{plan:catalogUI.plan.id,decisions,continue:true});
   catalogUI.plan=response.next_plan||null;catalogUI.decisions=new Map();catalogUI.cardsCache=new Map();catalogUI.dirty=false;catalogUI.group=null;catalogUI.artwork=new Map();

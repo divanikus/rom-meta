@@ -1,5 +1,5 @@
 /* Library navigation and server-owned library operations. No browser job queue. */
-const libraryUI={jobs:[],selected:null,view:"library",timer:null,polling:false,uploading:false,uploadPercent:0,error:"",refreshed:new Set(),settings:null,file:null,drafts:new Map()};
+const libraryUI={jobs:[],selected:null,view:"library",timer:null,polling:false,uploading:false,uploadProgress:null,error:"",refreshed:new Set(),settings:null,file:null,drafts:new Map()};
 const importStages={opening:"Opening DAT",parsing:"Reading releases",planning:"Preparing changes",bundling:"Grouping releases",writing:"Saving cards",importing:"Starting import"};
 const operationLabels={needs_selection:"Choose a DAT",planning:"Preparing plan",ready:"Ready to import",needs_review:"Needs attention",importing:"Importing",succeeded:"Complete",failed:"Could not finish"};
 function libraryNavigate(view){
@@ -40,6 +40,23 @@ function operationLabel(job){if(job.kind==="export")return exportStates[job.stat
 function operationStatus(state,label){
  const tone=({succeeded:"success",running:"active",planning:"active",importing:"active",enriching:"active",exporting:"active",queued:"queued",ready:"ready",incomplete:"warning",needs_review:"warning",needs_selection:"warning",failed:"error"})[state]||"muted";
  return '<span class="operation-status status-'+tone+'">'+escapeHTML(label)+'</span>';
+}
+function operationBytes(value){
+ const n=Math.max(0,Number(value)||0),units=["B","KiB","MiB","GiB","TiB"];
+ const i=n>0?Math.min(4,Math.floor(Math.log(n)/Math.log(1024))):0;
+ return formatNumber(Math.round(n/1024**i*10)/10)+" "+units[i];
+}
+function operationProgressMeter(current,total,unit="items",options={}){
+ current=Math.max(0,Number(current)||0);total=Math.max(0,Number(total)||0);
+ const known=options.known??total>0,format=options.bytes?operationBytes:formatNumber;
+ const label=options.label||unit,percent=total>0?Math.min(100,Math.floor(current/total*100)):100;
+ const text=known?format(current)+" / "+format(total)+" "+unit+" · "+percent+"%":format(current)+" "+unit+" · "+(options.unknown||"Total not known yet");
+ return '<span class="progress-count">'+escapeHTML(text)+'</span><progress aria-label="'+escapeAttr(label)+'" '+(known?'value="'+(total>0?Math.min(total,current):1)+'" max="'+(total||1)+'"':'')+'></progress>';
+}
+function importProgressUnit(stage){return stage==="bundling"?"releases":["writing","checking","matching","checking existing"].includes(stage)?"cards":"items";}
+function libraryUploadStatus(){
+ const p=libraryUI.uploadProgress||{};
+ return "Uploading "+(p.total>0?operationBytes(p.loaded)+" / "+operationBytes(p.total)+" · "+Math.min(100,Math.floor(p.loaded/p.total*100))+"%":operationBytes(p.loaded)+" sent")+" — keep this page open until the upload finishes.";
 }
 function operationBusy(job){return job.state==="queued"||job.state==="planning"||job.state==="importing"||job.state==="enriching"||job.state==="exporting"}
 async function libraryPollOperations(){
@@ -98,13 +115,13 @@ function operationDetail(job){
  const busy=operationBusy(job),done=job.state==="succeeded",p=job.progress||{},draft=libraryUI.drafts.get(job.id)||{},selected=draft.member??job.member??"";
  return '<article class="operation-detail"><div class="operation-eyebrow">DAT IMPORT · '+operationStatus(job.state,operationLabels[job.state]||job.state)+'</div><h2>'+escapeHTML(job.filename)+'</h2>'+
  (job.member?'<p class="secondary">'+escapeHTML(job.member)+'</p>':"")+
- (busy?'<div class="operation-progress" role="status"><strong>'+escapeHTML(importStages[p.Stage]||p.Stage||"Preparing")+'</strong><span>'+escapeHTML(p.Item||"")+'</span>'+(p.Total?'<progress value="'+Number(p.Current||0)+'" max="'+Number(p.Total)+'"></progress><span>'+formatNumber(p.Current)+' / '+formatNumber(p.Total)+'</span>':'<progress aria-label="Operation in progress"></progress>')+'<p>You can close your browser. This operation continues on the server.</p></div>':"")+
+ (busy?'<div class="operation-progress" role="status"><strong>'+escapeHTML(importStages[p.Stage]||p.Stage||"Preparing")+'</strong><span>'+escapeHTML(p.Item||"")+'</span>'+operationProgressMeter(p.Current,p.Total,importProgressUnit(p.Stage))+'<p>You can close your browser. This operation continues on the server.</p></div>':"")+
  (job.error?'<p class="operation-error" role="alert">'+escapeHTML(job.error)+'</p>':"")+
  (job.warning?'<p class="operation-error" role="status">'+escapeHTML(job.warning)+'</p>':"")+
  operationSummary(job)+
- (!busy&&!done?'<form id="dat-plan-form" data-operation="'+escapeAttr(job.id)+'"><details '+(!job.summary?'open':'')+'><summary>'+(job.summary?'Change import options':'Import options')+'</summary>'+
+ (!busy&&!done?'<form id="dat-plan-form" data-operation="'+escapeAttr(job.id)+'"><details '+(!job.summary||job.state==="failed"?'open':'')+'><summary>'+(job.summary?'Change import options':'Import options')+'</summary>'+
  (job.members?.length?'<label>DAT in ZIP<select name="member" id="dat-member">'+(job.members.length>1&&!selected?'<option value="">Choose a DAT…</option>':"")+job.members.map(m=>'<option value="'+escapeAttr(m)+'" '+(m===selected?"selected":"")+'>'+escapeHTML(m)+'</option>').join("")+'</select></label>':"")+
- '<label>Platform name <span class="secondary">(leave empty to detect)</span><input id="dat-platform" name="platform" maxlength="150" value="'+escapeAttr(draft.platform??job.platform??"")+'" placeholder="'+escapeAttr(job.summary?.platform||"Detected from the DAT")+'"></label><button class="tab-button" type="submit">Prepare plan</button></details></form>':"")+
+ '<label>Platform name <span class="secondary">(leave empty to detect)</span><input id="dat-platform" name="platform" maxlength="150" value="'+escapeAttr(draft.platform??job.platform??"")+'" placeholder="'+escapeAttr(job.summary?.platform||"Detected from the DAT")+'"></label><button class="tab-button" type="submit">'+(job.state==="failed"?"Retry — prepare plan":"Prepare plan")+'</button></details></form>':"")+
  '<div class="operation-actions">'+(job.state==="ready"?'<button class="catalog-primary" data-import-apply="'+job.id+'">Import into library</button><span class="secondary" id="dat-apply-hint">The plan has not changed your cards.</span>':"")+
  (done?'<button class="catalog-primary" data-import-open="'+job.id+'">Open '+escapeHTML(job.summary?.platform||"platform")+'</button><span class="secondary">Saved to your library.</span>':"")+
  (!busy?'<button class="tab-button" data-import-dismiss="'+job.id+'">'+(done?"Dismiss result":"Discard upload")+'</button>':"")+'</div></article>';
@@ -133,7 +150,7 @@ function libraryRenderOperations(force=false){
  '<div class="operations-layout"><aside class="operations-list" aria-label="Library operations">'+
  (libraryUI.jobs.length?libraryUI.jobs.map(j=>'<button class="operation-row '+(j.id===libraryUI.selected?"active":"")+'" data-operation-select="'+j.id+'"><strong>'+escapeHTML(operationTitle(j))+'</strong>'+operationStatus(j.state,operationLabel(j))+'<small>'+escapeHTML(j.platform||j.summary?.platform||j.member||"DAT import")+'</small></button>').join(""):'<p class="secondary">Your operations will appear here.</p>')+
  '<p class="secondary operations-lifetime">Progress stays with the running server, even when you close this browser. Inactive operations expire after 24 hours. Restarting the server clears this list.</p></aside>'+
- (selected?operationDetail(selected):typeof enrichmentUI!=="undefined"&&enrichmentUI.draft?enrichmentWizard():'<section class="operation-detail import-welcome"><h2>Import a DAT</h2><p>Start with a DAT. RomMeta prepares the game cards and fingerprints; your ROM files stay where they are.</p><form id="dat-upload-form"><label class="upload-label">Choose a DAT or ZIP<input type="file" id="dat-upload-file" name="file" accept=".dat,.xml,.zip" '+(libraryUI.uploading?"disabled":"")+'></label><p class="secondary">Preferred datasets: <strong>No-Intro</strong> for cartridges, <strong>Redump</strong> for discs, and <strong>MAME</strong> for arcade systems. Upload No-Intro, Redump or compatible XML DATs here; MAME listxml currently uses the CLI. ZIPs can contain several DATs. Up to 256 MiB.</p><button class="catalog-primary" type="submit" '+(libraryUI.uploading?"disabled":"")+'>'+(libraryUI.uploading?"Uploading…":"Upload & prepare")+'</button><p id="dat-upload-progress" role="status">'+(libraryUI.uploading?"Uploading "+libraryUI.uploadPercent+"% — keep this page open until the upload finishes.":"Uploading prepares a plan. You choose when to import.")+'</p></form><details><summary>Prefer the command line?</summary><p>The CLI uses the same importer and catalog rules.</p><pre>rom-meta dat import &quot;&lt;file.dat-or-zip&gt;&quot; --data-root &quot;&lt;library&gt;&quot;\n# Add --apply after reviewing the plan.</pre><p class="secondary">Use the CLI for classified MAME listxml imports.</p></details></section>')+'</div>';
+ (selected?operationDetail(selected):typeof enrichmentUI!=="undefined"&&enrichmentUI.draft?enrichmentWizard():'<section class="operation-detail import-welcome"><h2>Import a DAT</h2><p>Start with a DAT. RomMeta prepares the game cards and fingerprints; your ROM files stay where they are.</p><form id="dat-upload-form"><label class="upload-label">Choose a DAT or ZIP<input type="file" id="dat-upload-file" name="file" accept=".dat,.xml,.zip" '+(libraryUI.uploading?"disabled":"")+'></label><p class="secondary">Preferred datasets: <strong>No-Intro</strong> for cartridges, <strong>Redump</strong> for discs, and <strong>MAME</strong> for arcade systems. Upload No-Intro, Redump or compatible XML DATs here; MAME listxml currently uses the CLI. ZIPs can contain several DATs. Up to 256 MiB.</p><button class="catalog-primary" type="submit" '+(libraryUI.uploading?"disabled":"")+'>'+(libraryUI.uploading?"Uploading…":"Upload & prepare")+'</button><p id="dat-upload-progress" role="status">'+(libraryUI.uploading?libraryUploadStatus():"Uploading prepares a plan. You choose when to import.")+'</p></form><details><summary>Prefer the command line?</summary><p>The CLI uses the same importer and catalog rules.</p><pre>rom-meta dat import &quot;&lt;file.dat-or-zip&gt;&quot; --data-root &quot;&lt;library&gt;&quot;\n# Add --apply after reviewing the plan.</pre><p class="secondary">Use the CLI for classified MAME listxml imports.</p></details></section>')+'</div>';
  pane.querySelectorAll("[data-new-job]").forEach(button=>button.addEventListener("click",()=>libraryStartJob(button.dataset.newJob)));
  if(menuFocus)$(menuFocus)?.focus({preventScroll:true});
  pane.querySelectorAll("[data-operation-select]").forEach(b=>b.addEventListener("click",()=>{libraryUI.selected=b.dataset.operationSelect;libraryRenderOperations();}));
@@ -182,12 +199,12 @@ async function libraryUploadDAT(event){
  const file=$("dat-upload-file")?.files?.[0]||libraryUI.file;
  if(!file){libraryUI.error="Choose a DAT or ZIP file first.";libraryRenderOperations();return;}
  if(file.size>256*1024*1024){libraryUI.error="Choose a file up to 256 MiB.";libraryRenderOperations();return;}
- libraryUI.uploading=true;libraryUI.uploadPercent=0;libraryUI.error="";libraryRenderOperations();
+ libraryUI.uploading=true;libraryUI.uploadProgress={loaded:0,total:0};libraryUI.error="";libraryRenderOperations();
  try{
   const job=await new Promise((resolve,reject)=>{
    const xhr=new XMLHttpRequest(),body=new FormData();body.append("file",file);
    xhr.open("POST","/api/catalog/import-upload");xhr.responseType="json";
-   xhr.upload.onprogress=e=>{if(e.lengthComputable)libraryUI.uploadPercent=Math.round(e.loaded/e.total*100);const el=$("dat-upload-progress");if(el)el.textContent="Uploading "+libraryUI.uploadPercent+"% — keep this page open until the upload finishes.";};
+   xhr.upload.onprogress=e=>{libraryUI.uploadProgress={loaded:e.loaded,total:e.lengthComputable?e.total:0};const el=$("dat-upload-progress");if(el)el.textContent=libraryUploadStatus();};
    xhr.onload=()=>xhr.status>=200&&xhr.status<300?resolve(xhr.response):reject(new Error(xhr.response?.error||"Upload failed. Try again."));
    xhr.onerror=()=>reject(new Error("Connection lost. Check Operations for a received upload before sending it again."));
    xhr.send(body);

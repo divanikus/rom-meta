@@ -385,3 +385,100 @@ test('raw YAML edits disable structured profile controls until validated or disc
  b.run('nativeExportUI.draft.profileRaw="bad: [";exportProfilePending()');assert.equal(control.disabled,true);assert.equal(note.hidden,false);
  b.run('delete nativeExportUI.draft.profileRaw;exportProfilePending()');assert.equal(control.disabled,false);assert.equal(note.hidden,true);
 });
+
+test('growing media discovery does not imply an almost finished download task',()=>{
+ const b=browser();b.context.progress={Stage:'files',Transfers:{Queued:126,Downloaded:125,Failed:0,Existing:0,Bytes:1048576,DiscoveryCurrent:18,DiscoveryTotal:228,DiscoveryStage:'scanning',DiscoveryComplete:false}};
+ const html=b.run('enrichmentProgress({enrichment:{jobs:[{source:"screenscraper",type:"artwork"}],current:0,progress}})');
+ assert.match(html,/18 \/ 228 games/);assert.match(html,/125 files processed/);assert.match(html,/126 files found to download so far/);
+ assert.match(html,/Final file count is not known yet/);assert.doesNotMatch(html,/max="126"|99%/);
+});
+test('finished discovery exposes final file totals and distinguishes failures and existing files',()=>{
+ const b=browser();b.context.progress={Stage:'files',Transfers:{Queued:200,Downloaded:125,Failed:2,Existing:10,Bytes:1024,DiscoveryComplete:true}};
+ const html=b.run('enrichmentProgress({enrichment:{jobs:[],progress}})');
+ assert.match(html,/127 \/ 200 files processed · 63%/);assert.match(html,/125 downloaded · 10 already present · 2 failed · 73 pending/);
+ assert.match(html,/value="127" max="200"/);assert.doesNotMatch(html,/not known|so far/);
+});
+test('archive and file processing use their own counts instead of completed transfers',()=>{
+ const b=browser();
+ for(const [Stage,unit] of [['extracting','packages'],['indexing files','packages'],['materializing','files'],['reading catalog','games'],['scanning catalog','platforms']]){
+  b.context.progress={Stage,Current:2,Total:7,Transfers:{Queued:30,Downloaded:30,Failed:0,Existing:0,DiscoveryComplete:true}};
+  const html=b.run('enrichmentProgress({enrichment:{jobs:[],progress}})');
+  assert.match(html,new RegExp('2 / 7 '+unit));assert.match(html,/value="2" max="7"/);assert.doesNotMatch(html,/value="30"|max="30"/);
+ }
+});
+test('known and unknown byte downloads retain visible byte counters for snapshots and workers',()=>{
+ const b=browser();
+ b.context.progress={Stage:'downloading',BytesCurrent:1024,BytesTotal:4096};
+ let html=b.run('enrichmentProgress({enrichment:{jobs:[],progress}})');
+ assert.match(html,/1 KiB \/ 4 KiB received · 25%/);assert.match(html,/value="1024" max="4096"/);
+ b.context.progress.BytesTotal=0;
+ html=b.run('enrichmentProgress({enrichment:{jobs:[],progress,workers:{1:{Stage:"downloading",Item:"file",BytesCurrent:2048,BytesTotal:0}}}})');
+ assert.match(html,/1 KiB received · Total not known yet/);assert.match(html,/2 KiB received · Total not known yet/);assert.doesNotMatch(html,/value=/);
+});
+test('empty known queue and all-existing media never invent a pending download',()=>{
+ const b=browser();b.context.progress={Stage:'files',Transfers:{Queued:0,Downloaded:0,Failed:0,Existing:12,DiscoveryComplete:true}};
+ const html=b.run('enrichmentProgress({enrichment:{jobs:[],progress}})');
+ assert.match(html,/0 \/ 0 files processed/);assert.match(html,/12 already present · 0 failed · 0 pending/);assert.doesNotMatch(html,/not known/);
+});
+test('DAT and native export stages show counts with their actual units',()=>{
+ const b=browser();
+ for(const [Stage,unit] of [['writing','cards'],['checking existing','cards'],['bundling','releases']]){
+  b.context.progress={Stage,Current:4,Total:9};
+  assert.match(b.run('operationDetail({state:"importing",progress})'),new RegExp('4 / 9 '+unit));
+ }
+ for(const [Stage,unit] of [['write','files'],['n64 / ROMs','ROM files'],['n64 / metadata/media','ROM entries'],['index','cards']]){
+  b.context.progress={Stage,Current:4,Total:9};
+  assert.match(b.run('nativeExportDetail({state:"planning",export:{destination:{},progress}})'),new RegExp('4 / 9 '+unit));
+ }
+ b.context.progress={Stage:'ROMs',Current:25,Total:0};
+ assert.match(b.run('nativeExportDetail({state:"planning",export:{destination:{},progress}})'),/25 ROM files · Total not known yet/);
+});
+test('upload progress reports bytes and only uses a percentage for a known total',()=>{
+ const b=browser();b.run('libraryUI.uploadProgress={loaded:1024,total:4096}');
+ assert.match(b.run('libraryUploadStatus()'),/1 KiB \/ 4 KiB · 25%/);
+ b.run('libraryUI.uploadProgress.total=0');
+ assert.match(b.run('libraryUploadStatus()'),/1 KiB sent/);assert.doesNotMatch(b.run('libraryUploadStatus()'),/%/);
+});
+
+test('Retry is offered for any failed source stage, including earlier stages of an active batch',()=>{
+ const b=browser();
+ for(const type of ['metadata','artwork','video'])for(const state of ['failed','incomplete','skipped']){
+  b.context.task={source:'provider',type,state};
+  assert.match(b.run('enrichmentRetryAction({id:"parent"},task,2)'),/data-enrichment-retry-task="2"/);
+ }
+ for(const state of ['pending','running','succeeded']){
+  b.context.task={state};assert.equal(b.run('enrichmentRetryAction({},task,0)'),'');
+ }
+ b.run('catalogUI.enabled=false');
+ assert.equal(b.run('enrichmentRetryAction({},{state:"failed"},0)'),'');
+});
+test('Retry sends only the selected task and switches to the server-owned queued operation',async()=>{
+ const b=browser(),child={id:'retry',kind:'enrichment',state:'queued',platform:'Console',enrichment:{jobs:[],platforms:['Console']}};
+ b.context.parent={id:'parent',enrichment:{jobs:[{state:'succeeded'},{state:'failed',source:'screenscraper',type:'artwork'}]}};
+ b.context.catalogPost=async(path,body)=>{b.calls.push(['POST',path,body]);return child};
+ b.context.fetchJSON=async()=>[child];
+ await b.run('enrichmentRetryTask(parent,1)');
+ assert.equal(b.calls[0][1],'/api/catalog/enrichment-retry');assert.equal(b.calls[0][2].task,1);assert.equal(b.calls[0][2].id,'parent');
+ assert.equal(b.run('libraryUI.selected'),'retry');assert.equal(b.run('parent.enrichment.jobs[1].retry_operation'),'retry');
+ assert.match(b.run('enrichmentRetryAction(parent,parent.enrichment.jobs[1],1)'),/View retry/);
+ assert.doesNotMatch(b.run('enrichmentRetryAction(parent,parent.enrichment.jobs[1],1)'),/data-enrichment-retry-task/);
+});
+test('failed import and export return to review instead of replaying writes',()=>{
+ const b=browser();
+ assert.match(b.run('operationDetail({state:"failed",summary:{},progress:{}})'),/Retry — prepare plan/);
+ for(const state of ['failed','incomplete']){
+  b.context.failedState=state;
+  const html=b.run('nativeExportDetail({state:failedState,export:{destination:{}}})');
+  assert.match(html,/Retry — review a new plan/);assert.doesNotMatch(html,/data-native-export-apply/);
+ }
+});
+
+test('retry setup errors remain attached to the stage after progress polling',async()=>{
+ const b=browser();
+ b.context.parent={id:'parent',kind:'enrichment',state:'incomplete',enrichment:{jobs:[{state:'failed',source:'provider',type:'video'}]}};
+ b.context.catalogPost=async()=>{throw new Error("Credentials are missing")};
+ b.context.fetchJSON=async()=>[b.context.parent];
+ await b.run('enrichmentRetryTask(parent,0)');
+ await b.run('libraryPollOperations()');
+ assert.match(b.run('enrichmentRetryAction(parent,parent.enrichment.jobs[0],0)'),/Credentials are missing/);
+});

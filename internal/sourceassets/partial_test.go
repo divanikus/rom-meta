@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestPartialFetchReportsFailureAndNormalResumeSkipsSuccess(t *testing.T) {
@@ -43,7 +44,7 @@ func TestPartialFetchReportsFailureAndNormalResumeSkipsSuccess(t *testing.T) {
 	if !errors.As(err, &partial) || first.DownloadedFileCount != 1 || first.FailedDownloadCount != 1 || first.StopReason == "" {
 		t.Fatalf("partial result=%#v err=%v", first, err)
 	}
-	if final.Downloaded != 1 || final.Failed != 1 || final.Bytes != 5 || !final.Done {
+	if final.Downloaded != 1 || final.Failed != 1 || final.Bytes != 5 || !final.Done || !final.DiscoveryComplete || final.DiscoveryTotal != 2 {
 		t.Fatalf("dishonest progress: %#v", final)
 	}
 	report, err := os.ReadFile(first.ManifestPath)
@@ -65,4 +66,38 @@ func TestPartialFetchReportsFailureAndNormalResumeSkipsSuccess(t *testing.T) {
 	if err != nil || string(saved) != string(report) {
 		t.Fatal("old report changed")
 	}
+}
+
+func TestDiscoveryFinishesBeforeLastDownload(t *testing.T) {
+	release := make(chan struct{})
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { <-release; _, _ = w.Write([]byte("image")) }))
+	// Release the blocked transfer before closing the HTTP server.
+	root := t.TempDir()
+	writeGame(t, root, "Platform", "Orbit", fmt.Sprintf("title: Orbit\nreleases: {Game: {}}\nsources: {igdb: {matches: [{media: {box_front: [{url: %q}]}}]}}\n", provider.URL+"/image.jpg"))
+	discovered := make(chan taskprogress.TransferSnapshot, 1)
+	done := make(chan error, 1)
+	go func() {
+		_, err := Fetch(Options{DataRoot: root, Source: "igdb", Apply: true, Progress: func(s taskprogress.Snapshot) {
+			if s.Transfers != nil && s.Transfers.DiscoveryComplete && !s.Transfers.Done {
+				select {
+				case discovered <- *s.Transfers:
+				default:
+				}
+			}
+		}})
+		done <- err
+	}()
+	select {
+	case p := <-discovered:
+		if p.Queued != 1 || p.Downloaded != 0 {
+			t.Errorf("not an outstanding transfer: %#v", p)
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("final count hidden until download finishes")
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Error(err)
+	}
+	provider.Close()
 }

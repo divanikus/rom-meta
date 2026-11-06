@@ -101,6 +101,7 @@ body{font-size:14px}button,input,select,textarea{accent-color:var(--accent)}
 .enrichment-tasks{margin:0;gap:4px}.enrichment-tasks li{padding:0;border:0;background:transparent;border-radius:0}
 .enrichment-stage{display:grid;gap:4px;width:100%;font:inherit;text-align:left;padding:10px;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--text);cursor:pointer}.enrichment-stage small{color:var(--muted)}
 .enrichment-stage.active{background:var(--selected);border-color:var(--line)}
+.progress-section{display:grid;gap:6px}.progress-count{font-variant-numeric:tabular-nums;font-weight:600}.progress-section>span:first-child{color:var(--muted);font-size:12px}
 .enrichment-stage-detail{min-width:0}.enrichment-transfers{display:grid;gap:12px}.enrichment-transfers>div{display:grid;gap:4px;min-width:0}.enrichment-transfers>div>span:first-child{font-size:11px;color:var(--muted)}.enrichment-transfers>div>span:nth-child(2){overflow-wrap:anywhere;font-size:12px}
 .queue-status{border-left:3px solid var(--warn);padding-left:12px}
 .operation-status{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;line-height:1.5;color:var(--muted);text-transform:none;letter-spacing:normal}

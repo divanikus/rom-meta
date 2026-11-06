@@ -7,7 +7,7 @@ function browser(fetch){
  const elements=new Map();
  function element(id){if(!elements.has(id))elements.set(id,{innerHTML:'',textContent:'',disabled:true,open:true,checked:false,value:'',parentElement:{},classList:{toggle(){}},addEventListener(){},setAttribute(k,v){this[k]=k==='disabled'?true:v;},close(){this.open=false;},showModal(){this.open=true;},replaceChildren(){},insertAdjacentHTML(position,html){this.innerHTML+=html;}});return elements.get(id);}
  const context=vm.createContext({fetch,AbortController,URLSearchParams,TextDecoder,console,MutationObserver:class{observe(){}},window:{confirm:()=>true},$:element,
- document:{querySelectorAll:()=>[],createTextNode:s=>s},escapeHTML:s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;'),escapeAttr:s=>String(s),
+ document:{querySelectorAll:()=>[],createTextNode:s=>s},escapeHTML:s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;'),escapeAttr:s=>String(s),formatNumber:n=>String(n??0),
  state:{platform:'Console',games:[],game:{},selectedFolder:'One',view:'browse'},renderDetails(){},sourceLabel:s=>s,fact:(l,v)=>l+":"+v,renderGames(){},renderPlatforms(){},selectGame:async()=>{},selectPlatform(){},fetchJSON:async()=>({}),bestCover:()=>null,renderReleases:()=>'',renderSourceSection:()=>'',renderMediaSection:()=>''});
  vm.runInContext(readFileSync(require("node:path").join(__dirname,"static/catalog-register.js"),"utf8"),context);
  vm.runInContext(script,context);return{run:code=>vm.runInContext(code,context),element};
@@ -563,4 +563,11 @@ test('release removal retains nested fingerprints for explicit reassignment or u
  const b=browser(async()=>json({}));b.run('catalogRegisterInstall({revision:"fp",releases:[{name:"USA",fields:{}}],fingerprints:[{index:0,fields:{release:"USA",file:{name:"kept.bin",crc32:"12345678"}}}]},true);catalogRegisterDelete("release",0)');
  assert.match(b.run('catalogRenderRegister()'),/kept.bin/);assert.equal(b.run('catalogRegister.fingerprints[0].deleted'),undefined);
  b.run('catalogRegisterDelete("release",0)');assert.equal(b.run('catalogRegisterDirty()'),false);
+});
+
+test('fold plan progress keeps known totals and identifies count units',()=>{
+ const b=browser(async()=>json({}));
+ assert.equal(b.run('catalogStageProgress({Stage:"reading",Current:0,Total:100})'),' · 0 / 100 games');
+ assert.equal(b.run('catalogStageProgress({Stage:"checking files",Current:2,Total:8})'),' · 2 / 8 groups');
+ assert.equal(b.run('catalogStageProgress({Stage:"Planning platforms",Current:1,Total:3})'),' · 1 / 3 platforms');
 });
