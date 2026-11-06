@@ -7,14 +7,14 @@ const vm = require('node:vm');
 const html = readFileSync(require('node:path').join(__dirname, 'static/index.html'), 'utf8');
 const script = html.match(/<script>([\s\S]*)<\/script>/)[1].replace(/\s+loadPlatforms\(\);\s*$/, '');
 
-function browser(fetch) {
+function browser(fetch, withEditor = false) {
   const elements = new Map();
   const element = (id) => {
     if (!elements.has(id)) elements.set(id, {
       value: '', checked: false, textContent: '', innerHTML: '', scrollTop: 0,
       listeners: {}, addEventListener(name, handler) { this.listeners[name] = handler; }, querySelectorAll() { return []; },
       attributes: {}, setAttribute(name, value) { this.attributes[name] = value; },
-      focus() {}, click() { this.clicked = true; },
+      focus() {}, click() { this.clicked = true; }, replaceChildren() {},
       classList: {toggle() {}, add() {}, remove() {}}
     });
     return elements.get(id);
@@ -25,6 +25,13 @@ function browser(fetch) {
     document: {getElementById: element, addEventListener() {}, querySelectorAll() {return [];}}
   });
   vm.runInContext(script, context);
+  if (withEditor) {
+    context.MutationObserver = class { observe() {} };
+    context.window = {confirm: () => true};
+    for (const name of ['catalog-register.js','catalog-edit.js']) {
+      vm.runInContext(readFileSync(require('node:path').join(__dirname,'static',name),'utf8').replace(/catalogCapabilities\(\);\s*$/, ''),context);
+    }
+  }
   return {context, element, run: (code) => vm.runInContext(code, context)};
 }
 const json = (value) => ({ok: true, json: async () => value});
@@ -405,6 +412,67 @@ test('fingerprints load lazily, page in bounded requests and stay cached across 
  assert.equal(calls.length,1);assert.equal(calls[0].get('limit'),'100');assert.match(b.element('detail-body').innerHTML,/file0.zip/);assert.match(b.element('detail-body').innerHTML,/Show more fingerprints/);
  await b.run('loadFingerprints(true)');assert.equal(calls[1].get('offset'),'100');assert.equal(b.run('state.fingerprints.fingerprints.length'),101);
  b.run('state.exportMode=true;renderDetails()');assert.match(b.element('detail-body').innerHTML,/file100.zip/);assert.equal(calls.length,2);
+});
+
+test('leaving the release editor loads fingerprints even without visiting the read-only tab first', async () => {
+ const pending=[];
+ const card={revision:'card-1',fields:{title:'Orbit'},profile:{},records:[],registry:{sources:[]},register:{revision:'fp-1',releases:[{name:'World',fields:{}}],fingerprints:[{index:0,fields:{release:'World',file:{name:'Orbit.bin',size:1024}}}],default_release:'World'}};
+ const b=browser(async(path)=>{
+  if(path.startsWith('/api/fingerprints?'))return new Promise(resolve=>pending.push(resolve));
+  return json(card);
+ },true);
+ b.run('catalogUI.enabled=true;state.platform="Console";state.selectedFolder="Orbit";state.game={game:{folder:"Orbit",releases:[{name:"World"}]},profile:{}}');
+ await b.run('catalogStartInline();');await b.run('setDetailTab("files")');
+ assert.match(b.element('detail-body').innerHTML,/Orbit.bin/);
+ assert.equal(pending.length,0);
+ b.element('catalog-inline-cancel').listeners.click();
+ assert.equal(pending.length,1);
+ assert.match(b.element('detail-body').innerHTML,/Reading registered fingerprints/);
+ assert.doesNotMatch(b.element('detail-body').innerHTML,/No fingerprints registered/);
+ b.run('renderDetails()');assert.equal(pending.length,1);
+ pending[0](json({total:1,registered_total:1,fingerprints:[{name:'Orbit.bin',release:'World',size:1024}]}));await tick();
+ assert.match(b.element('detail-body').innerHTML,/Orbit.bin/);
+ assert.match(b.element('detail-body').innerHTML,/1 registered/);
+});
+
+test('saved register changes refresh cached fingerprints when Done returns to the open tab', async () => {
+ let saved=false,reads=0;
+ const register=name=>({revision:'fp-1',releases:[{name:'World',fields:{}}],fingerprints:[{index:0,fields:{release:'World',file:{name,size:1024}}}],default_release:'World'});
+ const card=()=>({revision:'card-1',fields:{title:'Orbit'},profile:{},records:[],registry:{sources:[]},register:register(saved?'Updated.bin':'Orbit.bin')});
+ const game={game:{folder:'Orbit',releases:[{name:'World'}]},profile:{}};
+ const b=browser(async(path)=>{
+  if(path.startsWith('/api/fingerprints?')){reads++;return json({total:1,registered_total:1,fingerprints:[{name:saved?'Updated.bin':'Orbit.bin',release:'World'}]});}
+  if(path==='/api/catalog/edit'){saved=true;return json({card:card()});}
+  if(path.startsWith('/api/catalog/edit?'))return json(card());
+  if(path.startsWith('/api/game?'))return json(game);
+  return json({});
+ },true);
+ b.context.cardGame=game;
+ b.run('catalogUI.enabled=true;state.platform="Console";state.selectedFolder="Orbit";state.game=cardGame');
+ await b.run('setDetailTab("files")');await tick();assert.equal(reads,1);
+ await b.run('catalogStartInline()');
+ b.run('catalogRegister.fingerprints[0].fields.file.name="Updated.bin";catalogRegisterChanged()');
+ await b.run('catalogSaveInline()');
+ assert.equal(saved,true);assert.equal(reads,1);
+ b.element('catalog-inline-cancel').listeners.click();await tick();
+ assert.equal(reads,2);assert.match(b.element('detail-body').innerHTML,/Updated.bin/);
+ assert.doesNotMatch(b.element('detail-body').innerHTML,/Orbit.bin|No fingerprints registered/);
+});
+
+test('unloaded, empty, filtered and failed fingerprint lists remain distinct', async () => {
+ let calls=0;
+ const b=browser(async()=>{calls++;return {ok:false,json:async()=>({error:'Cannot read fingerprints'})};});
+ b.run('state.platform="Console";state.selectedFolder="Orbit";state.game={game:{folder:"Orbit"},profile:{}}');
+ assert.doesNotMatch(b.run('renderFingerprintSection(state.game.game)'),/No fingerprints registered/);
+ await b.run('setDetailTab("files")');await tick();
+ assert.match(b.element('detail-body').innerHTML,/Cannot read fingerprints/);
+ assert.doesNotMatch(b.element('detail-body').innerHTML,/No fingerprints registered/);
+ b.run('renderDetails()');await tick();assert.equal(calls,1);
+ b.run('state.fingerprintError="";state.fingerprints={total:0,registered_total:0,fingerprints:[]};renderDetails()');
+ assert.match(b.element('detail-body').innerHTML,/No fingerprints registered/);
+ b.run('state.fingerprints={total:0,registered_total:3,fingerprints:[]};renderDetails()');
+ assert.match(b.element('detail-body').innerHTML,/No fingerprints match this filter/);
+ assert.equal(calls,1);
 });
 
 test('fingerprint filters cancel stale requests and escape registered file evidence', async () => {

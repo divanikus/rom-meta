@@ -1577,7 +1577,6 @@
           return;
         }
         state.game = response;
-        if (state.detailTab === "files") loadFingerprints();
         renderSourceControls();
         renderDetails();
         loadDetailPreview();
@@ -1809,7 +1808,7 @@
         const fields = [...(record.size > 0 ? [["Bytes",String(record.size)]] : []),...(record.format ? [["Format",record.format]] : []),...(record.payload_kind ? [["Payload kind",record.payload_kind]] : []),...(record.variant ? [["Variant ID",record.variant]] : []),...hashes];
         return '<details class="fingerprint-item"><summary><span class="primary">' + escapeHTML(record.name || "Unnamed file") + '</span><span class="secondary">' + escapeHTML(edition) + '</span><span class="secondary">' + escapeHTML(fingerprintSize(record.size)) + ' · ' + (hashes.length ? hashes.length + (hashes.length === 1 ? ' recorded hash' : ' recorded hashes') : 'No hashes recorded') + '</span></summary><dl class="fingerprint-hashes">' + fields.map(([key,value]) => '<dt>' + escapeHTML(key) + '</dt><dd><code>' + escapeHTML(value) + '</code></dd>').join("") + '</dl></details>';
       }).join("");
-      const status = state.fingerprintError ? '<div class="error">' + escapeHTML(state.fingerprintError) + '</div><button class="tab-button" type="button" data-fingerprint-retry>Retry fingerprints</button>' : state.fingerprintLoading && !data ? '<div class="loading">Reading registered fingerprints…</div>' : !records.length ? '<div class="empty">' + (data?.registered_total ? 'No fingerprints match this filter.' : 'No fingerprints registered for this game.') + '</div>' : '';
+      const status = state.fingerprintError ? '<div class="error">' + escapeHTML(state.fingerprintError) + '</div><button class="tab-button" type="button" data-fingerprint-retry>Retry fingerprints</button>' : !data ? '<div class="loading">Reading registered fingerprints…</div>' : !records.length ? '<div class="empty">' + (data?.registered_total ? 'No fingerprints match this filter.' : 'No fingerprints registered for this game.') + '</div>' : '';
       return '<section class="section"><h3>Releases & fingerprints</h3><p class="secondary">Read-only register of releases, files and hashes; no ROM scan is performed.</p>' + (typeof catalogEditorActive==="function"&&catalogEditorActive()?'<p class="secondary">Release definitions can be changed in Raw. Referenced releases cannot be removed. Fingerprints are registered through import and are not editable here.</p>':'') + register + filter + status + '<div class="fingerprint-list">' + rows + '</div>' + (data ? '<div class="secondary">Showing ' + records.length + ' of ' + data.total + ' matching records · ' + data.registered_total + ' registered</div>' : '') + (data && records.length < data.total ? '<button class="tab-button" type="button" data-fingerprint-more' + (state.fingerprintLoading ? ' disabled' : '') + '>' + (state.fingerprintLoading ? 'Loading…' : 'Show more fingerprints') + '</button>' : '') + '</section>';
     }
 
@@ -1819,7 +1818,6 @@
       state.detailTab = tab;
       $("detail-body").scrollTop = 0;
       renderDetails();
-      if (tab === "files" && !(typeof catalogEditorActive==="function"&&catalogEditorActive()) && !state.fingerprints && !state.fingerprintLoading) loadFingerprints();
     }
 
     function renderDetails() {
@@ -1833,6 +1831,11 @@
         return;
       }
       if (!["preview","files","raw"].includes(state.detailTab)) state.detailTab = "preview";
+      // The files tab can become visible through Done/Save as well as a tab click.
+      if (state.view === "browse" && state.detailTab === "files" && !(typeof catalogEditorActive === "function" && catalogEditorActive()) && !state.fingerprints && !state.fingerprintLoading && !state.fingerprintError) {
+        loadFingerprints();
+        return;
+      }
       const ready = !state.exportMode || !!state.detailPreview;
       const response = state.exportMode && ready ? exportResponse(stored) : stored;
       const game = response.game, profile = response.profile || {};

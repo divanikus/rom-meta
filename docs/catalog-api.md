@@ -90,7 +90,8 @@ an opened export card; selection notes are collapsed. Fingerprints are catalog
 records, not a live ROM verification. They load only when requested, independently
 of export policy and without writable caches or media/ROM payload reads. Malformed
 fingerprints do not block Overview. Per-card results are cached for the page
-session; reselect/reload to refresh external edits.
+session. Returning from the card editor loads missing results and refreshes them
+after saved edits; reselect/reload to refresh external edits.
 
 `GET /api/fingerprints?platform=<folder>&game=<folder>` returns `fingerprints`,
 `total` (filtered), `registered_total`, `offset` and `limit`. Default pages contain
