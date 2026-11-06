@@ -130,14 +130,14 @@ func TestFoldMAMEPreviewApplyAndRepeat(t *testing.T) {
 	writeFoldGame(t, root, "Arcade", "Other (USA)", "other_us", "Other", "999")
 	writeFoldGame(t, root, "Arcade", "Other (Japan)", "other_jp", "Other", "999")
 	before := mameTree(t, root)
-	dry, err := Fold(Options{DataRoot: root})
+	dry, err := Fold(Options{KeepBackup: true, DataRoot: root})
 	if err != nil || dry.MergedGameCount != 4 {
 		t.Fatal(err, dry)
 	}
 	if !reflect.DeepEqual(before, mameTree(t, root)) {
 		t.Fatal("preview changed catalog")
 	}
-	applied, err := Fold(Options{DataRoot: root, Apply: true})
+	applied, err := Fold(Options{KeepBackup: true, DataRoot: root, Apply: true})
 	if err != nil || applied.AppliedGroupCount != dry.CandidateGroupCount || len(applied.Backups) != 3 {
 		t.Fatal(err, applied)
 	}
@@ -171,7 +171,7 @@ func TestFoldMAMEPreviewApplyAndRepeat(t *testing.T) {
 	}
 	// The fixture's ordinary cards lack platform descriptors, so validate the
 	// MAME-only case below; repeat here checks hybrid/provider independence.
-	repeat, err := Fold(Options{DataRoot: root, Apply: true})
+	repeat, err := Fold(Options{KeepBackup: true, DataRoot: root, Apply: true})
 	if err != nil || repeat.CandidateGroupCount != 0 || len(repeat.Backups) > 0 {
 		t.Fatal("repeat was not a no-op", err, repeat)
 	}

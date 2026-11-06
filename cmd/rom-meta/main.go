@@ -234,15 +234,17 @@ Usage:
   rom-meta catalog prune-empty [--data-root <root>] [--platform <name>] [--details] [--apply]
   rom-meta catalog media-names [--data-root <root>] [--platform <name>] [--source launchbox] [--match <text>] [--details] [--apply]
   rom-meta catalog split --data-root <root> --review-plan <json> [--details] [--apply]
-  rom-meta catalog fold [--data-root <root>] [--platform <name>] [--match <text>] [--editions-only] [--review-plan <json>] [--details] [--apply|--interactive]
+  rom-meta catalog fold [--data-root <root>] [--platform <name>] [--match <text>] [--editions-only] [--review-plan <json>] [--details] [--apply|--interactive] [--keep-backup]
 
 Commands:
   status       Report platform, game, release, metadata coverage, media, and empty-game counts.
   prune-empty  Delete empty games only when --apply is passed.
   media-names  Label existing artwork variants offline using saved source categories.
+  backups      List retained backups; --delete <name> --apply removes one.
   fold         Preview or merge game folders using source IDs or accepted MAME relationships.
 
 Options:
+  --keep-backup       Retain originals after fold; off by default.
   --data-root <root>  Data root containing platforms/.
   --platform <name>   Limit to one platform. Short aliases such as n64 or pcengine are accepted.
   --details           Include detailed status, cleanup, or fold candidates.
@@ -280,7 +282,7 @@ func printCatalogFoldUsage() {
 
 Usage:
   rom-meta catalog split --data-root <root> --review-plan <json> [--details] [--apply]
-  rom-meta catalog fold [--data-root <root>] [--platform <name>] [--match <text>] [--editions-only] [--review-plan <json>] [--details] [--apply|--interactive]
+  rom-meta catalog fold [--data-root <root>] [--platform <name>] [--match <text>] [--editions-only] [--review-plan <json>] [--details] [--apply|--interactive] [--keep-backup]
 
 Options:
   --data-root <root>  Data root containing platforms/.
@@ -291,6 +293,7 @@ Options:
   --details           Include fold candidates, target names and identity evidence.
   --apply             Merge eligible candidates; held groups remain unchanged. Default: dry run.
   --interactive       Ask "Apply fold? yes/no/skip/quit" for each candidate.
+  --keep-backup       Retain originals under backups/ after success; off by default.
 
 Regional titles and existing files:
   Saved provider aliases can link regional titles on the same platform.
@@ -303,13 +306,13 @@ Regional titles and existing files:
   Serial-only links need --interactive confirmation; conflicts remain held.
   Existing keep-separate markers and provider matching safeguards remain in effect.
   Identical colliding files are deduplicated; distinct media variants are retained.
-  Original platform backups are kept and their paths printed. Stop writers before --apply.
+  --keep-backup retains original platforms; off by default. Stop writers before --apply.
 
 MAME:
   Accepted MAME sets use the same grouping rules as DAT import, preserving set bindings.
   New imports already fold by default; running fold again normally has nothing to change.
   Preview with --platform Arcade --details; add --apply to merge or rename existing cards.
-  Metadata, media and original backups are preserved. Stop catalog writers before applying.
+  Metadata and media are preserved. Original backups require --keep-backup.
   One snapshot is supported, including partial imports; splits and conflicting data are held.
   Source-ID interactive/review-plan modes do not change MAME bindings; --editions-only excludes them.
 

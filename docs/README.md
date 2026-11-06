@@ -12,6 +12,7 @@ Start with the [operator walkthrough](cli-workflow.md) and
 | Prepare translations/hacks | [Variants and inherited metadata](catalog-variants.md), [staging helper](prepare-variants.md) |
 | Understand catalog files | [Metadata model](portable-metadata.md), [storage](catalog-storage.md) |
 | Import, enrich, edit cards and review folds in the browser | [Library management](catalog-editing.md) |
+| Manage retained backups | [Optional backups and deletion](catalog-backups.md) |
 | Review game boundaries | [Identity rules](regional-content-identity.md), [fold plans](reviewed-fold-plans.md), [splits](reviewed-content-splits.md) |
 | Export ROM sets / new platforms | [Generic input handling and evidence](romset-export.md) |
 | Select platforms / identify folders | [Codes, aliases and export support](platform-selection.md) |

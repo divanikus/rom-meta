@@ -342,8 +342,9 @@ imports retain only their imported sets; names remain stable against the full
 source. Cards on different hardware or with meaningful content differences stay
 separate even when providers return the same ID. Already grouped cards are a no-op.
 
-Preview changes no catalog files. Stop writers before apply; original folders and
-bindings are retained under the printed backup path. Conflicting curation/media,
+Preview changes no catalog files. Stop writers before apply; pass
+`--keep-backup` to retain original folders and bindings after success.
+See [backup management](catalog-backups.md). Conflicting curation/media,
 splits and multiple snapshots remain unsupported and cannot silently lose data.
 Source-ID `--interactive`/`--review-plan` modes hold MAME groups; `--editions-only`
 excludes this authority-based grouping. Unbound cards and other platforms retain
@@ -352,7 +353,8 @@ normal provider-ID folding. See `catalog fold --help`.
 Prior card/check history remains in `arcade_repair.original_cards`; raw MAME
 release descriptions remain intact.
 Manual recovery after process/system interruption is still supported by the
-original folders, binding and manifest in the backup; no crash journal is added.
+original folders, binding and manifest when a backup was retained or the failed
+operation reports a recovery path; no crash journal is added.
 
 ## Metadata and Media
 

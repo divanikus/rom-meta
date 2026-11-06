@@ -2,7 +2,8 @@
 
 Use `rom-meta catalog split --help` for the command contract. The default is a
 read-only preflight; `--apply` activates the complete staged platform and retains
-its original directory under `backups/`. Stop catalog writers before applying.
+its original directory under `backups/` only with `--keep-backup`.
+See [backup management](catalog-backups.md). Stop catalog writers before applying.
 No remote metadata/media requests or ROM writes are performed.
 
 A version 1 JSON plan names one platform and explicit groups. Each group has the

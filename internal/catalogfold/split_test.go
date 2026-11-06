@@ -58,14 +58,14 @@ func TestReviewedSplitPreservesAllPayloadsAndFiles(t *testing.T) {
 	root := t.TempDir()
 	_, plan := splitFixture(t, root)
 	before := catalogBytes(t, root)
-	preview, err := Split(SplitOptions{DataRoot: root, ReviewPlan: plan})
+	preview, err := Split(SplitOptions{KeepBackup: true, DataRoot: root, ReviewPlan: plan})
 	if err != nil || preview.NewCards != 1 || preview.Releases != 2 || preview.Fingerprints != 2 {
 		t.Fatal(err, preview)
 	}
 	if !reflect.DeepEqual(before, catalogBytes(t, root)) {
 		t.Fatal("preview wrote files")
 	}
-	result, err := Split(SplitOptions{DataRoot: root, ReviewPlan: plan, Apply: true})
+	result, err := Split(SplitOptions{KeepBackup: true, DataRoot: root, ReviewPlan: plan, Apply: true})
 	if err != nil || result.Backup == "" {
 		t.Fatal(err, result)
 	}
@@ -95,7 +95,7 @@ func TestReviewedSplitPreservesAllPayloadsAndFiles(t *testing.T) {
 			t.Fatal("file changed", path)
 		}
 	}
-	if _, err = Split(SplitOptions{DataRoot: root, ReviewPlan: plan, Apply: true}); err == nil {
+	if _, err = Split(SplitOptions{KeepBackup: true, DataRoot: root, ReviewPlan: plan, Apply: true}); err == nil {
 		t.Fatal("consumed plan replayed")
 	}
 }
@@ -195,7 +195,7 @@ func TestReviewedSplitSharesMediaAndRoutesUnscopedSource(t *testing.T) {
 	group.GameSHA256 = fmt.Sprintf("%x", sha256.Sum256([]byte(game)))
 	group.SourceRoutes = []SplitSourceRoute{{Source: "archive", MatchIndex: 0, Folder: "Orbit Demo"}}
 	group.Files[0].Targets = append(group.Files[0].Targets, SplitTarget{Folder: "Orbit Demo", Path: "media/shared.jpg"})
-	result, err := Split(SplitOptions{DataRoot: root, ReviewPlan: writeSplitFixture(t, root, plan), Apply: true})
+	result, err := Split(SplitOptions{KeepBackup: true, DataRoot: root, ReviewPlan: writeSplitFixture(t, root, plan), Apply: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +231,7 @@ func TestReviewedSplitProjectsMultipleReleaseScopes(t *testing.T) {
 	game := readFoldFile(t, path) + "  multi:\n    custom_stanza: keep\n    matches:\n      - releases: [Orbit (USA), Orbit (Japan) (Demo)]\n        custom: {nested: keep}\n"
 	writeFoldFile(t, path, game)
 	group.GameSHA256 = fmt.Sprintf("%x", sha256.Sum256([]byte(game)))
-	result, err := Split(SplitOptions{DataRoot: root, ReviewPlan: writeSplitFixture(t, root, plan), Apply: true})
+	result, err := Split(SplitOptions{KeepBackup: true, DataRoot: root, ReviewPlan: writeSplitFixture(t, root, plan), Apply: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +263,7 @@ func TestReviewedSplitPreservesStructuredProviderReleasePayloads(t *testing.T) {
 			writeFoldFile(t, path, game)
 			group.GameSHA256 = fmt.Sprintf("%x", sha256.Sum256([]byte(game)))
 			before := catalogBytes(t, root)
-			result, err := Split(SplitOptions{DataRoot: root, ReviewPlan: writeSplitFixture(t, root, plan), Apply: true})
+			result, err := Split(SplitOptions{KeepBackup: true, DataRoot: root, ReviewPlan: writeSplitFixture(t, root, plan), Apply: true})
 			if invalid {
 				if err == nil || !reflect.DeepEqual(before, catalogBytes(t, root)) {
 					t.Fatal("invalid nested scope mutated catalog", err)

@@ -69,7 +69,7 @@ func (plan *mameFoldPlan) finish(root string, options Options, result *PlatformR
 	applied := false
 	if options.Apply && blocked == "" && len(plan.report.Groups) > 0 {
 		options.Progress.Update("applying MAME fold", 0, len(plan.report.Groups), "checking files and updating set bindings")
-		backup, err := arcaderepair.Apply(root, filepath.Join(plan.work, "review", "review.json"))
+		backup, err := arcaderepair.ApplyWithBackup(root, filepath.Join(plan.work, "review", "review.json"), options.KeepBackup)
 		if err != nil {
 			plan.keepWork = true
 			return fmt.Errorf("MAME fold: %w; prepared files: %s; backup: %s", err, plan.work, backup)

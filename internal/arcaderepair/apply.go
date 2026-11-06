@@ -13,10 +13,22 @@ import (
 )
 
 // Apply publishes exactly a prepared projection after rechecking every input
-// and output byte. Original directories and the old binding are retained on
-// the same volume; failures attempt rollback and report the retained backup.
+// and output byte. Temporary originals are removed after success; failures
+// attempt rollback and report any retained recovery directory.
 func Apply(root, reviewFile string) (backup string, err error) {
-	return applyReview(root, reviewFile, catalogfs.Rename)
+	return ApplyWithBackup(root, reviewFile, false)
+}
+
+// ApplyWithBackup keeps the original cards and binding only when requested.
+func ApplyWithBackup(root, reviewFile string, keepBackup bool) (string, error) {
+	backup, err := applyReview(root, reviewFile, catalogfs.Rename)
+	if err == nil && backup != "" && !keepBackup {
+		if err = catalogfs.RemoveAll(backup); err != nil {
+			return backup, fmt.Errorf("repair applied; could not remove temporary original at %s: %w", backup, err)
+		}
+		backup = ""
+	}
+	return backup, err
 }
 
 func applyReview(root, reviewFile string, rename func(string, string) error) (backup string, err error) {

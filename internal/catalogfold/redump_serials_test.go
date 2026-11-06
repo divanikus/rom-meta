@@ -39,7 +39,7 @@ func TestXboxSerialDiscoveryNeverAutomaticallyMerges(t *testing.T) {
 			a := writeSerialGame(t, root, "Microsoft - Xbox 360", names[0], "USA", "EA-2276", "", "", "")
 			b := writeSerialGame(t, root, "Microsoft - Xbox 360", names[1], "Japan", "ea2276", "", "", "")
 			beforeA, beforeB := readFoldFile(t, filepath.Join(a, "game.yaml")), readFoldFile(t, filepath.Join(b, "game.yaml"))
-			result, err := Fold(Options{DataRoot: root, Apply: true})
+			result, err := Fold(Options{KeepBackup: true, DataRoot: root, Apply: true})
 			if err != nil || result.CandidateGroupCount != 1 || result.ReviewRequiredCount != 1 || result.AppliedGroupCount != 0 || result.SkippedGroupCount != 1 || len(result.Backups) != 0 {
 				t.Fatalf("%v %+v", err, result)
 			}
@@ -112,7 +112,7 @@ func TestXboxSerialReviewPreservesDataAndMedia(t *testing.T) {
 	writeFoldFile(t, filepath.Join(a, "media", "box.jpg"), "English artwork")
 	writeFoldFile(t, filepath.Join(b, "media", "box.jpg"), "Russian artwork")
 	called := 0
-	r, e := Fold(Options{DataRoot: root, Review: func(p ReviewPrompt) (ReviewDecision, error) {
+	r, e := Fold(Options{KeepBackup: true, DataRoot: root, Review: func(p ReviewPrompt) (ReviewDecision, error) {
 		called++
 		if p.Group.ReviewRequired == "" || p.Group.HoldReason != "" || len(p.Group.FileChanges) != 1 || p.Group.FileChanges[0].Action != "relocate" {
 			t.Fatalf("unreviewable group: %+v", p.Group)
@@ -138,7 +138,7 @@ func TestXboxSerialReviewPreservesDataAndMedia(t *testing.T) {
 	if _, e = os.Stat(b); !os.IsNotExist(e) {
 		t.Fatal("localized directory survived", e)
 	}
-	again, e := Fold(Options{DataRoot: root, Apply: true})
+	again, e := Fold(Options{KeepBackup: true, DataRoot: root, Apply: true})
 	if e != nil || again.CandidateGroupCount != 0 {
 		t.Fatal(e, again)
 	}

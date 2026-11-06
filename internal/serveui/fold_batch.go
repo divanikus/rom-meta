@@ -79,7 +79,7 @@ func (b *foldBatch) split(decisions []catalogfold.Decision) ([][]catalogfold.Dec
 	}
 	return out, nil
 }
-func (b *foldBatch) Apply(ctx context.Context, decisions []catalogfold.Decision) (catalogfold.AppliedPlan, error) {
+func (b *foldBatch) Apply(ctx context.Context, decisions []catalogfold.Decision, keepBackup bool) (catalogfold.AppliedPlan, error) {
 	result := catalogfold.AppliedPlan{}
 	if len(decisions) == 0 {
 		return result, fmt.Errorf("select groups to apply")
@@ -101,7 +101,7 @@ func (b *foldBatch) Apply(ctx context.Context, decisions []catalogfold.Decision)
 		if len(d) == 0 {
 			continue
 		}
-		part, err := b.plans[i].Apply(ctx, d)
+		part, err := b.plans[i].ApplyWithBackup(ctx, d, keepBackup)
 		result.Applied += part.Applied
 		result.KeptSeparate += part.KeptSeparate
 		result.Backups = append(result.Backups, part.Backups...)

@@ -259,7 +259,7 @@ test('opening a completed DAT import dismisses only its receipt',async()=>{
 test('queued enrichment reconnect exposes automatic start and remove, never Start again',()=>{
  const b=browser();b.run('libraryUI.jobs=[{id:"q",kind:"enrichment",platform:"Console",state:"queued",queued_at:"1",enrichment:{platforms:["Console","Other"],jobs:[{source:"launchbox",type:"artwork",state:"pending",platform:"Console",workers:4}]}}]');
  const html=b.run('enrichmentDetail(libraryUI.jobs[0])');
- assert.equal(b.run('operationBusy(libraryUI.jobs[0])'),true);assert.match(html,/Starts automatically/);assert.match(html,/Remove from queue/);assert.doesNotMatch(html,/data-enrichment-start/);
+ assert.equal(b.run('operationBusy(libraryUI.jobs[0])'),true);assert.match(html,/Queue position 1/);assert.match(html,/Remove from queue/);assert.doesNotMatch(html,/data-enrichment-start/);
 });
 test('enrichment platform changes fetch all choices and preserve explicit source choices',async()=>{
  const b=browser();b.context.fetchJSON=async path=>path==="/api/operations"?[]:{revision:"settings",choices:[{source:"launchbox",type:"metadata",available:true,default:true},{source:"igdb",type:"metadata",available:false,reason:"Credentials missing"}]};
@@ -620,7 +620,7 @@ test('finished operation close buttons dismiss the selected result through the s
    const b=browser();b.context.fixture={id:'chosen',revision:7,kind,state,filename:'Example.dat',platform:'Console',summary:{platform:'Console'},enrichment:{jobs:[],platforms:['Console']},export:{destination:{name:'Example'},written:0}};
    const html=b.run('operationDetail(fixture)'),finished=['succeeded','incomplete','failed'].includes(state);
    assert.equal(html.includes('aria-label="Dismiss result from Operations"'),finished,kind+' '+state);
-   if(finished)assert.match(html,/Saved files stay in place/);
+   if(finished)assert.match(html,/Remove from Operations/);
   }
  }
  for(const index of [0,1]){
@@ -638,7 +638,7 @@ test('completed import offers Fetch metadata for its resolved platform without s
  b.element('operations-pane').querySelectorAll=selector=>selector==='[data-import-fetch]'?[button]:[];
  b.context.fetchJSON=async path=>{b.calls.push(['GET',path]);return path==='/api/operations'?b.run('libraryUI.jobs'):path==='/api/platforms'?b.run('state.platforms'):{revision:'settings',choices:[{source:'launchbox',type:'metadata',available:true,default:true}]}};
  b.run('state.platform="Other";state.platforms=[{platform:"Imported console"},{platform:"Other"}];libraryUI.jobs=[{id:"done",kind:"dat-import",state:"succeeded",revision:2,filename:"example.dat",platform:"Original input",summary:{platform:"Imported console"}}];libraryUI.selected="done";libraryRenderOperations()');
- assert.match(b.element('operations-pane').innerHTML,/Next step:/);assert.match(b.element('operations-pane').innerHTML,/data-import-fetch="done"/);
+ assert.match(b.element('operations-pane').innerHTML,/Add descriptions and artwork next/);assert.match(b.element('operations-pane').innerHTML,/data-import-fetch="done"/);
  await button.listeners.click();
  assert.equal(b.run('state.view'),'operations');
  assert.deepEqual(JSON.parse(b.run('JSON.stringify(enrichmentUI.draft.platforms)')),['Imported console']);
@@ -650,4 +650,17 @@ test('completed import offers Fetch metadata for its resolved platform without s
  }
  b.run('libraryUI.jobs[0].state="succeeded";catalogUI.enabled=false');
  assert.doesNotMatch(b.run('operationDetail(libraryUI.jobs[0])'),/data-import-fetch/);
+});
+
+test('backup deletion requires confirmation and uses the displayed revision',async()=>{
+ const b=browser();b.run('state.view="settings";librarySettingsUI.selected="backups";backupUI.entries=[{id:"Console.fold-backup-123",platform:"Console",kind:"Platform",bytes:1024,files:2,modified:"2026-01-01",revision:"reviewed"}];libraryRenderBackups()');
+ assert.match(b.element('settings-pane').innerHTML,/Delete…/);
+ b.context.window.confirm=()=>false;await b.run('libraryDeleteBackup("Console.fold-backup-123")');
+ assert.equal(b.calls.length,0);
+ b.context.window.confirm=()=>true;
+ b.context.catalogPost=async(path,body)=>{b.calls.push([path,body]);return {backups:[]}};
+ await b.run('libraryDeleteBackup("Console.fold-backup-123")');
+ assert.equal(b.calls[0][0],'/api/catalog/backups');
+ assert.deepEqual(JSON.parse(JSON.stringify(b.calls[0][1])),{id:'Console.fold-backup-123',revision:'reviewed',confirm:true});
+ assert.match(b.element('settings-pane').innerHTML,/No retained backups/);
 });

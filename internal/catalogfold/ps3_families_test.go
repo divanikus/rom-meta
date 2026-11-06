@@ -43,7 +43,7 @@ func TestPS3DiscFamiliesUseSerialsAndPreserveEnrichment(t *testing.T) {
 	}
 	// The scope is PS3, even if unrelated hardware has identical source fields.
 	other := writeSerialGame(t, root, "Other Console", names[1], "Russia", serials[1], "", "", "")
-	dry, err := Fold(Options{DataRoot: root, Platform: platform})
+	dry, err := Fold(Options{KeepBackup: true, DataRoot: root, Platform: platform})
 	if err != nil || dry.CandidateGroupCount != 1 || dry.HeldGroupCount != 0 || dry.ReviewRequiredCount != 0 {
 		t.Fatalf("%v %+v", err, dry)
 	}
@@ -51,7 +51,7 @@ func TestPS3DiscFamiliesUseSerialsAndPreserveEnrichment(t *testing.T) {
 	if len(group.Evidence) != 1 || !isPS3DiscFamily(group.Evidence[0]) || group.Evidence[0].URL == "" || group.Keep.Folder != names[0] {
 		t.Fatalf("%+v", group)
 	}
-	result, err := Fold(Options{DataRoot: root, Platform: platform, Apply: true})
+	result, err := Fold(Options{KeepBackup: true, DataRoot: root, Platform: platform, Apply: true})
 	if err != nil || result.AppliedGroupCount != 1 || len(result.Backups) != 1 {
 		t.Fatalf("%v %+v", err, result)
 	}
@@ -77,7 +77,7 @@ func TestPS3DiscFamiliesUseSerialsAndPreserveEnrichment(t *testing.T) {
 	if _, err := os.Stat(other); err != nil {
 		t.Fatal(err)
 	}
-	again, err := Fold(Options{DataRoot: root, Platform: platform, Apply: true})
+	again, err := Fold(Options{KeepBackup: true, DataRoot: root, Platform: platform, Apply: true})
 	if err != nil || again.CandidateGroupCount != 0 {
 		t.Fatal(err, again)
 	}
@@ -118,7 +118,7 @@ func TestPS3DiscFamiliesConservativeCoverage(t *testing.T) {
 			if tt.releaseExtra != "" {
 				writeFoldFile(t, filepath.Join(path, "game.yaml"), readFoldFile(t, filepath.Join(path, "game.yaml"))+tt.releaseExtra)
 			}
-			r, e := Fold(Options{DataRoot: root, Apply: true, EditionsOnly: tt.editions})
+			r, e := Fold(Options{KeepBackup: true, DataRoot: root, Apply: true, EditionsOnly: tt.editions})
 			if e != nil || r.CandidateGroupCount != 0 || len(r.Backups) != 0 {
 				t.Fatalf("%v %+v", e, r)
 			}
@@ -128,7 +128,7 @@ func TestPS3DiscFamiliesConservativeCoverage(t *testing.T) {
 		root := t.TempDir()
 		writeSerialGame(t, root, "PS3", "English", "USA", "BLUS30198", "", "", "")
 		writeSerialGame(t, root, "PS3", "Localized", "Europe", "BLES00406, BLES00411", "", "", "")
-		r, e := Fold(Options{DataRoot: root})
+		r, e := Fold(Options{KeepBackup: true, DataRoot: root})
 		if e != nil || r.CandidateGroupCount != 1 {
 			t.Fatal(e, r)
 		}
@@ -159,7 +159,7 @@ func TestPS3DiscFamiliesDoNotBypassHolds(t *testing.T) {
 			if tt.thirdSerial != "" {
 				writeSerialGame(t, root, platform, "Third", "Europe", tt.thirdSerial, "", "", tt.thirdSource)
 			}
-			r, e := Fold(Options{DataRoot: root, Review: func(ReviewPrompt) (ReviewDecision, error) { return ReviewApply, nil }})
+			r, e := Fold(Options{KeepBackup: true, DataRoot: root, Review: func(ReviewPrompt) (ReviewDecision, error) { return ReviewApply, nil }})
 			if e != nil || r.HeldGroupCount != 1 || r.AppliedGroupCount != 0 || len(r.Backups) != 0 {
 				t.Fatalf("%v %+v", e, r)
 			}

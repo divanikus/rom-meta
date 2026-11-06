@@ -121,7 +121,7 @@ func TestPrepareApplyPreservesEnrichmentAndBindings(t *testing.T) {
 			t.Fatal("release changed", id)
 		}
 	}
-	backup, e := Apply(root, filepath.Join(out, "review.json"))
+	backup, e := ApplyWithBackup(root, filepath.Join(out, "review.json"), true)
 	if e != nil {
 		t.Fatal(e)
 	}

@@ -163,6 +163,7 @@ func HandlerWithEditing(dataRoot string, allowEdit bool) (http.Handler, error) {
 	mux.HandleFunc("/api/catalog/import-dismiss", server.operationDismiss)
 	mux.HandleFunc("/api/catalog", server.catalogCapabilities)
 	mux.HandleFunc("/api/catalog/settings", server.librarySettings)
+	mux.HandleFunc("/api/catalog/backups", server.backups)
 	mux.HandleFunc("/api/catalog/curation", server.curationSources)
 	mux.HandleFunc("/api/catalog/edit", server.catalogEdit)
 	mux.HandleFunc("/api/catalog/edit-preview", server.catalogEditPreview)

@@ -505,12 +505,15 @@ only after verifying that its writer has stopped.
 Ordinary selected groups use one staging/swap per platform. MAME uses its
 binding-aware transaction. This is not an all-platform atomic transaction: if a
 later platform or MAME transaction fails, earlier completed changes remain saved.
-Recovery paths are shown after apply. Completed work and recovery
-locations are reported; build a fresh plan for remaining cases. An apply attempt
+Backups are optional and off by default. Check **Keep a backup of the affected
+platforms** in the final review to retain originals for that apply. Manage retained
+copies in **Settings → Backups**; deleting a copy requires confirmation.
+See [backup management](catalog-backups.md) for CLI use and limits.
+Errors report any retained recovery files; build a fresh plan for remaining cases. An apply attempt
 consumes its plan even on failure. The browser requests `continue: true` after a
 successful apply; the response contains `next_plan` with a new ID, or a separate
-`continuation_error` alongside the successful result. Recovery folders use the existing fold behavior;
-no filesystem or ZFS snapshot is requested.
+`continuation_error` alongside the successful result. Temporary originals are removed after successful application unless
+`keep_backup: true` was requested. No filesystem or ZFS snapshot is created.
 
 Single-card saves use atomic replacement and reject stale revisions. The recognition
 index and browser summaries are refreshed after writes; an index refresh problem is

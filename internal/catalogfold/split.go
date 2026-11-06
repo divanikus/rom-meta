@@ -60,6 +60,7 @@ type SplitTarget struct {
 type SplitOptions struct {
 	DataRoot, ReviewPlan string
 	Apply                bool
+	KeepBackup           bool
 	RegionPriority       []string
 	RegionGroups         map[string][]string
 	Progress             taskprogress.Func
@@ -167,7 +168,7 @@ func Split(options SplitOptions) (SplitResult, error) {
 		}
 	}
 	options.Progress.Update("committing split", 1, 1, plan.Platform)
-	if err = tx.commit(); err != nil {
+	if err = tx.commit(options.KeepBackup); err != nil {
 		return result, err
 	}
 	result.Backup = tx.backupPath

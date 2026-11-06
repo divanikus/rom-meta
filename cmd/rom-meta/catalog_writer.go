@@ -15,6 +15,10 @@ func catalogWriterRoot(args []string) (string, bool) {
 	default:
 		return "", false
 	}
+	// Backup management owns its lock for both listing and deletion.
+	if len(args) > 1 && args[0] == "catalog" && args[1] == "backups" {
+		return "", false
+	}
 	root := "."
 	apply := false
 	for i, arg := range args {

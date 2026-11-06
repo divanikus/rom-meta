@@ -74,7 +74,7 @@ test('editable-field and identity reviews retain their distinct guidance',()=>{
  assert.doesNotMatch(b.element('catalog-content').innerHTML,/id="catalog-preview-group" disabled/);
  assert.match(b.element('catalog-subtitle').textContent,/Needs your decision/);
  b.run('catalogUI.group.conflicts=[];catalogUI.group.needs_identity=true;catalogRenderReview()');
- assert.match(b.element('catalog-content').innerHTML,/Agree & next queues this selection/);
+ assert.match(b.element('catalog-content').innerHTML,/Review now, apply together/);
  assert.match(b.element('catalog-content').innerHTML,/Agree & next/);
  assert.doesNotMatch(b.element('catalog-content').innerHTML,/cannot override the conflict/);
  b.run('catalogUI.group.group.ReviewAccepted=true;catalogUI.group.conflicts=["description"];catalogRenderReview()');
@@ -318,7 +318,7 @@ test('merge, separate and skip decisions advance without applying until the fina
  await b.run('catalogQueueDecision("skip")');
  assert.equal(b.run('catalogUI.mode'),'decisions');assert.equal(calls.length,0);
  assert.match(b.element('catalog-content').innerHTML,/2 merge.*1 keep separate.*1 unresolved/s);
- assert.match(b.element('catalog-subtitle').textContent,/One batch will save these changes/);
+ assert.match(b.element('catalog-subtitle').textContent,/Review the changes before applying/);
  await b.run('catalogApply(catalogBatchDecisions())');
  assert.equal(calls.filter(c=>c.path.endsWith('fold-apply')).length,1);
  assert.deepEqual(calls[0].body.decisions.map(d=>d.action).sort(),['merge','merge','separate']);
@@ -570,4 +570,16 @@ test('fold plan progress keeps known totals and identifies count units',()=>{
  assert.equal(b.run('catalogStageProgress({Stage:"reading",Current:0,Total:100})'),' · 0 / 100 games');
  assert.equal(b.run('catalogStageProgress({Stage:"checking files",Current:2,Total:8})'),' · 2 / 8 groups');
  assert.equal(b.run('catalogStageProgress({Stage:"Planning platforms",Current:1,Total:3})'),' · 1 / 3 platforms');
+});
+
+test('final merge review opts out of backups until explicitly checked',async()=>{
+ for(const keep of [false,true]){
+  let request;
+  const b=browser(async(path,options)=>{if(path.endsWith('fold-apply'))request=JSON.parse(options.body);return json({result:{applied:1,kept_separate:0},next_plan:{id:'next',groups:[]}})});
+  b.run('catalogUI.plan={id:"plan",groups:[{id:0,revision:1,status:"ready",group:{Keep:{Folder:"One"},Merge:[{Folder:"Two"}]}}]};catalogUI.selected=new Set([0]);fetchJSON=async()=>[];catalogRenderDecisions()');
+  assert.match(b.element('catalog-content').innerHTML,/id="catalog-keep-backup">/);
+  b.element('catalog-keep-backup').checked=keep;
+  await b.run('catalogApply(catalogBatchDecisions())');
+  assert.equal(request.keep_backup,keep);
+ }
 });

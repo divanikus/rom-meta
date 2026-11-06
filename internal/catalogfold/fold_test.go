@@ -98,7 +98,7 @@ func TestFoldReportsPlatformStartAndResult(t *testing.T) {
 
 	var starts []string
 	var results []PlatformResult
-	_, err := Fold(Options{
+	_, err := Fold(Options{KeepBackup: true,
 		DataRoot: root,
 		OnPlatformStart: func(index, total int, platform string) {
 			starts = append(starts, strconv.Itoa(index)+"/"+strconv.Itoa(total)+" "+platform)
@@ -131,7 +131,7 @@ func TestFoldRegionPriorityCanPreferJapan(t *testing.T) {
 	writeFoldGame(t, root, platform, japan, japan, "Akumajou Densetsu", "42")
 	addRegionalTestAlias(t, root, platform, usa, "Castlevania III", "Akumajou Densetsu", "Japan")
 
-	result, err := Fold(Options{
+	result, err := Fold(Options{KeepBackup: true,
 		DataRoot:       root,
 		Platform:       platform,
 		RegionPriority: []string{"japan", "usa"},
@@ -167,7 +167,7 @@ func TestFoldRegionPriorityRecognizesAsiaAndRussiaAliases(t *testing.T) {
 			writeFoldGame(t, root, platform, china, china, "Regional Game", "55")
 			writeFoldGame(t, root, platform, russia, russia, "Regional Game", "55")
 
-			result, err := Fold(Options{
+			result, err := Fold(Options{KeepBackup: true,
 				DataRoot:       root,
 				Platform:       platform,
 				RegionPriority: test.priority,
@@ -190,7 +190,7 @@ func TestFoldPlatformRegionPriorityOverridesGlobal(t *testing.T) {
 	writeFoldGame(t, root, platform, usa, usa, "Dragon's Lair", "100")
 	writeFoldGame(t, root, platform, japan, japan, "Dragon's Lair", "100")
 
-	result, err := Fold(Options{
+	result, err := Fold(Options{KeepBackup: true,
 		DataRoot:       root,
 		Platform:       platform,
 		RegionPriority: []string{"usa", "japan"},
@@ -266,7 +266,7 @@ func TestFoldApplyUsesRegionPriorityForMergedDefaultRelease(t *testing.T) {
 	writeFoldGame(t, root, platform, japan, japan, "Akumajou Densetsu", "42")
 	addRegionalTestAlias(t, root, platform, usa, "Castlevania III", "Akumajou Densetsu", "Japan")
 
-	_, err := Fold(Options{
+	_, err := Fold(Options{KeepBackup: true,
 		DataRoot:       root,
 		Platform:       platform,
 		Apply:          true,
@@ -321,7 +321,7 @@ func TestPlatformTransactionCommitSwapsCompletePlatform(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(transaction.stagePath, "Sonic", "game.yaml"), []byte("title: Changed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := transaction.commit(); err != nil {
+	if err := transaction.commit(true); err != nil {
 		t.Fatalf("commit returned error: %v", err)
 	}
 	if got := readFoldFile(t, filepath.Join(gamePath, "game.yaml")); got != "title: Changed\n" {
@@ -344,7 +344,7 @@ func TestPlatformTransactionCommitSwapsCompletePlatform(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer second.abort()
-	if err := second.commit(); err != nil {
+	if err := second.commit(true); err != nil {
 		t.Fatal(err)
 	}
 	if second.backupPath == transaction.backupPath {
@@ -372,7 +372,7 @@ func TestPlatformTransactionBackupFailuresPreserveOriginal(t *testing.T) {
 			} else if err := os.Rename(transaction.stagePath, transaction.stagePath+"-unavailable"); err != nil {
 				t.Fatal(err)
 			}
-			if err := transaction.commit(); err == nil {
+			if err := transaction.commit(true); err == nil {
 				t.Fatal("expected commit failure")
 			}
 			if got := readFoldFile(t, original); got != "original" {
@@ -397,7 +397,7 @@ func TestFoldApplyPreservesMediaPathConflicts(t *testing.T) {
 	writeFoldFile(t, filepath.Join(root, "platforms", platform, usa, "media", "box-front.launchbox.jpg"), "usa")
 	writeFoldFile(t, filepath.Join(root, "platforms", platform, europe, "media", "box-front.launchbox.jpg"), "europe")
 
-	result, err := Fold(Options{DataRoot: root, Platform: platform, Apply: true})
+	result, err := Fold(Options{KeepBackup: true, DataRoot: root, Platform: platform, Apply: true})
 	if err != nil {
 		t.Fatalf("Fold returned error: %v", err)
 	}
@@ -530,7 +530,7 @@ func TestFoldInteractiveNoWritesIgnoredEvidence(t *testing.T) {
 	writeFoldScreenScraperGame(t, root, platform, "Sports Talk Baseball", "Sports Talk Baseball (USA)", "Sports Talk Baseball", "752", "Sports Talk Baseball", []string{"Sports Talk Baseball", "Nikkan Sports Pro Yakyuu Van"})
 	writeFoldScreenScraperGame(t, root, platform, "Nikkan Sports Pro Yakyuu VAN", "Nikkan Sports Pro Yakyuu VAN (Japan)", "Nikkan Sports Pro Yakyuu VAN", "752", "Sports Talk Baseball", []string{"Sports Talk Baseball", "Nikkan Sports Pro Yakyuu Van"})
 
-	result, err := Fold(Options{
+	result, err := Fold(Options{KeepBackup: true,
 		DataRoot: root,
 		Platform: platform,
 		Review: func(prompt ReviewPrompt) (ReviewDecision, error) {
@@ -570,7 +570,7 @@ func TestFoldInteractiveYesAppliesGroup(t *testing.T) {
 	writeFoldGame(t, root, platform, japan, japan, "Akumajou Densetsu", "42")
 	addRegionalTestAlias(t, root, platform, usa, "Castlevania III", "Akumajou Densetsu", "Japan")
 
-	result, err := Fold(Options{
+	result, err := Fold(Options{KeepBackup: true,
 		DataRoot: root,
 		Platform: platform,
 		Review: func(prompt ReviewPrompt) (ReviewDecision, error) {
@@ -598,7 +598,7 @@ func TestFoldInteractiveQuitStopsReview(t *testing.T) {
 	writeFoldGame(t, root, platform, "Game Two (Japan)", "Game Two (Japan)", "Game Two", "200")
 
 	reviews := 0
-	result, err := Fold(Options{
+	result, err := Fold(Options{KeepBackup: true,
 		DataRoot: root,
 		Platform: platform,
 		Review: func(prompt ReviewPrompt) (ReviewDecision, error) {

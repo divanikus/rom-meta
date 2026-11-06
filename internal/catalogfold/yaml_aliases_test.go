@@ -88,7 +88,7 @@ sources:
 				if packed {
 					catalogfstest.Pack(t, filepath.Join(root, "platforms", platform))
 				}
-				options := Options{DataRoot: root, Platform: platform}
+				options := Options{KeepBackup: true, DataRoot: root, Platform: platform}
 				if mode == "reviewed" {
 					options.Platform = ""
 					group := ReviewedGroup{Platform: platform, Reason: "Alias preservation regression"}

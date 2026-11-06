@@ -16,7 +16,7 @@ func runCatalogSplit(args []string) error {
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--help", "-h":
-			fmt.Println("rom-meta catalog split --data-root <root> --review-plan <json> [--details] [--apply]\nSplit explicitly reviewed content partitions, preserving releases, fingerprints and files.\nDefault is read-only preflight. Every input extra file needs an explicit target.\nOriginal platform backup is retained. Stop catalog writers before --apply.")
+			fmt.Println("rom-meta catalog split --data-root <root> --review-plan <json> [--details] [--apply] [--keep-backup]\nSplit explicitly reviewed content partitions, preserving releases, fingerprints and files.\nDefault is read-only preflight. Every input extra file needs an explicit target.\nUse --keep-backup to retain the original platform. Stop catalog writers before --apply.")
 			return nil
 		case "--data-root", "--review-plan":
 			if i+1 >= len(args) || strings.TrimSpace(args[i+1]) == "" {
@@ -29,6 +29,8 @@ func runCatalogSplit(args []string) error {
 			} else {
 				options.ReviewPlan = args[i]
 			}
+		case "--keep-backup":
+			options.KeepBackup = true
 		case "--apply":
 			options.Apply = true
 		case "--details":

@@ -443,6 +443,10 @@ func (p *Plan) Validate(ctx context.Context, decisions []Decision) error {
 	return nil
 }
 func (p *Plan) Apply(ctx context.Context, decisions []Decision) (AppliedPlan, error) {
+	return p.ApplyWithBackup(ctx, decisions, p.options.KeepBackup)
+}
+
+func (p *Plan) ApplyWithBackup(ctx context.Context, decisions []Decision, keepBackup bool) (AppliedPlan, error) {
 	result := AppliedPlan{}
 	if len(decisions) == 0 {
 		return result, fmt.Errorf("select groups to apply")
@@ -507,10 +511,13 @@ func (p *Plan) Apply(ctx context.Context, decisions []Decision) (AppliedPlan, er
 		if err := ctx.Err(); err != nil {
 			return result, err
 		}
-		if err := tx.commit(); err != nil {
+		err = tx.commit(keepBackup)
+		if tx.backupPath != "" {
+			result.Backups = append(result.Backups, tx.backupPath)
+		}
+		if err != nil {
 			return result, err
 		}
-		result.Backups = append(result.Backups, tx.backupPath)
 		for _, d := range ordinary {
 			if d.Action == "merge" {
 				result.Applied++
@@ -520,7 +527,7 @@ func (p *Plan) Apply(ctx context.Context, decisions []Decision) (AppliedPlan, er
 		}
 	}
 	if len(targets) > 0 {
-		backup, err := arcaderepair.ApplySelected(p.options.DataRoot, filepath.Join(p.mame.work, "review", "review.json"), targets)
+		backup, err := arcaderepair.ApplySelected(p.options.DataRoot, filepath.Join(p.mame.work, "review", "review.json"), targets, keepBackup)
 		if backup != "" {
 			result.Backups = append(result.Backups, backup)
 		}

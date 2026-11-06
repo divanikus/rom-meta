@@ -32,7 +32,7 @@ async function enrichmentLoadChoices(defaults=false){
 function enrichmentWizard(){
  const f=enrichmentUI.draft,selected=enrichmentSelected();if(!f)return "";
  const names=[...new Set(f.choices.map(c=>c.source))],platforms=state.platforms||[];
- return '<section class="operation-detail enrichment-wizard"><h2>Fetch metadata</h2><p>Choose platforms and sources. Tasks run in order; downloads within each task can run in parallel.</p>'+
+ return '<section class="operation-detail enrichment-wizard"><h2>Fetch metadata</h2><p>Choose platforms and sources.</p>'+
  (enrichmentUI.error?'<p class="operation-error" role="alert">'+escapeHTML(enrichmentUI.error)+'</p>':"")+
  '<form id="enrichment-plan-form"><fieldset '+(enrichmentUI.busy?'disabled':'')+'><legend>Platforms ('+f.platforms.length+')</legend><div class="operation-actions"><button type="button" class="tab-button" data-enrichment-platforms="all">Select all</button><button type="button" class="tab-button" data-enrichment-platforms="none">Clear</button></div><div class="enrichment-platforms">'+platforms.map(p=>'<label><input type="checkbox" data-enrichment-platform="'+escapeAttr(p.platform)+'" '+(f.platforms.includes(p.platform)?'checked':'')+'> '+escapeHTML(p.platform)+'</label>').join("")+'</div></fieldset>'+
  '<fieldset '+(enrichmentUI.busy||f.loading?'disabled':'')+'><legend>Sources and data</legend>'+
@@ -42,7 +42,7 @@ function enrichmentWizard(){
  (choices.some(c=>c.reason)?'<small>'+escapeHTML([...new Set(choices.map(c=>c.reason).filter(Boolean))].join(" "))+'</small>':"")+'</div>';
  }).join("")+'</div>')+
  '<label class="enrichment-workers">Parallel requests / downloads<select id="enrichment-concurrency">'+[0,1,2,4,8,16,32].map(n=>'<option value="'+n+'" '+(f.concurrency===n?'selected':'')+'>'+(n?n+' worker'+(n===1?'':'s'):'Library / provider defaults')+'</option>').join("")+'</select><small>Applied within each source task. Provider limits still apply.</small></label>'+
- '<p class="secondary">Platform support is checked against each source when its task starts. Unresolved platforms are skipped; saved matches and existing media are kept.</p><div class="operation-actions"><button type="submit" class="catalog-primary" id="enrichment-prepare" '+(!selected.length||f.loading?'disabled':'')+'>'+(enrichmentUI.busy?'Preparing…':'Review tasks')+'</button><button type="button" class="tab-button" id="enrichment-defaults">Use library defaults</button></div></fieldset></form><p class="secondary">Once queued, work continues on this server after the browser is closed.</p></section>';
+ '<p class="secondary">Unsupported platforms are skipped.</p><div class="operation-actions"><button type="submit" class="catalog-primary" id="enrichment-prepare" '+(!selected.length||f.loading?'disabled':'')+'>'+(enrichmentUI.busy?'Preparing…':'Review tasks')+'</button><button type="button" class="tab-button" id="enrichment-defaults">Use library defaults</button></div></fieldset></form></section>';
 }
 async function enrichmentPrepare(event){
  event?.preventDefault();if(enrichmentUI.busy||enrichmentUI.draft.loading||!enrichmentSelected().length)return;
@@ -70,7 +70,7 @@ function enrichmentProgress(job){
  return '<div class="operation-progress" role="status"><strong>'+escapeHTML(downloading?"Downloading files":enrichmentStages[p.Stage]||p.Stage||"Starting")+'</strong>'+meter+
  (t?'<span>'+formatNumber(t.Downloaded)+' downloaded · '+formatNumber(t.Existing)+' already present · '+formatNumber(t.Failed)+' failed · '+formatNumber(Math.max(0,t.Queued-t.Downloaded-t.Failed))+' pending</span><small>'+operationBytes(t.Bytes)+' transferred · '+formatNumber(t.Queued)+(t.DiscoveryComplete?' files to download in this task':' files found to download so far')+'</small>':"")+
  (p.Item?'<span class="secondary">'+escapeHTML(p.Item)+'</span>':"")+
- '<div class="enrichment-transfers">'+Object.entries(e.workers||{}).map(([id,w])=>'<div><span>Worker '+Number(id)+'</span><span>'+escapeHTML(w.Item||"Working")+'</span>'+(w.Stage==="downloading"||w.BytesTotal>0?operationProgressMeter(w.BytesCurrent,w.BytesTotal,"received",{bytes:true,label:"Worker "+Number(id)+" download"}):'')+'</div>').join("")+'</div><small>Up to '+(task?.workers||1)+' worker'+((task?.workers||1)===1?'':'s')+' for this task.</small></div>';
+ '<div class="enrichment-transfers">'+Object.entries(e.workers||{}).map(([id,w])=>'<div><span>Worker '+Number(id)+'</span><span>'+escapeHTML(w.Item||"Working")+'</span>'+(w.Stage==="downloading"||w.BytesTotal>0?operationProgressMeter(w.BytesCurrent,w.BytesTotal,"received",{bytes:true,label:"Worker "+Number(id)+" download"}):'')+'</div>').join("")+'</div></div>';
 }
 function enrichmentTaskResult(t){
  const c=t.counts||{};
@@ -81,7 +81,7 @@ function enrichmentTaskResult(t){
 function enrichmentRetryAction(job,task,index){
  if(!catalogUI.enabled||!["failed","incomplete","skipped"].includes(task?.state))return "";
  const previous=libraryUI.jobs.find(j=>j.id===task.retry_operation),error=enrichmentUI.retryErrors.get(job.id+":"+index);
- return (error?'<p class="operation-error" role="alert">'+escapeHTML(error)+'</p>':'')+'<div class="operation-actions">'+(previous?'<button class="tab-button" data-enrichment-retry-open="'+escapeAttr(previous.id)+'">View retry</button>':'<button class="tab-button" data-enrichment-retry-task="'+index+'" '+(enrichmentUI.retrying?'disabled':'')+'>Retry this stage</button><span class="secondary">Saved results are reused. The retry starts when the library is free.</span>')+'</div>';
+ return (error?'<p class="operation-error" role="alert">'+escapeHTML(error)+'</p>':'')+'<div class="operation-actions">'+(previous?'<button class="tab-button" data-enrichment-retry-open="'+escapeAttr(previous.id)+'">View retry</button>':'<button class="tab-button" data-enrichment-retry-task="'+index+'" '+(enrichmentUI.retrying?'disabled':'')+'>Retry this stage</button>')+'</div>';
 }
 async function enrichmentRetryTask(job,index){
  if(enrichmentUI.retrying)return;
@@ -101,13 +101,13 @@ function enrichmentDetail(job){
  const queue=libraryUI.jobs.filter(j=>j.state==="queued").sort((a,b)=>(a.queued_at||"").localeCompare(b.queued_at||""));
  return '<article class="operation-detail enrichment-detail">'+operationDismiss(job,"",true)+'<div class="operation-eyebrow">FETCH METADATA · '+operationStatus(job.state,enrichmentStates[job.state]||job.state)+'</div><h2>'+escapeHTML(platforms.length===1?platforms[0]:platforms.length+" platforms")+'</h2>'+
  (platforms.length>1?'<details><summary>Selected platforms</summary><ul>'+platforms.map(p=>'<li>'+escapeHTML(p)+'</li>').join("")+'</ul></details>':"")+
- (queued?'<p class="queue-status" role="status">Queue position '+Math.max(1,queue.findIndex(j=>j.id===job.id)+1)+'. Starts automatically when the current library operation finishes. You can close the browser.</p>':ready?'<p>'+(willQueue?'Another operation is active or queued. These tasks will start automatically when it is their turn.':'Review the tasks, then start fetching metadata.')+' No downloads have started.</p>':'<p>'+finished+' / '+e.jobs.length+' tasks finished. Progress remains available in Operations.</p>')+
+ (queued?'<p class="queue-status" role="status">Queue position '+Math.max(1,queue.findIndex(j=>j.id===job.id)+1)+'</p>':ready?'<p>'+(willQueue?'Ready to join the queue.':'Ready to fetch.')+'</p>':'<p>'+finished+' / '+e.jobs.length+' tasks finished</p>')+
  '<div class="enrichment-layout"><nav aria-label="Fetch stages"><ol class="enrichment-tasks">'+e.jobs.map((t,i)=>'<li><button class="enrichment-stage '+(i===index?'active':'')+'" data-enrichment-task="'+i+'"><span>'+escapeHTML(sourceLabel(t.source))+' · '+enrichmentTypes[t.type]+'</span>'+(platforms.length>1?'<small>'+escapeHTML(t.platform)+'</small>':"")+'<span>'+operationStatus(t.state,enrichmentStates[t.state]||t.state)+'</span></button></li>').join("")+'</ol></nav><section class="enrichment-stage-detail"><h3>'+escapeHTML(task?sourceLabel(task.source)+" · "+enrichmentTypes[task.type]:"Tasks")+'</h3>'+
  (task?'<p class="secondary">'+escapeHTML(task.platform||job.platform)+' · '+(task.workers||1)+' worker'+((task.workers||1)===1?'':'s')+'</p>'+((job.state==="enriching"&&index===e.current)?enrichmentProgress(job):enrichmentTaskResult(task)+enrichmentRetryAction(job,task,index)):"")+
  (job.state==="enriching"&&index!==e.current?'<button class="tab-button" data-enrichment-follow>Show current task</button>':"")+'</section></div>'+
  (job.error?'<p class="operation-error" role="alert">'+escapeHTML(job.error)+'</p>':"")+(job.warning?'<p class="operation-error">'+escapeHTML(job.warning)+'</p>':"")+
  '<div class="operation-actions">'+(ready?'<button class="catalog-primary" data-enrichment-start="'+job.id+'">'+(willQueue?'Enqueue':'Start fetching')+'</button><button class="tab-button" data-enrichment-retry>Change selection</button>':!busy?'<button class="tab-button" data-import-open="'+job.id+'">Open platform</button><button class="tab-button" data-enrichment-retry>'+(job.state==='needs_review'?'Change selection':'Prepare another pass')+'</button>':"")+
- (!busy||queued?operationDismiss(job,queued?"Remove from queue":ready?"Discard plan":"Dismiss result"):"")+operationDismissHint(job)+'</div></article>';
+ (!busy||queued?operationDismiss(job,queued?"Remove from queue":ready?"Discard plan":"Dismiss result"):"")+'</div></article>';
 }
 function enrichmentBind(selected){
  document.querySelectorAll("[data-enrichment-retry-task]").forEach(b=>b.addEventListener("click",()=>enrichmentRetryTask(selected,Number(b.dataset.enrichmentRetryTask))));

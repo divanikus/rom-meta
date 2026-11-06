@@ -34,7 +34,7 @@ function catalogUpdateTools(){
  const count=catalogUI.compare.size+(state.game&&state.selectedFolder&&!catalogUI.compare.has(state.selectedFolder)?1:0);
  $("catalog-compare").disabled=count<2||!state.game||catalogUI.busy;
  $("catalog-compare").textContent="Compare for merge ("+count+")";
- $("catalog-compare").title=count<2?"Open another card from this platform to compare.":"Compare selected game cards, including this card, before deciding whether to merge. Nothing is saved until Apply.";
+ $("catalog-compare").title=count<2?"Select another card to compare.":"Compare this card with the selected cards for merging.";
  if(typeof librarySyncNavigation==="function")librarySyncNavigation();
 }
 async function catalogCapabilities(){
@@ -123,7 +123,7 @@ function catalogIncluded(){return catalogUI.included||new Set([catalogUI.group.g
 function catalogReviewHint(pg){
  if(pg.status==="blocked")return "The selected cards have a data or file conflict. Choose a different selection or resolve the reported problem before merging. Identity confirmation cannot discard conflicting data.";
  if(pg.conflicts?.length)return "Choose the highlighted saved values, then preview the result.";
- if(pg.needs_identity&&!pg.group.ReviewAccepted)return "Review the selected cards. Agree & next queues them for the final batch. Releases, source IDs and media are retained.";
+ if(pg.needs_identity&&!pg.group.ReviewAccepted)return "Confirm that the selected cards belong together.";
  return "Preview the result to inspect the merged card.";
 }
 const catalogLanes = {
@@ -276,7 +276,7 @@ function catalogRenderReview(){
  catalogHeader("Compare cards for merging",((catalogUI.platforms||[]).length>1?pg.group.Platform+" · ":"")+included.size+" of "+catalogUI.cards.length+" cards selected · "+(catalogUI.selectionDirty?"Selection changed":catalogStatus[pg.status])+". "+(blocked&&!catalogUI.selectionDirty?"Resolve the data conflict or change the selection.":"Choose the cards to keep together. Unselected cards stay unchanged."));
  $("catalog-content").innerHTML=catalogSessionSummary()+catalogQueueNotice()+'<div class="catalog-queue-toolbar"><button class="tab-button" id="catalog-skip-group">Skip for now →</button><button class="tab-button" id="catalog-review-decisions">Review decisions</button></div><button class="catalog-back" id="catalog-back">← Back to plan</button><div id="catalog-feedback">'+(pg.reason?catalogNotice(catalogGroupReason(pg),pg.status==="blocked"?"error":"warn"):'')+'</div><div class="catalog-comparison"><section class="catalog-candidate-area"><p class="catalog-scroll-hint">Scroll sideways to compare cards →</p><div class="catalog-candidates" tabindex="0" role="region" aria-label="Candidate cards; scroll horizontally to compare">'+catalogUI.cards.map((card,i)=>catalogCandidate(card,i,["title","alternate_titles","description","descriptions","developer","publisher","release_date","genres","players"])).join("")+'</div></section><section class="catalog-result"><span class="catalog-eyebrow">'+(blocked?"Merge status":"Result")+'</span><h3>'+cEscape(blocked?"Merge blocked":g.Keep.Title||g.Keep.Folder)+'</h3>'+
  (blocked?'':g.NativeDigest?'<p>MAME chooses its primary from the accepted snapshot. Edit individual cards in the library before rebuilding this plan.</p>':'<details><summary>Correct the result</summary><div id="catalog-form-host"></div></details>')+
- (!blocked&&pendingIdentity?'<div class="catalog-notice warn">'+cEscape(pg.identity_reason||"Confirm that these cards belong together as one game.")+'</div><p class="secondary">Agree & next queues this selection. Changes are saved together after the final review. Releases, source IDs and media are retained.</p>':!blocked&&g.ReviewAccepted&&pg.status==="ready"?'<p class="secondary">This selection is ready for the final batch. Nothing has been saved yet.</p>':'')+
+ (!blocked&&pendingIdentity?'<div class="catalog-notice warn">'+cEscape(pg.identity_reason||"Confirm that these cards belong together as one game.")+'</div><p class="secondary">Review now, apply together at the end.</p>':!blocked&&g.ReviewAccepted&&pg.status==="ready"?'<p class="secondary">Ready for the final review.</p>':'')+
  '<div class="catalog-actions"><button class="tab-button" id="catalog-preview-group" '+(!enough||(blocked&&!catalogUI.selectionDirty)?'disabled':'')+'>'+(pendingIdentity?'Confirm selection':'Preview result')+'</button><button class="catalog-primary" id="catalog-commit" '+(!enough||(blocked&&!catalogUI.selectionDirty)||(pg.status==="review"&&!pendingIdentity&&!catalogUI.dirty)?'disabled':'')+'>'+'Agree & next'+'</button></div><p class="secondary" id="catalog-preview-feedback">'+(blocked?"Merge unavailable for this group.":catalogUI.dirty?"Changes need a new preview.":pg.status==="review"?"A decision is needed before applying.":"Result matches the current preview.")+'</p><div id="catalog-result-preview">'+catalogProfilePreview(catalogUI.preview,catalogReviewHint(pg))+'</div><details><summary>Why this group?</summary>'+(g.Evidence||[]).map(e=>'<p>'+cEscape(e.Source+": "+e.Field+" · "+e.Value)+'</p>').join("")+'</details><details><summary>Affected files</summary><pre>'+cEscape((g.FileChanges||[]).map(f=>f.Action+": "+f.FromFolder+"/"+f.Path+" → "+f.Target).join("\n")||"Catalog documents and merged card folders")+'</pre></details>'+
  '<div class="catalog-actions"><button class="tab-button" id="catalog-keep-separate" '+(!g.Evidence?.length||g.NativeDigest||catalogUI.dirty?'disabled':'')+'>Keep separate</button></div></section></div>';
  catalogRenderForm();
@@ -339,7 +339,7 @@ function catalogSessionSummary(){
  const remaining=catalogUI.plan?.groups.length;
  return catalogNotice(result.applied+" groups merged · "+result.kept_separate+" kept separate"+(remaining?" · "+remaining+" groups remaining":""))+
  (result.warnings||[]).map(w=>catalogNotice(w,"warn")).join("")+
- (result.backups.length?'<details class="raw-details"><summary>Recovery locations</summary><pre>'+cEscape(result.backups.join("\n"))+'</pre></details>':"");
+ (result.backups.length?'<details class="raw-details"><summary>Backups ('+result.backups.length+')</summary><pre>'+cEscape(result.backups.join("\n"))+'</pre><button type="button" class="tab-button" data-manage-backups>Manage backups</button></details>':"");
 }
 function catalogRecordResult(response){
  const total=catalogUI.completed||(catalogUI.completed={applied:0,kept_separate:0,backups:[],warnings:[]});
@@ -358,13 +358,14 @@ function catalogResumeButton(){
 }
 async function catalogApply(decisions){
  if(catalogUI.busy||!decisions.length)return;
+ const keepBackup=!!$("catalog-keep-backup")?.checked;
  const oldGroups=catalogUI.plan.groups||[];
  const excluded=new Set(oldGroups.filter(g=>g.status==="ready"&&!catalogUI.selected.has(g.id)).map(catalogGroupKey));
  catalogUI.busy=true;catalogUI.mode="applying";
  catalogHeader("Saving and preparing the next groups","Keep this window open. The review will continue automatically.");
  $("catalog-content").innerHTML='<div class="catalog-progress"><span class="catalog-spinner"></span><span>Saving '+formatNumber(decisions.length)+' decisions and checking what remains…</span></div>';
  try{
-  const response=await catalogPost("/api/catalog/fold-apply",{plan:catalogUI.plan.id,decisions,continue:true});
+  const response=await catalogPost("/api/catalog/fold-apply",{plan:catalogUI.plan.id,decisions,continue:true,keep_backup:keepBackup});
   catalogUI.plan=response.next_plan||null;catalogUI.decisions=new Map();catalogUI.cardsCache=new Map();catalogUI.dirty=false;catalogUI.group=null;catalogUI.artwork=new Map();
   catalogRecordResult(response);catalogUI.compare.clear();catalogUpdateTools();
   if(catalogUI.plan){
@@ -396,7 +397,7 @@ function catalogBatchDecisions(){
 }
 function catalogQueueNoticeContent(){
  const decisions=catalogBatchDecisions(),merged=decisions.filter(d=>d.action==="merge").length,separate=decisions.length-merged;
- return merged+' to merge · '+separate+' to keep separate <span>Nothing saved yet. Apply all decisions at the end.</span>';
+ return merged+' to merge · '+separate+' to keep separate <span>Not applied</span>';
 }
 function catalogQueueNotice(){return catalogUI.plan?'<div class="catalog-queue-status" id="catalog-queue-status" role="status">'+catalogQueueNoticeContent()+'</div>':"";}
 async function catalogQueueDecision(action){
@@ -411,16 +412,18 @@ async function catalogQueueDecision(action){
 function catalogRenderDecisions(){
  catalogUI.mode="decisions";catalogUI.group=null;catalogUI.dirty=false;
  const decisions=catalogBatchDecisions(),merge=decisions.filter(d=>d.action==="merge").length,separate=decisions.length-merge,remaining=catalogUI.plan.groups.length-decisions.length;
- catalogHeader("Review your decisions","One batch will save these changes. You can still go back and change any decision.");
+ catalogHeader("Review your decisions","Review the changes before applying.");
  $("catalog-content").innerHTML=catalogSessionSummary()+'<div id="catalog-feedback"></div>'+
  '<div class="catalog-decision-totals"><strong>'+merge+' merge</strong><strong>'+separate+' keep separate</strong><span>'+remaining+' unresolved / skipped</span></div>'+
  '<div class="catalog-decision-list">'+decisions.map(d=>{const pg=catalogUI.plan.groups.find(g=>g.id===d.id),g=pg.group;return '<button class="catalog-decision-row" data-plan-review="'+d.id+'"><span>'+cEscape(g.Keep.Title||g.Keep.Folder)+((catalogUI.platforms?.length||0)>1?'<small class="catalog-platform-label">'+cEscape(g.Platform)+'</small>':'')+'</span><span>'+ (d.action==="merge"?(1+(g.Merge||[]).length)+' cards → 1':"Keep separate")+'</span><span>Review →</span></button>';}).join("")+'</div>'+
  (remaining?catalogNotice(remaining+" groups have no merge or separation decision. They will remain unchanged.","warn"):"")+
+ '<label class="catalog-backup-choice"><input type="checkbox" id="catalog-keep-backup">Keep a backup of the affected platforms <small>Manage in Settings → Backups</small></label>'+
  '<div class="catalog-actions"><button class="tab-button" id="catalog-back-plan">Back to review</button><button class="catalog-primary" id="catalog-save-decisions" '+(!decisions.length?"disabled":"")+'>Apply '+decisions.length+' decisions</button></div>';
  $("catalog-back-plan").addEventListener("click",catalogRenderPlan);
  $("catalog-save-decisions").addEventListener("click",()=>catalogApply(catalogBatchDecisions()));
  document.querySelectorAll("[data-plan-review]").forEach(button=>button.addEventListener("click",()=>catalogReviewGroup(Number(button.dataset.planReview))));
 }
+$("catalog-dialog").addEventListener("click",event=>{if(event.target.closest?.("[data-manage-backups]")){catalogClose();libraryOpenBackups();}});
 $("catalog-dialog").addEventListener("cancel",event=>{event.preventDefault();catalogClose();});
 $("catalog-close").addEventListener("click",catalogClose);
 $("catalog-edit-card").addEventListener("click",catalogEditCard);
@@ -542,7 +545,7 @@ async function catalogMaterializeDraft(){
    if(f.target.kind==="manual")f.target=card.records?.find(r=>r.target.source===f.target.source&&r.target.match>=0&&r.target.release_index==null&&(r.fields.release||"")===(f.target.scope||""))?.target||f.target;
    if(f.target.kind==="source"&&!card.records?.some(r=>catalogTargetKey(r.target)===catalogTargetKey(f.target)))f.target={kind:"library",match:-1};
   }
-  f.message=catalogRegister.loaded?"Releases, fingerprints and card fields are valid. Nothing has been saved.":"YAML is valid. Nothing has been saved.";return true;
+  f.message=catalogRegister.loaded?"Validation passed.":"YAML is valid.";return true;
  }catch(error){f.error=error.message;return false;}
  finally{f.saving=false;catalogInlineRender();}
 }
@@ -662,7 +665,7 @@ async function catalogSaveInline(){
   const response=await catalogPost("/api/catalog/edit",{platform,game:folder,revision:f.baseRevision||f.card.revision,edits:catalogEditorEdits(),...catalogRegisterPayload()});
   catalogRegisterInstall(response.card.register||null,true);
   if(typeof resetFingerprints==="function")resetFingerprints();
-  f.card=response.card;f.savedCard=response.card;f.baseRevision=response.card.revision;f.raw=null;f.edits=new Map();f.invalid=new Map();f.dirty=false;f.message=response.warning||"Saved to your library.";
+  f.card=response.card;f.savedCard=response.card;f.baseRevision=response.card.revision;f.raw=null;f.edits=new Map();f.invalid=new Map();f.dirty=false;f.message=response.warning||"Saved.";
   if(target.kind==="manual")f.target=f.card.records.filter(r=>r.target.source===target.source&&r.target.match>=0&&r.target.release_index==null).find(r=>(r.fields.release||"")===(target.scope||""))?.target||{kind:"library",match:-1};
   if(state.platform===platform&&state.selectedFolder===folder){
    state.game.profile=response.card.profile;state.game.catalog_fields=response.card.fields;state.game.catalog_yaml=response.card.yaml;

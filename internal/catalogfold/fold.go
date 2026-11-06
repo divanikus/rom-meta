@@ -35,6 +35,7 @@ type Options struct {
 	Platform               string
 	Match                  string
 	Apply                  bool
+	KeepBackup             bool // Retain originals after success only with explicit consent.
 	EditionsOnly           bool
 	ReviewPlan             string
 	Review                 ReviewFunc
@@ -443,10 +444,12 @@ func Fold(options Options) (Result, error) {
 					return Result{}, err
 				}
 			}
-			if err := transaction.commit(); err != nil {
+			if err := transaction.commit(options.KeepBackup); err != nil {
 				return Result{}, err
 			}
-			platformResult.Backups = append(platformResult.Backups, transaction.backupPath)
+			if transaction.backupPath != "" {
+				platformResult.Backups = append(platformResult.Backups, transaction.backupPath)
+			}
 		}
 		if err := mame.finish(root, options, &platformResult, &groups); err != nil {
 			return Result{}, err
@@ -511,7 +514,7 @@ func beginPlatformTransaction(root, platform string) (*platformTransaction, erro
 	return transaction, nil
 }
 
-func (transaction *platformTransaction) commit() error {
+func (transaction *platformTransaction) commit(keepBackup bool) error {
 	backupPath, err := reserveFoldBackupPath(transaction.originalPath)
 	if err != nil {
 		return err
@@ -525,8 +528,13 @@ func (transaction *platformTransaction) commit() error {
 		}
 		return err
 	}
-	// Retain the original platform, including downloaded media, for recovery.
 	transaction.backupPath = backupPath
+	if !keepBackup {
+		if err := catalogfs.RemoveAll(backupPath); err != nil {
+			return fmt.Errorf("platform applied; could not remove temporary original at %s: %w", backupPath, err)
+		}
+		transaction.backupPath = ""
+	}
 	return nil
 }
 
@@ -594,6 +602,9 @@ func reserveFoldBackupPath(platformPath string) (string, error) {
 	backupRoot := filepath.Join(filepath.Dir(filepath.Dir(platformPath)), "backups")
 	if err := catalogfs.MkdirAll(backupRoot, 0o755); err != nil {
 		return "", fmt.Errorf("create fold backup directory: %w", err)
+	}
+	if info, err := os.Lstat(backupRoot); err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("backup folder must be a real directory")
 	}
 	reserved, err := os.MkdirTemp(backupRoot, filepath.Base(platformPath)+".fold-backup-")
 	if err != nil {

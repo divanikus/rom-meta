@@ -11,7 +11,7 @@ import (
 
 // ApplySelected restricts an existing prepared snapshot projection to exact groups.
 // Unselected set bindings are restored before the usual manifest-bound apply.
-func ApplySelected(root, reviewFile string, targets []string) (string, error) {
+func ApplySelected(root, reviewFile string, targets []string, keepBackup bool) (string, error) {
 	data, err := catalogfs.ReadFile(reviewFile)
 	if err != nil {
 		return "", err
@@ -79,5 +79,5 @@ func ApplySelected(root, reviewFile string, targets []string) (string, error) {
 	if err := catalogfs.WriteFile(reviewFile, data, 0644); err != nil {
 		return "", err
 	}
-	return Apply(root, reviewFile)
+	return ApplyWithBackup(root, reviewFile, keepBackup)
 }

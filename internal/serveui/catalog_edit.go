@@ -51,9 +51,10 @@ type foldPreviewRequest struct {
 	Draft *catalogfold.Draft `json:"draft,omitempty"`
 }
 type foldApplyRequest struct {
-	Continue  bool                   `json:"continue,omitempty"`
-	Plan      string                 `json:"plan"`
-	Decisions []catalogfold.Decision `json:"decisions"`
+	KeepBackup bool                   `json:"keep_backup,omitempty"`
+	Continue   bool                   `json:"continue,omitempty"`
+	Plan       string                 `json:"plan"`
+	Decisions  []catalogfold.Decision `json:"decisions"`
 }
 type storedPlan struct {
 	plan    *foldBatch
@@ -448,7 +449,7 @@ func (s *server) foldApply(w http.ResponseWriter, r *http.Request) {
 	}
 	defer unlock()
 	batch := catalogchanges.Begin(exporter.RefreshPlatformIndex)
-	result, err := stored.plan.Apply(r.Context(), request.Decisions)
+	result, err := stored.plan.Apply(r.Context(), request.Decisions, request.KeepBackup)
 	indexErr := batch.Finish()
 	// Every apply attempt consumes the plan: MAME staging or earlier platform work
 	// may have changed even on error. No blind replay of a partially applied plan.

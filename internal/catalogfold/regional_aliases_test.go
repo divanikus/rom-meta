@@ -57,11 +57,11 @@ func TestRegionalAliasFoldSafety(t *testing.T) {
 			}
 			writeRegionalGame(t, root, "Console", "English Game", "USA", "", anchor)
 			writeRegionalGame(t, root, "Console", "Nippon Game", region, tt.targetExtra, tt.targetSource)
-			dry, err := Fold(Options{DataRoot: root})
+			dry, err := Fold(Options{KeepBackup: true, DataRoot: root})
 			if err != nil || dry.CandidateGroupCount != tt.groups || dry.HeldGroupCount != tt.held {
 				t.Fatalf("preview: %v %+v", err, dry)
 			}
-			applied, err := Fold(Options{DataRoot: root, Apply: true})
+			applied, err := Fold(Options{KeepBackup: true, DataRoot: root, Apply: true})
 			if err != nil || applied.AppliedGroupCount != tt.groups-tt.held {
 				t.Fatalf("apply: %v %+v", err, applied)
 			}
@@ -94,7 +94,7 @@ func TestRegionalAliasApplyPreservesMetadataAndRepeats(t *testing.T) {
 	writeRegionalGame(t, root, "Console", "English Game", "USA", "aliases: [Old English]\n", regionalAnchorSource)
 	writeRegionalGame(t, root, "Console", "Nippon Game", "Japan", "alternate_titles: [Local Name]\n", "  hasheous:\n    matches:\n      - game_id: '123'\n        title: Nippon Game\n")
 	writeRegionalGame(t, root, "Other Console", "Nippon Game", "Japan", "", "")
-	result, err := Fold(Options{DataRoot: root, Apply: true})
+	result, err := Fold(Options{KeepBackup: true, DataRoot: root, Apply: true})
 	if err != nil || result.AppliedGroupCount != 1 || len(result.Backups) != 1 {
 		t.Fatal(err, result)
 	}
@@ -112,7 +112,7 @@ func TestRegionalAliasApplyPreservesMetadataAndRepeats(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(result.Backups[0], "Nippon Game", "game.yaml")); err != nil {
 		t.Fatal(err)
 	}
-	again, err := Fold(Options{DataRoot: root, Apply: true})
+	again, err := Fold(Options{KeepBackup: true, DataRoot: root, Apply: true})
 	if err != nil || again.CandidateGroupCount != 0 {
 		t.Fatal(err, again)
 	}

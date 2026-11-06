@@ -45,11 +45,10 @@ function operationFinished(job){return ["succeeded","incomplete","failed"].inclu
 function operationDismiss(job,label="Dismiss",corner=false){
  const finished=operationFinished(job);
  if(corner&&!finished)return "";
- const hint="Remove this result from Operations. Saved files stay in place.";
+ const hint="Remove from Operations";
  const classes=corner?"tab-button operation-dismiss-close":finished?"tab-button operation-dismiss-result"+(job.state==="succeeded"?" completed":""):"tab-button";
  return '<button type="button" class="'+classes+'" data-import-dismiss="'+escapeAttr(job.id)+'"'+(finished?' title="'+hint+'"':"")+(corner?' aria-label="Dismiss result from Operations"':"")+'>'+(corner?'<span aria-hidden="true">×</span>':escapeHTML(finished?"Dismiss result":label))+'</button>';
 }
-function operationDismissHint(job){return operationFinished(job)?'<span class="secondary operation-dismiss-hint">Dismiss removes this result from Operations. Saved files stay in place.</span>':"";}
 function operationBytes(value){
  const n=Math.max(0,Number(value)||0),units=["B","KiB","MiB","GiB","TiB"];
  const i=n>0?Math.min(4,Math.floor(Math.log(n)/Math.log(1024))):0;
@@ -124,17 +123,17 @@ function operationDetail(job){
  const busy=operationBusy(job),done=job.state==="succeeded",platform=job.summary?.platform||job.platform,canFetch=done&&catalogUI.enabled&&!!platform,p=job.progress||{},draft=libraryUI.drafts.get(job.id)||{},selected=draft.member??job.member??"";
  return '<article class="operation-detail">'+operationDismiss(job,"",true)+'<div class="operation-eyebrow">DAT IMPORT · '+operationStatus(job.state,operationLabels[job.state]||job.state)+'</div><h2>'+escapeHTML(job.filename)+'</h2>'+
  (job.member?'<p class="secondary">'+escapeHTML(job.member)+'</p>':"")+
- (busy?'<div class="operation-progress" role="status"><strong>'+escapeHTML(importStages[p.Stage]||p.Stage||"Preparing")+'</strong><span>'+escapeHTML(p.Item||"")+'</span>'+operationProgressMeter(p.Current,p.Total,importProgressUnit(p.Stage))+'<p>You can close your browser. This operation continues on the server.</p></div>':"")+
+ (busy?'<div class="operation-progress" role="status"><strong>'+escapeHTML(importStages[p.Stage]||p.Stage||"Preparing")+'</strong><span>'+escapeHTML(p.Item||"")+'</span>'+operationProgressMeter(p.Current,p.Total,importProgressUnit(p.Stage))+'</div>':"")+
  (job.error?'<p class="operation-error" role="alert">'+escapeHTML(job.error)+'</p>':"")+
  (job.warning?'<p class="operation-error" role="status">'+escapeHTML(job.warning)+'</p>':"")+
  operationSummary(job)+
  (!busy&&!done?'<form id="dat-plan-form" data-operation="'+escapeAttr(job.id)+'"><details '+(!job.summary||job.state==="failed"?'open':'')+'><summary>'+(job.summary?'Change import options':'Import options')+'</summary>'+
  (job.members?.length?'<label>DAT in ZIP<select name="member" id="dat-member">'+(job.members.length>1&&!selected?'<option value="">Choose a DAT…</option>':"")+job.members.map(m=>'<option value="'+escapeAttr(m)+'" '+(m===selected?"selected":"")+'>'+escapeHTML(m)+'</option>').join("")+'</select></label>':"")+
  '<label>Platform name <span class="secondary">(leave empty to detect)</span><input id="dat-platform" name="platform" maxlength="150" value="'+escapeAttr(draft.platform??job.platform??"")+'" placeholder="'+escapeAttr(job.summary?.platform||"Detected from the DAT")+'"></label><button class="tab-button" type="submit">'+(job.state==="failed"?"Retry — prepare plan":"Prepare plan")+'</button></details></form>':"")+
- (canFetch?'<p><strong>Next step:</strong> add descriptions, artwork and other metadata. Choose your sources in the next screen.</p>':"")+
+ (canFetch?'<p>Add descriptions and artwork next.</p>':"")+
  '<div class="operation-actions">'+(canFetch?'<button class="catalog-primary" data-import-fetch="'+escapeAttr(job.id)+'">Fetch metadata</button>':"")+(job.state==="ready"?'<button class="catalog-primary" data-import-apply="'+job.id+'">Import into library</button><span class="secondary" id="dat-apply-hint">The plan has not changed your cards.</span>':"")+
- (done?'<button class="tab-button" data-import-open="'+job.id+'">Open '+escapeHTML(job.summary?.platform||"platform")+'</button><span class="secondary">Saved to your library.</span>':"")+
- (!busy?operationDismiss(job,"Discard upload"):"")+operationDismissHint(job)+'</div></article>';
+ (done?'<button class="tab-button" data-import-open="'+job.id+'">Open '+escapeHTML(job.summary?.platform||"platform")+'</button>':"")+
+ (!busy?operationDismiss(job,"Discard upload"):"")+'</div></article>';
 }
 function libraryJobMenu(open=false){
  if(!catalogUI.enabled)return state.platforms?.length?'<button class="tab-button" data-new-job="preview">Preview export</button>':"";
@@ -155,12 +154,12 @@ function libraryRenderOperations(force=false){
  const focused=document.activeElement;
  if(!force&&focused&&pane.contains?.(focused)&&["INPUT","SELECT"].includes(focused.tagName))return;
  const selected=libraryUI.jobs.find(j=>j.id===libraryUI.selected),menu=$("operations-add-job"),menuOpen=!!menu?.open,menuFocus=menu?.contains?.(focused)?focused.id:"";
- pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">YOUR LIBRARY</span><h1>Operations</h1><p>Import, fetch metadata, export — return whenever you are ready.</p></div>'+libraryJobMenu(menuOpen)+'</div>'+
+ pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">YOUR LIBRARY</span><h1>Operations</h1></div>'+libraryJobMenu(menuOpen)+'</div>'+
  (libraryUI.error?'<p class="operation-error" role="alert">'+escapeHTML(libraryUI.error)+'</p>':"")+
  '<div class="operations-layout"><aside class="operations-list" aria-label="Library operations">'+
  (libraryUI.jobs.length?libraryUI.jobs.map(j=>'<button class="operation-row '+(j.id===libraryUI.selected?"active":"")+'" data-operation-select="'+j.id+'"><strong>'+escapeHTML(operationTitle(j))+'</strong>'+operationStatus(j.state,operationLabel(j))+'<small>'+escapeHTML(j.platform||j.summary?.platform||j.member||"DAT import")+'</small></button>').join(""):'<p class="secondary">Your operations will appear here.</p>')+
- '<p class="secondary operations-lifetime">Progress stays with the running server, even when you close this browser. Inactive operations expire after 24 hours. Restarting the server clears this list.</p></aside>'+
- (selected?operationDetail(selected):typeof enrichmentUI!=="undefined"&&enrichmentUI.draft?enrichmentWizard():'<section class="operation-detail import-welcome"><h2>Import a DAT</h2><p>Start with a DAT. RomMeta prepares the game cards and fingerprints; your ROM files stay where they are.</p><form id="dat-upload-form"><label class="upload-label">Choose a DAT or ZIP<input type="file" id="dat-upload-file" name="file" accept=".dat,.xml,.zip" '+(libraryUI.uploading?"disabled":"")+'></label><p class="secondary">Recommended sources: <a href="https://datomatic.no-intro.org/" target="_blank" rel="noopener noreferrer">No-Intro (DAT-o-MATIC)</a> for cartridges, <a href="https://redump.info/downloads/" target="_blank" rel="noopener noreferrer">Redump</a> for discs, and <strong>MAME</strong> for arcade systems. Upload No-Intro, Redump or compatible XML DATs here; MAME listxml currently uses the CLI. ZIPs can contain several DATs. Up to 256 MiB.</p><button class="catalog-primary" type="submit" '+(libraryUI.uploading?"disabled":"")+'>'+(libraryUI.uploading?"Uploading…":"Upload & prepare")+'</button><p id="dat-upload-progress" role="status">'+(libraryUI.uploading?libraryUploadStatus():"Uploading prepares a plan. You choose when to import.")+'</p></form><details><summary>Prefer the command line?</summary><p>The CLI uses the same importer and catalog rules.</p><pre>rom-meta dat import &quot;&lt;file.dat-or-zip&gt;&quot; --data-root &quot;&lt;library&gt;&quot;\n# Add --apply after reviewing the plan.</pre><p class="secondary">Use the CLI for classified MAME listxml imports.</p></details></section>')+'</div>';
+ '<p class="secondary operations-lifetime">Jobs continue after you close the browser.<details><summary>History</summary>Cleared on server restart; inactive results expire after 24 hours.</details></p></aside>'+
+ (selected?operationDetail(selected):typeof enrichmentUI!=="undefined"&&enrichmentUI.draft?enrichmentWizard():'<section class="operation-detail import-welcome"><h2>Import a DAT</h2><p>Create game cards from a DAT.</p><form id="dat-upload-form"><label class="upload-label">Choose a DAT or ZIP<input type="file" id="dat-upload-file" name="file" accept=".dat,.xml,.zip" '+(libraryUI.uploading?"disabled":"")+'></label><p class="secondary">Recommended sources: <a href="https://datomatic.no-intro.org/" target="_blank" rel="noopener noreferrer">No-Intro (DAT-o-MATIC)</a> for cartridges · <a href="https://redump.info/downloads/" target="_blank" rel="noopener noreferrer">Redump</a> for discs · <strong>MAME</strong> for arcade (CLI).<br>XML DAT or ZIP · up to 256 MiB.</p><button class="catalog-primary" type="submit" '+(libraryUI.uploading?"disabled":"")+'>'+(libraryUI.uploading?"Uploading…":"Upload & prepare")+'</button><p id="dat-upload-progress" role="status">'+(libraryUI.uploading?libraryUploadStatus():"")+'</p></form><details><summary>Prefer the command line?</summary><pre>rom-meta dat import &quot;&lt;file.dat-or-zip&gt;&quot; --data-root &quot;&lt;library&gt;&quot;\n# Add --apply after reviewing the plan.</pre><p class="secondary">Use the CLI for classified MAME listxml imports.</p></details></section>')+'</div>';
  pane.querySelectorAll("[data-new-job]").forEach(button=>button.addEventListener("click",()=>libraryStartJob(button.dataset.newJob)));
  if(menuFocus)$(menuFocus)?.focus({preventScroll:true});
  pane.querySelectorAll("[data-operation-select]").forEach(b=>b.addEventListener("click",()=>{libraryUI.selected=b.dataset.operationSelect;libraryRenderOperations();}));
@@ -268,13 +267,13 @@ function settingsListChange(fieldID,source,action){
  settingsChange(fieldID,selected);libraryRenderSettings();
 }
 function libraryRenderSettings(){
+ if(librarySettingsUI.selected==="backups"){libraryRenderBackups();return;}
  const pane=$("settings-pane");
  if(!librarySettingsUI.sections){pane.innerHTML='<h1>Settings</h1><p>'+escapeHTML(librarySettingsUI.error||"Loading library settings…")+'</p>';return}
  const section=settingsSection()||librarySettingsUI.sections[0];if(!section)return;
  librarySettingsUI.selected=section.id;
- pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">LIBRARY SETTINGS</span><h1>Settings</h1><p>Saved in this library and used by the CLI and browser.</p></div></div>'+
- '<div class="settings-layout"><nav class="settings-nav" aria-label="Settings sections">'+librarySettingsUI.sections.map(s=>'<button class="operation-row '+(s.id===section.id?'active':'')+'" data-settings-section="'+escapeAttr(s.id)+'">'+escapeHTML(s.title.startsWith("Connection · ")?sourceLabel(s.title.slice(13)):s.title)+(librarySettingsUI.drafts.has(s.id)?' · edited':'')+'</button>').join("")+
- '<p class="secondary">Export profile preferences are in Export. Service address and access protection are configured when starting serve.</p></nav>'+
+ pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">LIBRARY SETTINGS</span><h1>Settings</h1></div></div>'+
+ '<div class="settings-layout">'+librarySettingsNavigation()+
  '<section class="operation-detail settings-editor"><h2>'+escapeHTML(section.title.startsWith("Connection · ")?sourceLabel(section.title.slice(13)):section.title)+'</h2><p>'+escapeHTML(section.help)+'</p>'+
  (section.status?'<p class="settings-credential-status">'+escapeHTML(section.status)+'</p>':"")+
  section.fields.map(field=>{
@@ -284,8 +283,8 @@ function libraryRenderSettings(){
   return '<fieldset class="settings-field"><legend>'+escapeHTML(field.label)+'</legend>'+(field.help?'<p class="secondary settings-help">'+escapeHTML(field.help)+'</p>':"")+control+'</fieldset>';
  }).join("")+
  '<div class="operation-actions settings-savebar"><button class="catalog-primary" id="settings-save">'+(librarySettingsUI.saving?'Saving…':'Save changes')+'</button><button class="tab-button" id="settings-reset">Discard changes</button><button class="tab-button" id="settings-reload">Reload saved</button><span id="settings-feedback" role="status"></span></div>'+
- '<p class="secondary settings-file">Saved to '+escapeHTML(section.file)+'. Existing settings outside the edited fields are preserved.</p></section></div>';
- pane.querySelectorAll("[data-settings-section]").forEach(button=>button.addEventListener("click",()=>{librarySettingsUI.selected=button.dataset.settingsSection;librarySettingsUI.error="";librarySettingsUI.notice="";libraryRenderSettings();}));
+ '<p class="secondary settings-file">Saved to '+escapeHTML(section.file)+'</p></section></div>';
+ libraryBindSettingsNavigation(pane);
  pane.querySelectorAll("[data-setting-input]").forEach(input=>input.addEventListener("input",()=>{
   const field=section.fields.find(f=>f.id===input.dataset.settingInput);
   settingsChange(field.id,field.kind==="number"?(input.value===""?0:Number(input.value)):input.value);
@@ -394,6 +393,46 @@ function libraryTheme(theme){
 }
 $("theme-toggle")?.addEventListener("click",()=>libraryTheme(document.documentElement.dataset.theme==="light"?"dark":"light"));
 if($("theme-toggle"))libraryTheme(document.documentElement.dataset.theme||"dark");
+
+
+const backupUI={entries:[],loading:false,busy:false,error:""};
+function librarySettingsNavigation(){
+ return '<nav class="settings-nav" aria-label="Settings sections">'+(librarySettingsUI.sections||[]).map(s=>'<button class="operation-row '+(s.id===librarySettingsUI.selected?'active':'')+'" data-settings-section="'+escapeAttr(s.id)+'">'+escapeHTML(s.title.startsWith("Connection · ")?sourceLabel(s.title.slice(13)):s.title)+(librarySettingsUI.drafts.has(s.id)?' · edited':'')+'</button>').join("")+'<button class="operation-row '+(librarySettingsUI.selected==="backups"?'active':'')+'" data-settings-section="backups">Backups</button></nav>';
+}
+function libraryBindSettingsNavigation(pane){
+ pane.querySelectorAll("[data-settings-section]").forEach(button=>button.addEventListener("click",()=>{
+  if(backupUI.busy)return;
+  librarySettingsUI.selected=button.dataset.settingsSection;librarySettingsUI.error="";librarySettingsUI.notice="";
+  if(librarySettingsUI.selected==="backups")libraryLoadBackups();else libraryRenderSettings();
+ }));
+}
+function libraryOpenBackups(){librarySettingsUI.selected="backups";libraryNavigate("settings");return libraryLoadBackups();}
+async function libraryLoadBackups(){
+ if(backupUI.loading||backupUI.busy)return;
+ backupUI.loading=true;backupUI.error="";libraryRenderBackups();
+ try{const data=await fetchJSON("/api/catalog/backups");backupUI.entries=data.backups;}
+ catch(error){backupUI.error=error.message;}
+ finally{backupUI.loading=false;if(state.view==="settings"&&librarySettingsUI.selected==="backups")libraryRenderBackups();}
+}
+function libraryRenderBackups(){
+ const pane=$("settings-pane"),locked=backupUI.loading||backupUI.busy;
+ pane.innerHTML='<div class="management-heading"><h1>Settings</h1></div><div class="settings-layout">'+librarySettingsNavigation()+'<section class="operation-detail"><div class="management-heading"><h2>Backups</h2><button class="tab-button" id="backups-refresh" '+(locked?'disabled':'')+'>Refresh</button></div>'+
+ '<p class="secondary">Retained originals · '+operationBytes(backupUI.entries.reduce((n,b)=>n+b.bytes,0))+' logical size</p>'+
+ (backupUI.error?'<p class="operation-error" role="alert">'+escapeHTML(backupUI.error)+'</p>':'')+
+ (backupUI.loading?'<p role="status">Reading backups…</p>':backupUI.entries.length?'<div class="backup-list">'+backupUI.entries.map(b=>'<article class="backup-row"><div><strong>'+escapeHTML(b.platform)+'</strong><small>'+escapeHTML(b.kind)+' · '+formatNumber(b.files)+' files · '+operationBytes(b.bytes)+'</small><small>Modified '+escapeHTML(new Date(b.modified).toLocaleString())+'</small><code>'+escapeHTML(b.id)+'</code>'+(b.error?'<p class="operation-error">'+escapeHTML(b.error)+'</p>':'')+'</div><button type="button" class="tab-button backup-delete" data-backup-delete="'+escapeAttr(b.id)+'" '+(locked||b.error?'disabled':'')+'>Delete…</button></article>').join("")+'</div>':'<p>No retained backups.</p>')+'</section></div>';
+ libraryBindSettingsNavigation(pane);
+ $("backups-refresh")?.addEventListener("click",libraryLoadBackups);
+ pane.querySelectorAll("[data-backup-delete]").forEach(b=>b.addEventListener("click",()=>libraryDeleteBackup(b.dataset.backupDelete)));
+}
+async function libraryDeleteBackup(id){
+ const backup=backupUI.entries.find(b=>b.id===id);
+ if(!backup||backupUI.busy||backupUI.loading)return;
+ if(!window.confirm('Delete backup "'+backup.id+'" ('+operationBytes(backup.bytes)+')? This cannot be undone. Current library cards stay unchanged.'))return;
+ backupUI.busy=true;backupUI.error="";libraryRenderBackups();
+ try{const result=await catalogPost("/api/catalog/backups",{id,revision:backup.revision,confirm:true});backupUI.entries=result.backups;}
+ catch(error){backupUI.error=error.message;}
+ finally{backupUI.busy=false;if(state.view==="settings"&&librarySettingsUI.selected==="backups")libraryRenderBackups();}
+}
 
 
 librarySyncNavigation();

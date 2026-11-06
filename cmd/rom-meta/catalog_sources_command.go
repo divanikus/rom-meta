@@ -33,6 +33,8 @@ func runCatalog(args []string) error {
 		return runCatalogSplit(args[1:])
 	case "fold":
 		return runCatalogFold(args[1:])
+	case "backups":
+		return runCatalogBackups(args[1:])
 	default:
 		return fmt.Errorf("unknown catalog command: %s", args[0])
 	}
@@ -158,6 +160,8 @@ func runCatalogFold(args []string) error {
 			if strings.TrimSpace(options.ReviewPlan) == "" {
 				return fmt.Errorf("--review-plan requires a value")
 			}
+		case arg == "--keep-backup":
+			options.KeepBackup = true
 		case arg == "--editions-only":
 			options.EditionsOnly = true
 		case arg == "--apply":

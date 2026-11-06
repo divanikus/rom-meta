@@ -23,7 +23,7 @@ func TestFoldPlansAllMediaCollisionsAndPreservesBytes(t *testing.T) {
 	writeFoldFile(t, file("Europe", "media/logo.launchbox.png"), "Europe bytes")
 	writeFoldFile(t, file("Japan", "media/logo.launchbox.png"), "Japan bytes")
 	writeFoldFile(t, file("Japan", "notes/game.yaml"), "nested extra")
-	dry, err := Fold(Options{DataRoot: root})
+	dry, err := Fold(Options{KeepBackup: true, DataRoot: root})
 	if err != nil || dry.HeldGroupCount != 0 {
 		t.Fatal(err, dry)
 	}
@@ -37,7 +37,7 @@ func TestFoldPlansAllMediaCollisionsAndPreservesBytes(t *testing.T) {
 	if _, err := os.Stat(file("USA", "notes/game.yaml")); !os.IsNotExist(err) {
 		t.Fatal("preview wrote files", err)
 	}
-	applied, err := Fold(Options{DataRoot: root, Apply: true})
+	applied, err := Fold(Options{KeepBackup: true, DataRoot: root, Apply: true})
 	if err != nil || applied.AppliedGroupCount != 1 {
 		t.Fatal(err, applied)
 	}
@@ -47,7 +47,7 @@ func TestFoldPlansAllMediaCollisionsAndPreservesBytes(t *testing.T) {
 			t.Fatalf("lost %s: %q != %q", change.Path, got, original)
 		}
 	}
-	repeat, err := Fold(Options{DataRoot: root, Apply: true})
+	repeat, err := Fold(Options{KeepBackup: true, DataRoot: root, Apply: true})
 	if err != nil || repeat.CandidateGroupCount != 0 || len(repeat.Backups) != 0 {
 		t.Fatal(err, repeat)
 	}
@@ -59,7 +59,7 @@ func TestFoldHoldsUnknownExtraFileCollisions(t *testing.T) {
 		writeFoldGame(t, root, "Console", region, "Game ("+region+")", "Game", "10")
 		writeFoldFile(t, filepath.Join(root, "platforms", "Console", region, "notes.txt"), region)
 	}
-	result, err := Fold(Options{DataRoot: root, Apply: true})
+	result, err := Fold(Options{KeepBackup: true, DataRoot: root, Apply: true})
 	if err != nil || result.AppliedGroupCount != 0 || result.HeldGroupCount != 1 || !strings.Contains(result.Groups[0].HoldReason, "non-media") || len(result.Backups) != 0 {
 		t.Fatal(err, result)
 	}
