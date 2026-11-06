@@ -26,6 +26,10 @@ func TestTranslationNameSuggestionsAreNotBindings(t *testing.T) {
 		{"translations/en/Sky Quest II.pce", "", 0},
 		{"translations/en/Sky.pce", "", 0},
 		{"Sky Quest.pce", "", 0},
+		{"support/docs/Collection [T-En] Docs.zip", "Sky Quest (Japan).pce", 0},
+		{"translations/en/Sky Quest.zip", "Sky Quest (Japan).md", 0},
+		{"translations/en/Sky Quest (Japan).ips", "", 0},
+		{"translations/en/Sky Quest.zip", "docs/Sky Quest (Japan).pce", 0},
 	} {
 		t.Run(tc.name+tc.member, func(t *testing.T) {
 			record := Record{ROM: tc.name, Member: tc.member, Status: "unmatched", SHA1: "observed-hash"}
