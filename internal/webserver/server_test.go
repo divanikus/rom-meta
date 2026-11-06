@@ -74,6 +74,40 @@ func TestOneServerNeedsNeitherProfileNorToken(t *testing.T) {
 		t.Fatal("missing shared DTOs")
 	}
 }
+
+func TestFaviconIsPublicWithoutExposingCatalog(t *testing.T) {
+	s := fixture(t, strings.Repeat("s", 32))
+	for path, contentType := range map[string]string{"/favicon.svg": "image/svg+xml", "/favicon.ico": "image/vnd.microsoft.icon"} {
+		for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodPost} {
+			w := httptest.NewRecorder()
+			s.ServeHTTP(w, httptest.NewRequest(method, path, nil))
+			if method == http.MethodPost {
+				if w.Code != http.StatusMethodNotAllowed || w.Header().Get("Allow") != "GET, HEAD" {
+					t.Fatalf("%s %s: %d", method, path, w.Code)
+				}
+				continue
+			}
+			if w.Code != http.StatusOK || w.Header().Get("Content-Type") != contentType || w.Header().Get("X-Content-Type-Options") != "nosniff" {
+				t.Fatalf("%s %s: %d %v", method, path, w.Code, w.Header())
+			}
+			if method == http.MethodHead && w.Body.Len() != 0 || method == http.MethodGet && w.Body.Len() == 0 {
+				t.Fatalf("%s %s: unexpected body size %d", method, path, w.Body.Len())
+			}
+		}
+	}
+	for _, path := range []string{"/", "/api", "/favicon.svg/../api", "/favicon.ico/extra"} {
+		if w := request(s, path, ""); w.Code != http.StatusUnauthorized {
+			t.Fatalf("favicon routes bypassed catalog protection: %s: %d", path, w.Code)
+		}
+	}
+	for _, path := range []string{"/", "/docs"} {
+		w := request(s, path, "Bearer "+strings.Repeat("s", 32))
+		if !strings.Contains(w.Body.String(), `href="/favicon.svg"`) || !strings.Contains(w.Body.String(), `href="/favicon.ico"`) {
+			t.Fatalf("missing favicon links: %s", path)
+		}
+	}
+}
+
 func TestOptionalProtectionCoversBothUIAndAPI(t *testing.T) {
 	token := strings.Repeat("s", 32)
 	s := fixture(t, token)

@@ -488,7 +488,7 @@ environment/secret storage, never a URL or argument.
 Protection covers browser, metadata, health and media routes. Consumers send
 `Authorization: Bearer <token>`; browsers can use HTTP Basic with username
 `rommeta` and that token as password. There are no accounts, roles or sessions.
-Documentation/static assets stay public so Swagger can acquire credentials.
+Documentation/static assets, including the shared favicon, stay public so Swagger can acquire credentials.
 Use TLS outside a trusted network.
 
 ## Fixed-selection mode
