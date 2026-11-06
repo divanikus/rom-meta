@@ -176,6 +176,7 @@ func HandlerWithEditing(dataRoot string, allowEdit bool) (http.Handler, error) {
 }
 
 type server struct {
+	operationAccess        operationAccess
 	exportWrite            func(*frontend.Plan) error
 	exportBuild            func(exporter.Options, string, string, bool) (*exportjob.Job, error)
 	enrichmentQueueRunning bool

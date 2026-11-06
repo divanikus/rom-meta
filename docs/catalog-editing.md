@@ -188,6 +188,14 @@ LaunchBox. The CLI remains available through the same exporter.
    selected card documents, ROM stamps and destination files. Stale inputs require
    a new plan. Accepted Apply retries never replay writes.
 
+A single-platform export can run alongside **Fetch metadata** for other platforms
+in the same server. This applies to preparing, reviewing and applying a plan.
+Aliases and related DAT datasets count as the same platform. Fetch completion on
+another platform does not invalidate the export plan. Fetching the same platform
+waits for an active export; starting export while that platform is being fetched
+reports the conflict. Exporting all platforms, other catalog writers and a second
+export still require exclusive access.
+
 Both planning and applying continue after browser closure. Return to Operations
 for progress or results; a completed repeat can report zero files to write.
 A write failure reports the files completed so far. Prepare another plan against

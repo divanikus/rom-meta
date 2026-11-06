@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"rommeta/internal/catalogedit"
 	"time"
 )
 
@@ -62,17 +61,11 @@ func (s *server) drainEnrichmentQueue() {
 			s.operationsMu.Unlock()
 			return
 		}
-		if !s.editMu.TryLock() {
-			s.operationsMu.Unlock()
-			time.Sleep(250 * time.Millisecond)
-			continue
-		}
-		unlock, err := catalogedit.Lock(s.root)
+		unlock, err := s.acquireOperationAccess(true, next.Enrichment.Platforms)
 		if err != nil {
-			s.editMu.Unlock()
-			if errors.Is(err, fs.ErrExist) {
+			if errors.Is(err, fs.ErrExist) || errors.Is(err, errOperationBusy) {
 				s.operationsMu.Unlock()
-				time.Sleep(500 * time.Millisecond)
+				time.Sleep(250 * time.Millisecond)
 				continue
 			}
 			next.State, next.Error, next.Updated = "needs_review", "Cannot acquire library write access; check the server's folder permissions.", time.Now().UTC()
@@ -94,13 +87,12 @@ func (s *server) drainEnrichmentQueue() {
 		if err != nil {
 			next.State, next.Error, next.Updated = "needs_review", enrichmentText(config, err.Error()), time.Now().UTC()
 			unlock()
-			s.editMu.Unlock()
 			s.operationsMu.Unlock()
 			continue
 		}
 		next.State, next.Error, next.Updated = "enriching", "", time.Now().UTC()
 		snapshot := cloneOperation(next)
 		s.operationsMu.Unlock()
-		func() { defer s.editMu.Unlock(); defer unlock(); s.runEnrichment(snapshot, config, registry) }()
+		func() { defer unlock(); s.runEnrichment(snapshot, config, registry) }()
 	}
 }

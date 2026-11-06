@@ -46,9 +46,22 @@ type exportState struct {
 	Written     int                       `json:"written"`
 }
 
-func (s *server) exportStamp() (string, error) {
+func (s *server) exportStamp(d exportDestination) (string, error) {
 	hash := sha256.New()
-	for _, name := range []string{catalogchanges.RevisionFile, "config/catalog.yaml", "config/platforms.yaml", "config/sources.yaml"} {
+	names := []string{"config/catalog.yaml", "config/platforms.yaml", "config/sources.yaml", "config/source-policies.yaml"}
+	if d.All {
+		names = append(names, catalogchanges.RevisionFile)
+	} else {
+		platforms, err := s.exportScope(d)
+		if err != nil {
+			return "", err
+		}
+		sort.Strings(platforms)
+		for _, platform := range platforms {
+			names = append(names, filepath.Join("platforms", platform, "_platform.yaml"), filepath.Join("platforms", platform, catalogchanges.RevisionFile))
+		}
+	}
+	for _, name := range names {
 		data, err := os.ReadFile(filepath.Join(s.root, name))
 		if err != nil && !os.IsNotExist(err) {
 			return "", err
@@ -125,7 +138,7 @@ func (s *server) exportPlan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, fmt.Errorf("choose a platform or all platform folders"))
 		return
 	}
-	profileStamp, err := s.exportStamp()
+	profileStamp, err := s.exportStamp(d)
 	if err != nil {
 		writeError(w, 400, err)
 		return
@@ -160,23 +173,17 @@ func (s *server) exportPlan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 409, fmt.Errorf("dismiss an old operation before planning another"))
 		return
 	}
-	if !s.editMu.TryLock() {
-		writeError(w, 409, fmt.Errorf("another library operation is running; try again when it finishes"))
-		return
-	}
-	unlock, err := catalogedit.Lock(s.root)
+	unlock, err := s.exportAccess(d)
 	if err != nil {
-		s.editMu.Unlock()
 		writeError(w, 409, err)
 		return
 	}
-	stamp, err := s.exportStamp()
+	stamp, err := s.exportStamp(d)
 	if err == nil && stamp != profileStamp {
 		err = fmt.Errorf("library changed while reading the profile; prepare again")
 	}
 	if err != nil {
 		unlock()
-		s.editMu.Unlock()
 		writeError(w, 400, err)
 		return
 	}
@@ -186,7 +193,7 @@ func (s *server) exportPlan(w http.ResponseWriter, r *http.Request) {
 	}
 	s.operations[op.ID] = op
 	snapshot := cloneOperation(op)
-	go func() { defer s.editMu.Unlock(); defer unlock(); s.runExportPlan(snapshot) }()
+	go func() { defer unlock(); s.runExportPlan(snapshot) }()
 	w.WriteHeader(http.StatusAccepted)
 	writeJSON(w, snapshot)
 }
@@ -228,7 +235,7 @@ func (s *server) runExportPlan(op libraryOperation) {
 		documents, err = exportDocuments(job)
 	}
 	if err == nil {
-		stamp, e := s.exportStamp()
+		stamp, e := s.exportStamp(d)
 		if e != nil || stamp != op.stamp {
 			err = fmt.Errorf("library changed while preparing the export; prepare a new plan")
 		}
@@ -284,18 +291,13 @@ func (s *server) beginExport(id string, revision int) error {
 	if op.Revision != revision {
 		return fmt.Errorf("export plan changed; review the current plan")
 	}
-	if !s.editMu.TryLock() {
-		return fmt.Errorf("another library operation is running; try again when it finishes")
-	}
-	unlock, err := catalogedit.Lock(s.root)
+	unlock, err := s.exportAccess(op.Export.Destination)
 	if err != nil {
-		s.editMu.Unlock()
 		return err
 	}
-	stamp, err := s.exportStamp()
+	stamp, err := s.exportStamp(op.Export.Destination)
 	if err != nil || stamp != op.stamp {
 		unlock()
-		s.editMu.Unlock()
 		return fmt.Errorf("library settings or catalog changed; prepare a new export plan")
 	}
 	op.State = "exporting"
@@ -304,7 +306,7 @@ func (s *server) beginExport(id string, revision int) error {
 	op.Error = ""
 	op.Updated = time.Now().UTC()
 	snapshot := cloneOperation(op)
-	go func() { defer s.editMu.Unlock(); defer unlock(); s.runExportApply(snapshot) }()
+	go func() { defer unlock(); s.runExportApply(snapshot) }()
 	return nil
 }
 func (s *server) runExportApply(op libraryOperation) {

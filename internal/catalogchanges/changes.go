@@ -127,6 +127,9 @@ func (b *Batch) Finish() error {
 			if err := b.refresh(root, p); err != nil && first == nil {
 				first = fmt.Errorf("catalog written, index refresh %s: %w", p, err)
 			}
+			if err := publishRevision(filepath.Join(root, "platforms", p)); err != nil && first == nil {
+				first = fmt.Errorf("catalog written, platform revision %s: %w", p, err)
+			}
 		}
 		if err := publishRevision(root); err != nil && first == nil {
 			first = fmt.Errorf("catalog written, revision publication: %w", err)

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
-	"rommeta/internal/catalogedit"
 	"rommeta/internal/exporter"
 	"rommeta/internal/exportjob"
 	"rommeta/internal/taskprogress"
@@ -91,17 +90,12 @@ func (s *server) exportReview(w http.ResponseWriter, r *http.Request) {
 		}
 		seen[b.ID] = true
 	}
-	if !s.editMu.TryLock() {
-		writeError(w, 409, fmt.Errorf("another library operation is running; update this plan after it finishes"))
-		return
-	}
-	unlock, err := catalogedit.Lock(s.root)
+	unlock, err := s.exportAccess(op.Export.Destination)
 	if err != nil {
-		s.editMu.Unlock()
 		writeError(w, 409, err)
 		return
 	}
-	stamp, err := s.exportStamp()
+	stamp, err := s.exportStamp(op.Export.Destination)
 	if err == nil && stamp != op.stamp {
 		err = fmt.Errorf("library changed; prepare a new export plan")
 	}
@@ -122,7 +116,6 @@ func (s *server) exportReview(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		unlock()
-		s.editMu.Unlock()
 		writeError(w, 409, err)
 		return
 	}
@@ -134,7 +127,6 @@ func (s *server) exportReview(w http.ResponseWriter, r *http.Request) {
 	op.Revision++
 	snapshot := cloneOperation(op)
 	go func() {
-		defer s.editMu.Unlock()
 		defer unlock()
 		job, err := snapshot.exportReviewJob.WithReview(excluded, input.Bindings)
 		var documents map[string]string

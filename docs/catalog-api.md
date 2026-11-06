@@ -613,6 +613,15 @@ reuse rules. Repeated requests return the same child operation while it remains
 in Operations. Use Retry on that child for another attempt. No force overwrite
 or automatic retry loop is enabled.
 
+Native web export prepare/review/apply can overlap one enrichment operation only
+when their catalog platform scopes do not intersect. Export aliases and family
+datasets use the exporter's normal resolver. All-platform export and other writers
+remain exclusive; two exports are serialized. The shared process-owned catalog
+lock remains held until both operations finish, so CLI writers cannot race them.
+Single-platform plans check platform revisions and configuration; unrelated fetch
+completion does not invalidate them. This exception applies within one serve
+process, not independent CLI processes.
+
 `GET /api/export/profile?target=es-de` (also `launchbox`) returns resolved library
 policy and reusable YAML. Native export plans retain this effective policy.
 The operation response includes only unresolved/uncertain input issues for review;

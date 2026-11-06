@@ -75,7 +75,9 @@ func TestRefreshFailureStillSignalsCommittedWrites(t *testing.T) {
 	if err := b.Finish(); err == nil {
 		t.Fatal("cache failure hidden")
 	}
-	if _, err := os.Stat(filepath.Join(root, RevisionFile)); err != nil {
-		t.Fatal("payload change not signalled", err)
+	for _, dir := range []string{root, p} {
+		if _, err := os.Stat(filepath.Join(dir, RevisionFile)); err != nil {
+			t.Fatal("payload change not signalled", err)
+		}
 	}
 }
