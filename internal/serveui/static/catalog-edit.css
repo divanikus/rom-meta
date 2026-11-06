@@ -165,7 +165,14 @@
 .register-editor input,.register-editor select{width:100%;min-width:0;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:4px;padding:9px 10px;font:inherit;font-size:13px}
 .register-editor input:focus,.register-editor select:focus{outline:2px solid var(--accent);outline-offset:1px}
 .register-default{max-width:520px;margin-bottom:16px}.register-search{flex:1;max-width:520px}
-.register-release-list,.register-fingerprint-list{display:grid;gap:12px}
+.register-release-list,.register-fingerprint-list{display:grid;gap:18px}
+.register-files{margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
+.register-files h4{margin:0;font-size:13px}.register-files h4 span{color:var(--muted);margin-left:6px}
+.register-file{border:1px solid var(--line);border-radius:4px;background:var(--panel);margin-top:8px}
+.register-file>summary{padding:11px 12px;cursor:pointer;overflow-wrap:anywhere}
+.register-file>summary small{color:var(--muted);float:right;margin-left:12px}
+.register-file>.register-record{border:0;border-top:1px solid var(--line);border-radius:0;background:transparent}
+.register-release> .register-heading h3{color:var(--accent);font-size:15px}
 .register-record{min-width:0;margin:0;padding:16px;background:var(--inset,var(--bg));border:1px solid var(--line);border-radius:5px}
 .register-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 20px}
 .register-record .register-delete{color:var(--bad,var(--warn))}

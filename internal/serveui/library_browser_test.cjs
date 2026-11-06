@@ -202,7 +202,7 @@ test('export navigation opens setup and keeps a draft through other views',async
  assert.equal(b.run('state.view'),'export');assert.match(b.element('native-export-pane').innerHTML,/ES-DE couch/);
  b.run('libraryNavigate("library");libraryNavigate("export")');
  assert.equal(b.run('nativeExportUI.draft.path'),'/frontends/esde');
- assert.equal(b.calls.filter(x=>x[0]==='POST').length,0);
+ assert.equal(b.calls.filter(x=>x[0]==='POST'&&x[1]!=='/api/export/profile').length,0);
 });
 test('export reconnect reads progress without replaying planning or apply',async()=>{
  const b=browser();
@@ -274,9 +274,9 @@ test('export review shows evidence, pages problem inputs and keeps exclusions ac
  b.run('exportIssueDraft(op).excluded.add("id0")');assert.equal(b.run('exportReviewDirty(op)'),true);assert.match(b.run('exportIssues(op)'),/data-export-exclude="id0" checked/);
  b.run('op.revision=2;op.export.excluded=["id0"]');assert.equal(b.run('exportReviewDirty(op)'),false);
 });
-test('effective profile inspector uses library policy instead of browser preview',async()=>{
- const b=browser();b.context.fetchJSON=async path=>({profile_yaml:"selection: saved-priorities"});b.run('nativeExportUI.draft=exportDraft();exportCapture=()=>{}');
- await b.run('exportInspectProfile()');assert.equal(b.run('nativeExportUI.draft.inspected_profile'),'selection: saved-priorities');
+test('inline defaults load library policy without using compact browser settings',async()=>{
+ const b=browser();b.context.catalogPost=async()=>({profile_yaml:'selection: saved-priorities',profile:{selection:{description:{sources:['manual.notes']}}}});b.run('nativeExportUI.draft=exportDraft()');
+ await b.run('exportEnsurePolicy()');assert.equal(b.run('nativeExportUI.draft.policy.selection.description.sources[0]'),'manual.notes');
 });
 test('theme toggle applies both themes to the document',()=>{
  const b=browser();b.run('libraryTheme("light")');assert.equal(b.context.document.documentElement.dataset.theme,'light');assert.equal(b.element('theme-toggle').title,'Switch to dark theme');
@@ -284,9 +284,9 @@ test('theme toggle applies both themes to the document',()=>{
 });
 
 
-test('inspecting a profile cannot leak UI-only fields into export requests',async()=>{
- const b=browser();b.run('nativeExportUI.draft={...exportDraft(),name:"Test",inspected_profile:"yaml",inspected_policy:{selection:{}},profile_mode:"defaults"};exportCapture=()=>{}');
- const input=await b.run('exportDestinationInput()');assert.equal(input.name,'Test');assert.equal('inspected_profile' in input,false);assert.equal('inspected_policy' in input,false);assert.equal('profile_mode' in input,false);
+test('profile editing cannot leak UI-only fields into export requests',async()=>{
+ const b=browser();b.run('nativeExportUI.draft={...exportDraft(),name:"Test",ruleKey:"description",prioritiesOpen:true,profile_mode:"defaults"};exportCapture=()=>{}');
+ const input=await b.run('exportDestinationInput()');assert.equal(input.name,'Test');assert.equal('ruleKey' in input,false);assert.equal('prioritiesOpen' in input,false);assert.equal('profile_mode' in input,false);
 });
 
 test('platform selection feeds both inline actions and survives browsing',async()=>{
@@ -335,4 +335,53 @@ test('export setup and profile preview belong to Operations in the header',()=>{
  assert.equal(b.element('browse-tab').classes.has('active'),true);
  b.run('catalogUI.enabled=false;state.platforms=[{platform:"Console"}];exportPreviewProfile=()=>{state.preview=true};libraryStartJob("preview")');
  assert.equal(b.run('state.preview'),true);assert.equal(b.calls.filter(c=>c[0]==='POST').length,0);
+});
+
+function profileSetup(b){
+ b.run('state.view="export";nativeExportUI.draft={...exportDraft(),name:"Keep destination",rom_root:"/roms",path:"/output",platform:"Console",profile_name:"Custom profile",policy:{schema_version:1,titles:{mode:"regional"},launchbox:{regions:["Japan"]},selection:{description:{languages:["en"],scope:"game",sources:["launchbox"]},fields:{title:{sources:["launchbox"]}},media:{}}}};nativeExportUI.profileOptions={available_sources:["launchbox","manual.notes"],media_roles:{"es-de":[{id:"cover",label:"Cover"}]}}');
+ for(const [id,value]of Object.entries({'export-destination-name':'Keep destination','export-run-target':'es-de','export-destination-path':'/output','export-rom-root':'/roms','export-run-platform':'Console','export-media-root':'','export-rom-mode':'single'}))b.element(id).value=value;
+}
+test('inline profile preview opens a separate tab with exact policy and keeps setup intact',async()=>{
+ const b=browser();profileSetup(b);const data={},destinations=[];
+ b.context.window.open=(url,target)=>{assert.equal(url,'about:blank');assert.equal(target,'_blank');return{sessionStorage:{setItem:(k,v)=>data[k]=JSON.parse(v)},location:{replace:url=>destinations.push(url)},close(){throw Error('unexpected close')}}};
+ b.context.catalogPost=async(path,body)=>{assert.equal(path,'/api/export/profile');assert.equal(body.profile.launchbox.regions[0],'Japan');return{profile_yaml:'schema_version: 1\nselection:\n  media: {}\n',target:'es-de'}};
+ await b.run('exportPreviewProfile()');
+ assert.equal(b.run('state.view'),'export');assert.equal(b.run('nativeExportUI.draft.rom_root'),'/roms');assert.equal(b.run('nativeExportUI.draft.path'),'/output');
+ assert.equal(data['rommeta.export-preview'].profile_yaml,'schema_version: 1\nselection:\n  media: {}\n');assert.equal(data['rommeta.export-preview'].platform,'Console');assert.deepEqual(destinations,['/?export-preview=1']);
+});
+test('preview rejects invalid profile, closes only its reserved tab and keeps the draft',async()=>{
+ const b=browser();profileSetup(b);let closed=false;
+ b.context.window.open=()=>({close(){closed=true}});b.context.catalogPost=async()=>{throw Error('Invalid rule scope')};
+ await b.run('exportPreviewProfile()');assert.equal(closed,true);assert.match(b.run('nativeExportUI.error'),/Invalid rule/);assert.equal(b.run('nativeExportUI.draft.path'),'/output');
+});
+test('late profile loading cannot overwrite a different saved destination',async()=>{
+ const b=browser();let resolve;b.context.catalogPost=()=>new Promise(r=>resolve=r);
+ b.run('nativeExportUI.draft=exportDraft()');const loading=b.run('exportEnsurePolicy()');b.run('nativeExportUI.draft={...exportDraft(),name:"Newer"}');
+ resolve({profile:{titles:{mode:"release"}},profile_yaml:'old'});await loading;assert.equal(b.run('nativeExportUI.draft.policy'),undefined);assert.equal(b.run('nativeExportUI.draft.name'),'Newer');
+});
+test('unvalidated YAML is retained and prevents saving or planning a different policy',async()=>{
+ const b=browser();profileSetup(b);b.run('nativeExportUI.draft.profileRaw="bad: ["');
+ await assert.rejects(b.run('exportDestinationInput()'),/Validate your YAML/);assert.equal(b.run('nativeExportUI.draft.profileRaw'),'bad: [');assert.equal(b.calls.length,0);
+});
+test('profile form has direct fields and one separate-preview action',()=>{
+ const b=browser();profileSetup(b);b.run('exportRender()');const html=b.element('native-export-pane').innerHTML;
+ assert.match(html,/data-profile-field="titles.mode"/);assert.match(html,/data-profile-field="selection.description.languages"/);
+ assert.equal((html.match(/data-export-preview/g)||[]).length,1);assert.doesNotMatch(html,/export-profile-mode|Edit browser profile|View effective profile/);
+});
+
+
+test('typed profile languages are captured before save without a blur event',async()=>{
+ const b=browser();profileSetup(b);const listeners={};
+ b.context.document.querySelectorAll=selector=>selector==='[data-profile-field]'?[{tagName:'INPUT',dataset:{profileField:'selection.description.languages'},value:'ja, en',addEventListener:(type,fn)=>listeners[type]=fn}]:[];
+ b.run('exportBindProfile()');assert.equal(typeof listeners.input,'function');listeners.input();
+ assert.equal(b.run('nativeExportUI.draft.policy.selection.description.languages.join(",")'),'ja,en');
+ b.context.catalogPost=async(path,body)=>({profile_yaml:body.profile.selection.description.languages.join(','),profile:body.profile});
+ const result=await b.run('exportDestinationInput()');assert.equal(result.profile_yaml,'ja,en');assert.equal(result.path,'/output');
+});
+
+test('raw YAML edits disable structured profile controls until validated or discarded',()=>{
+ const b=browser();profileSetup(b);const control={disabled:false},note=b.element('export-profile-pending');
+ b.context.document.querySelectorAll=selector=>selector.includes('[data-profile-field],')?[control]:[];
+ b.run('nativeExportUI.draft.profileRaw="bad: [";exportProfilePending()');assert.equal(control.disabled,true);assert.equal(note.hidden,false);
+ b.run('delete nativeExportUI.draft.profileRaw;exportProfilePending()');assert.equal(control.disabled,false);assert.equal(note.hidden,true);
 });

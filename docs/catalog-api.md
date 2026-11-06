@@ -31,7 +31,8 @@ badges/filter still describe provider coverage, not all available metadata.
 
 ### Browser operations
 
-The browser has Library, Operations, Export and Settings navigation.
+The browser has Library, Operations and Settings navigation.
+Operations → Add job opens import, metadata fetching and export setup.
 `GET /api/operations` reconnects to this server's DAT jobs without starting work.
 Editable catalog servers also provide multipart `POST /api/catalog/import-upload`
 and JSON `import-plan`, `import-apply`, `import-dismiss` under `/api/catalog/`.
@@ -609,6 +610,13 @@ native output from the retained scan without writing the destination. Restoring 
 input uses the same endpoint. Apply accepts only the resulting reviewed revision.
 See interactive [OpenAPI documentation](#openapi-and-interactive-documentation)
 for request schemas and [browser workflows](catalog-editing.md) for the UI.
+
+Profile editing uses read-only `POST /api/export/profile` with `target` and either
+`profile_yaml` or a structured `profile`. It returns validated `profile_yaml` and
+resolved `profile` using the CLI policy validator. It neither scans ROMs nor writes
+files. `POST /api/export-preview` also accepts optional `profile_yaml`; when present,
+that exact policy replaces compact controls (only `settings.target` selects the
+frontend). This keeps the separate preview tab and native plan on the same policy.
 
 ## Browser statistics reference
 

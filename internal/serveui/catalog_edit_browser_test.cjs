@@ -526,7 +526,7 @@ test('register materialization carries fingerprint draft but keeps both original
 });
 test('register paging keeps unrendered drafts and rejects invalid file sizes',()=>{
  const b=browser(async()=>json({}));
- b.run('catalogRegisterInstall({revision:"fp",releases:[],fingerprints:Array.from({length:42},(_,index)=>({index,fields:{file:{name:"File "+index,size:1,crc32:"12345678"}}}))},true);catalogRegisterChange("fingerprint",41,"file.name","Last edited");catalogRegister.page=2;');
+ b.run('catalogRegisterInstall({revision:"fp",releases:[],fingerprints:Array.from({length:42},(_,index)=>({index,fields:{file:{name:"File "+index,size:1,crc32:"12345678"}}}))},true);catalogRegisterChange("fingerprint",41,"file.name","Last edited");catalogRegister.pages.unassigned=2;');
  assert.match(b.run('catalogRenderRegister()'),/Last edited/);
  assert.doesNotMatch(b.run('catalogRenderRegister()'),/>File 0</);
  b.run('catalogRegisterChange("fingerprint",41,"file.size","1.5")');
@@ -550,4 +550,17 @@ test('saving release changes updates the game-list count and default immediately
  await b.run('catalogSaveInline()');
  assert.equal(b.run('state.games[0].release_count'),1);
  assert.equal(b.run('state.games[0].default_release'),'World');
+});
+
+test('fingerprints are nested by owner and adding to a release retains original global indices',()=>{
+ const b=browser(async()=>json({}));b.run('catalogRegisterInstall({revision:"fp",releases:[{name:"USA",fields:{}},{name:"Japan",fields:{}}],fingerprints:[{index:7,fields:{release:"Japan",file:{name:"jp.bin",size:2,crc32:"12345678"}}},{index:2,fields:{release:"USA",file:{name:"us.bin",size:1,crc32:"12345678"}}}]},true)');
+ const html=b.run('catalogRenderRegister()'),us=html.indexOf('data-register-record="release-0"'),jp=html.indexOf('data-register-record="release-1"');
+ assert.ok(html.indexOf('us.bin')>us&&html.indexOf('us.bin')<jp);assert.ok(html.indexOf('jp.bin')>jp);
+ b.run('catalogRegisterAdd("fingerprint","release:Japan");catalogRegisterChange("fingerprint",0,"file.name","JP edited")');
+ assert.equal(b.run('catalogRegister.fingerprints[2].fields.release'),'Japan');assert.equal(b.run('catalogRegisterPatch().fingerprints[0].index'),7);
+});
+test('release removal retains nested fingerprints for explicit reassignment or undo',()=>{
+ const b=browser(async()=>json({}));b.run('catalogRegisterInstall({revision:"fp",releases:[{name:"USA",fields:{}}],fingerprints:[{index:0,fields:{release:"USA",file:{name:"kept.bin",crc32:"12345678"}}}]},true);catalogRegisterDelete("release",0)');
+ assert.match(b.run('catalogRenderRegister()'),/kept.bin/);assert.equal(b.run('catalogRegister.fingerprints[0].deleted'),undefined);
+ b.run('catalogRegisterDelete("release",0)');assert.equal(b.run('catalogRegisterDirty()'),false);
 });

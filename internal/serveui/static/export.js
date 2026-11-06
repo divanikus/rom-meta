@@ -6,8 +6,8 @@ function exportDraft(){return {id:"",name:"",target:state.exportSettings?.target
 async function exportOpen(){
  if(!nativeExportUI.draft)nativeExportUI.draft=exportDraft();
  exportRender();
- if(nativeExportUI.loaded||nativeExportUI.loading)return;
- await exportLoadDestinations();
+ if(!nativeExportUI.loaded&&!nativeExportUI.loading)await exportLoadDestinations();
+ await exportEnsurePolicy();
 }
 async function exportLoadDestinations(){
  nativeExportUI.loading=true;nativeExportUI.error="";exportRender();
@@ -17,7 +17,7 @@ async function exportLoadDestinations(){
 }
 function exportCapture(){
  const f=nativeExportUI.draft;if(!f||!$("export-run-form"))return;
- for(const [key,id]of Object.entries({name:"export-destination-name",target:"export-run-target",path:"export-destination-path",rom_root:"export-rom-root",platform:"export-run-platform",media_root:"export-media-root",profile_mode:"export-profile-mode"})){const el=$(id);if(el)f[key]=el.value;}
+ for(const [key,id]of Object.entries({name:"export-destination-name",target:"export-run-target",path:"export-destination-path",rom_root:"export-rom-root",platform:"export-run-platform",media_root:"export-media-root"})){const el=$(id);if(el)f[key]=el.value;}
  f.all=$("export-rom-mode")?.value==="all";
 }
 function exportPathField(label,id,key,hint){
@@ -27,9 +27,9 @@ function exportPathField(label,id,key,hint){
 function exportRender(){
  const pane=$("native-export-pane");if(!pane)return;
  if(!catalogUI.enabled){pane.innerHTML='<h1>Export</h1><p>Start serve with --edit to save destinations and run exports on this machine.</p><button class="tab-button" data-export-preview>Preview profile</button>';exportBind();return;}
- const f=nativeExportUI.draft||exportDraft(),busy=nativeExportUI.busy||nativeExportUI.loading;
+ const f=nativeExportUI.draft||exportDraft(),busy=nativeExportUI.busy||nativeExportUI.loading||f.profileLoading;
  const platforms=state.platforms||[];
- pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">EXPORT TO A FRONTEND</span><h1>Export</h1><p>Write metadata, playlists and media for your existing ROMs.</p></div><button class="tab-button" data-export-preview>Edit browser profile</button></div>'+
+ pane.innerHTML='<div class="management-heading"><div><span class="operation-eyebrow">EXPORT TO A FRONTEND</span><h1>Export</h1><p>Write metadata, playlists and media for your existing ROMs.</p></div></div>'+
  '<p class="secondary export-host">Folders belong to <strong>'+escapeHTML(nativeExportUI.host||"the machine running serve")+'</strong>'+ (nativeExportUI.os?' · '+escapeHTML(nativeExportUI.os):"")+'. ROM files stay in place.</p>'+
  (nativeExportUI.error?'<p class="operation-error" role="alert">'+escapeHTML(nativeExportUI.error)+'</p>':"")+
  '<form id="export-run-form"><fieldset '+(busy?'disabled':'')+'><div class="export-setup-grid"><section class="operation-detail"><h2>Destination</h2><label>Saved destination<select id="export-destination-select"><option value="">New destination</option>'+
@@ -41,15 +41,13 @@ function exportRender(){
  '<section class="operation-detail"><h2>ROMs and profile</h2>'+exportPathField("ROM folder","export-rom-root","rom_root",f.all?"A parent folder containing platform folders, for example nes, snes and psx.":"The folder containing ROMs for this platform.")+
  '<div class="export-inline"><label>Folder layout<select id="export-rom-mode"><option value="single" '+(!f.all?'selected':'')+'>One platform</option><option value="all" '+(f.all?'selected':'')+'>All platform folders</option></select></label>'+
  (!f.all?'<label>Platform<select id="export-run-platform"><option value="">Choose platform</option>'+platforms.map(p=>'<option value="'+escapeAttr(p.platform)+'" '+(p.platform===f.platform?'selected':'')+'>'+escapeHTML(p.platform)+'</option>').join("")+'</select></label>':"")+'</div>'+
- '<label>Selection profile<select id="export-profile-mode"><option value="defaults" '+(f.profile_mode==="defaults"?'selected':'')+'>Library settings (saved priorities)</option><option value="current" '+(f.profile_mode==="current"?'selected':'')+'>Profile edited in this browser</option><option value="yaml" '+(f.profile_mode==="yaml"?'selected':'')+'>YAML profile</option></select></label>'+
- (f.profile_mode==="yaml"?'<label>Choose profile<input id="export-profile-upload" type="file" accept=".yaml,.yml"></label><p class="secondary">'+escapeHTML(f.profile_name||"Choose a YAML profile")+'</p>'+(f.profile_yaml?'<details><summary>Profile contents</summary><pre class="export-profile-text">'+escapeHTML(f.profile_yaml)+'</pre></details>':""):f.profile_mode==="current"?'<p class="secondary">Uses the title rules, languages, source order and media choices edited in this browser. Open “Edit this profile” to change them.</p>':'<p class="secondary">Uses source priorities saved in Settings, with the default title, language and media rules. “View effective profile” shows the exact resolved policy.</p>')+
- '<div class="export-profile-summary"><button type="button" class="tab-button" data-export-inspect>View effective profile</button>'+(f.profile_mode==="current"?'<button type="button" class="tab-button" data-export-preview>Edit this profile</button>':'')+(f.inspected_profile?exportPolicySummary(f.inspected_policy)+'<details><summary>Full profile YAML</summary><pre class="export-profile-text">'+escapeHTML(f.inspected_profile)+'</pre></details>':'')+'</div></section></div><div class="export-prepare-bar"><button class="catalog-primary" type="submit">'+(nativeExportUI.busy?'Preparing…':'Prepare export plan')+'</button><p>Scan ROMs and review the proposed changes before applying. Progress stays in Operations after you close the browser.</p></div></fieldset></form>';
+ exportProfileEditor(f)+'</section></div><div class="export-prepare-bar"><button class="catalog-primary" type="submit" '+(!f.policy||f.profileRaw!==undefined?'disabled':'')+'>'+(nativeExportUI.busy?'Preparing…':'Prepare export plan')+'</button><p>Scan ROMs and review the proposed changes before applying. Progress stays in Operations after you close the browser.</p></div></fieldset></form>';
  exportBind();
 }
 async function exportDestinationInput(){
  exportCapture();const f=nativeExportUI.draft,d=Object.fromEntries(["id","name","target","path","rom_root","media_root","platform","all","profile_yaml","profile_name"].map(k=>[k,f[k]]));
- if(f.profile_mode==="defaults"){d.profile_yaml="";d.profile_name="Library settings";}
- if(f.profile_mode==="current"){const p=await requestPreview([],undefined,{...state.exportSettings,target:d.target});d.profile_yaml=p.profile_yaml;d.profile_name="Browser profile";}
+ if(f.policy){const result=await exportResolvePolicy(f);d.profile_yaml=result.profile_yaml;d.profile_name=f.profile_name||"Custom profile";}
+ else if(f.profile_mode==="defaults"&&!f.profile_yaml){d.profile_yaml="";d.profile_name="Library settings";}
  if(f.profile_mode==="yaml"&&!d.profile_yaml)throw Error("Choose a YAML profile first.");
  if(d.all)d.platform="";
  if(d.target!=="es-de")d.media_root="";
@@ -59,13 +57,14 @@ async function exportSaveDestination(remove=false){
  if(nativeExportUI.busy)return;
  exportCapture();nativeExportUI.busy=true;nativeExportUI.error="";exportRender();
  try{
+  const fallbackPolicy=nativeExportUI.draft.policy;
   const d=remove?{id:nativeExportUI.draft.id}:await exportDestinationInput();
   if(remove&&!window.confirm("Remove this saved destination? Files in the destination are kept."))return;
   nativeExportUI.busy=true;nativeExportUI.error="";exportRender();
   const data=await catalogPost("/api/export/destinations",{revision:nativeExportUI.revision,destination:d,delete:remove});
   Object.assign(nativeExportUI,data);
   if(remove)nativeExportUI.draft=exportDraft();
-  else{const saved=data.destinations.find(x=>x.id===d.id||x.name===d.name);nativeExportUI.draft={...saved,profile_mode:saved.profile_yaml?"yaml":"defaults"};}
+  else{const saved=data.destinations.find(x=>x.id===d.id||x.name===d.name);nativeExportUI.draft={...saved,policy:fallbackPolicy,profile_mode:saved.profile_yaml?"custom":"defaults"};}
  }catch(error){nativeExportUI.error=error.message;}
  finally{nativeExportUI.busy=false;exportRender();}
 }
@@ -79,20 +78,15 @@ async function exportPrepare(event){
  }catch(error){nativeExportUI.error=error.message;exportRender();}
  finally{nativeExportUI.busy=false;if(state.view==="export")exportRender();}
 }
-function exportPreviewProfile(){
- exportCapture();
- if(nativeExportUI.draft){nativeExportUI.draft.profile_mode="current";if(state.exportSettings){state.exportSettings.target=nativeExportUI.draft.target;$("export-target").value=nativeExportUI.draft.target;}}
- setView("browse");setExportMode(true);
-}
 function exportBind(){
- document.querySelectorAll("[data-export-inspect]").forEach(b=>b.addEventListener("click",exportInspectProfile));
+ exportBindProfile();
  document.querySelectorAll("[data-export-preview]").forEach(b=>b.addEventListener("click",exportPreviewProfile));
  $("export-run-form")?.addEventListener("submit",exportPrepare);
  $("export-run-form")?.addEventListener("input",exportCapture);
- for(const id of ["export-run-target","export-rom-mode","export-profile-mode"])$(id)?.addEventListener("change",()=>{exportCapture();delete nativeExportUI.draft.inspected_profile;delete nativeExportUI.draft.inspected_policy;exportRender();});
+ for(const id of ["export-run-target","export-rom-mode"])$(id)?.addEventListener("change",()=>{exportCapture();exportRender();});
  $("export-destination-select")?.addEventListener("change",event=>{
   const saved=nativeExportUI.destinations.find(d=>d.id===event.target.value);
-  nativeExportUI.draft=saved?{...saved,profile_mode:saved.profile_yaml?"yaml":"defaults"}:exportDraft();nativeExportUI.error="";exportRender();
+  nativeExportUI.draft=saved?{...saved,profile_mode:saved.profile_yaml?"yaml":"defaults"}:exportDraft();nativeExportUI.error="";exportRender();exportEnsurePolicy();
  });
  $("export-save-destination")?.addEventListener("click",()=>exportSaveDestination());
  $("export-delete-destination")?.addEventListener("click",()=>exportSaveDestination(true));
@@ -100,7 +94,7 @@ function exportBind(){
  $("export-profile-upload")?.addEventListener("change",async event=>{
   const file=event.target.files?.[0];if(!file)return;
   const draft=nativeExportUI.draft;
-  try{if(file.size>1048576)throw Error("Profile must be at most 1 MiB.");const content=await file.text();if(nativeExportUI.draft!==draft)return;draft.profile_yaml=content;draft.profile_name=file.name;nativeExportUI.error="";}
+  try{if(file.size>1048576)throw Error("Profile must be at most 1 MiB.");const content=await file.text();if(nativeExportUI.draft!==draft)return;draft.profile_yaml=content;draft.profile_name=file.name;draft.profile_mode="yaml";delete draft.policy;delete draft.profileRaw;nativeExportUI.error="";await exportEnsurePolicy();}
   catch(error){nativeExportUI.error=error.message;}exportRender();
  });
  document.querySelectorAll("[data-export-browse]").forEach(b=>b.addEventListener("click",()=>{exportCapture();exportBrowse(b.dataset.exportBrowse,nativeExportUI.draft[b.dataset.exportBrowse]);}));
@@ -161,14 +155,6 @@ function exportIssues(job){
  return '<section class="export-review"><h3>Inputs needing attention ('+issues.length+')</h3>'+
  (!issues.length?'<p>No unresolved or ambiguous ROMs. Recognized inputs are included automatically.</p>':'<p>Review filenames and match evidence. You can exclude inputs from this export; ROMs and library cards stay unchanged.</p><div class="export-issue-tools"><input id="export-issue-search" aria-label="Filter problem inputs" placeholder="Filter filenames or reasons" value="'+escapeAttr(d.query)+'">'+(review?'<button type="button" class="tab-button" data-export-exclude-all>Exclude all unresolved</button><button type="button" class="tab-button" data-export-restore-all>Restore all</button>':'')+'</div><div class="export-issues">'+filtered.slice(d.page*40,(d.page+1)*40).map(x=>'<div class="export-issue"><label><input type="checkbox" data-export-exclude="'+escapeAttr(x.id)+'" '+(d.excluded.has(x.id)?'checked ':'')+(!review?'disabled ':'')+'aria-label="'+escapeAttr("Exclude "+x.rom)+'"><span>Exclude <strong>'+escapeHTML(x.rom)+'</strong> · '+escapeHTML(x.status)+'</span></label><small>'+escapeHTML(x.platform)+' · '+escapeHTML(x.reason||x.warnings?.join("; ")||"Review match evidence")+'</small>'+(x.game?'<small>Matched: '+escapeHTML(x.game)+(x.release?' / '+escapeHTML(x.release):"")+(x.matched_by?' · '+escapeHTML(x.matched_by):"")+'</small>':"")+(x.candidates?.length?'<small>Candidates: '+escapeHTML(x.candidates.join("; "))+'</small>':"")+'</div>').join("")+'</div><div class="operation-actions">'+(pages>1?'<button class="tab-button" data-export-issue-page="-1" '+(!d.page?'disabled':'')+'>Previous</button><span>'+(d.page+1)+' / '+pages+' · '+filtered.length+' inputs</span><button class="tab-button" data-export-issue-page="1" '+(d.page===pages-1?'disabled':'')+'>Next</button>':"")+(review?'<button class="tab-button" data-export-review-update '+(!exportReviewDirty(job)?'disabled':'')+'>Update plan</button>':'')+'<span id="export-review-hint" class="secondary">'+(exportReviewDirty(job)?'Update the plan to review these exclusions.':d.excluded.size+' excluded from this export.')+'</span></div>')+'</section>';
 }
-async function exportInspectProfile(){
- exportCapture();const d=nativeExportUI.draft;
- try{
-  const result=d.profile_mode==="defaults"?await fetchJSON("/api/export/profile?"+new URLSearchParams({target:d.target})):d.profile_mode==="current"?await requestPreview([],undefined,{...state.exportSettings,target:d.target}):{profile_yaml:d.profile_yaml};
-  if(nativeExportUI.draft!==d)return;
-  d.inspected_profile=result.profile_yaml||"Choose a YAML profile first.";d.inspected_policy=result.profile;nativeExportUI.error="";exportRender();
- }catch(error){nativeExportUI.error=error.message;exportRender();}
-}
 function exportBindReview(job){
  const d=exportIssueDraft(job);
  const update=()=>{document.querySelectorAll("[data-native-export-apply]").forEach(b=>b.disabled=exportReviewDirty(job));document.querySelectorAll("[data-export-review-update]").forEach(b=>b.disabled=!exportReviewDirty(job));const hint=$("export-review-hint");if(hint)hint.textContent=exportReviewDirty(job)?"Update the plan to review these exclusions.":d.excluded.size+" excluded from this export.";};
@@ -182,9 +168,109 @@ function exportBindReview(job){
 }
 
 
-function exportPolicySummary(p){
- if(!p)return "";
- const s=p.selection||{},sources=list=>(list||[]).map(sourceLabel).join(" → ")||"None selected";
- const rows=[["Titles",p.titles?.mode==="release"?"Full release name":"Regional title"],["Descriptions",(s.description?.languages||[]).join(" → ")],["Metadata",sources(s.fields?.title?.sources)],["Artwork",sources(s.media?.cover?.sources)],["Video",sources(s.media?.video?.sources)],["Media types",Object.keys(s.media||{}).join(", ")||"None"]];
- return '<dl class="operation-facts">'+rows.map(([k,v])=>'<dt>'+escapeHTML(k)+'</dt><dd>'+escapeHTML(v)+'</dd>').join("")+'</dl>';
+function exportProfileEditor(d){
+ if(d.profileLoading)return '<section class="export-profile-editor"><h2>Selection profile</h2><p class="secondary">Loading profile…</p></section>';
+ const p=d.policy;
+ const toolbar='<div class="register-heading"><h2>Selection profile</h2><button type="button" class="tab-button" data-export-preview '+(!p?'disabled':'')+'>Preview in new tab ↗</button></div>'+
+ '<div class="export-profile-tools"><span id="export-profile-name" class="secondary">'+escapeHTML(d.profile_name||"Library settings")+'</span><button type="button" class="tab-button" id="export-profile-reset">Reset to library settings</button><label class="tab-button export-profile-upload">Load YAML<input id="export-profile-upload" type="file" accept=".yaml,.yml"></label></div>';
+ if(!p)return '<section class="export-profile-editor">'+toolbar+'<p class="secondary">Load or reset a profile to configure it here.</p></section>';
+ const supported=nativeExportUI.profileOptions?.media_roles?.[d.target]||[],choices=[...supported,...Object.keys(p.selection.media).filter(id=>!supported.some(role=>role.id===id)).map(id=>({id,label:id+" (check frontend support)"}))];
+ const select=(key,label,value,options)=>'<label>'+label+'<select data-profile-field="'+key+'">'+options.map(([id,text])=>'<option value="'+id+'" '+(value===id?'selected':'')+'>'+text+'</option>').join("")+'</select></label>';
+ const input=(key,label,value)=>'<label>'+label+'<input data-profile-field="'+key+'" value="'+escapeAttr((value||[]).join(", "))+'"></label>';
+ const ruleKeys=["description",...Object.keys(p.selection.fields).map(k=>"fields."+k),...Object.keys(p.selection.media).map(k=>"media."+k)];
+ if(!ruleKeys.includes(d.ruleKey))d.ruleKey="description";
+ const label=key=>key==="description"?"Description":(key.startsWith("fields.")?"Metadata · ":"Media · ")+key.split(".")[1].replaceAll("_"," ");
+ const rule=exportProfileRule(d,d.ruleKey),selected=rule.sources||[],available=[...new Set([...selected,...(nativeExportUI.profileOptions?.available_sources||[])])];
+ const sources=available.map(source=>{const index=selected.indexOf(source);return '<div class="export-policy-source"><label><input type="checkbox" data-profile-source="'+escapeAttr(source)+'" '+(index>=0?'checked':'')+'>'+escapeHTML(sourceLabel(source))+'</label>'+(index>=0?'<span><button type="button" class="tab-button" data-profile-move="'+escapeAttr(source)+'" data-step="-1" '+(!index?'disabled':'')+' aria-label="Move '+escapeAttr(sourceLabel(source))+' up">↑</button><button type="button" class="tab-button" data-profile-move="'+escapeAttr(source)+'" data-step="1" '+(index===selected.length-1?'disabled':'')+' aria-label="Move '+escapeAttr(sourceLabel(source))+' down">↓</button></span>':'')+'</div>';}).join("");
+ return '<section class="export-profile-editor">'+toolbar+'<div class="export-inline">'+
+ select("titles.mode","Game titles",p.titles.mode,[["regional","Regional title"],["release","Full release name"]])+
+ input("selection.description.languages","Description languages · first preferred",p.selection.description.languages)+
+ select("selection.description.scope","Description from",p.selection.description.scope,[["game","Whole game"],["release","Selected release"]])+
+ (d.target==="launchbox"?input("launchbox.regions","Preferred regions · first preferred",p.launchbox.regions):'')+'</div>'+
+ '<fieldset class="export-policy-media"><legend>Media to include</legend>'+choices.map(role=>'<label><input type="checkbox" data-profile-media="'+escapeAttr(role.id)+'" '+(p.selection.media[role.id]?'checked':'')+'>'+escapeHTML(role.label||role.id)+'</label>').join("")+'</fieldset>'+
+ '<details class="export-policy-priorities" '+(d.prioritiesOpen?'open':'')+'><summary>Source priorities & selection rules</summary><label>Choose field<select id="export-policy-rule">'+ruleKeys.map(key=>'<option value="'+key+'" '+(d.ruleKey===key?'selected':'')+'>'+escapeHTML(label(key))+'</option>').join("")+'</select></label><p class="secondary">Top source is preferred. Uncheck a source to exclude it for this field.</p>'+sources+
+ select("rule.scope","Choose from",rule.scope,[["game","Whole game"],["release","Selected release"]])+
+ (d.ruleKey==="description"?'<button type="button" class="tab-button" id="export-profile-copy-sources">Use this source order for all metadata fields</button>':'')+'</details>'+
+ '<details class="export-policy-raw" '+(d.rawOpen?'open':'')+'><summary>Advanced profile YAML</summary><p class="secondary">Validate YAML to use it in this form. All profile changes are checked again before saving a destination or preparing a plan.</p><textarea id="export-policy-yaml" aria-label="Profile YAML" spellcheck="false">'+escapeHTML(d.profileRaw??d.profile_yaml??"")+'</textarea><button type="button" class="tab-button" id="export-profile-yaml-apply">Validate & use YAML</button> <button type="button" class="tab-button" id="export-profile-yaml-discard">Discard YAML edits</button><p class="secondary" id="export-profile-pending" '+(d.profileRaw===undefined?'hidden':'')+'>Validate or discard YAML edits before changing other settings or continuing.</p></details></section>';
+}
+function exportProfileRule(d,key){return key.split(".").reduce((obj,key)=>obj[key],d.policy.selection);}
+function exportPolicyChanged(){
+ const d=nativeExportUI.draft;d.profile_mode="custom";d.profile_name="Custom profile";delete d.profileRaw;d.profile_yaml="";nativeExportUI.error="";if($("export-profile-name"))$("export-profile-name").textContent=d.profile_name;
+}
+async function exportResolvePolicy(d){
+ if(d.profileRaw!==undefined)throw Error("Validate your YAML edits before continuing.");
+ return catalogPost("/api/export/profile",d.policy?{target:d.target,profile:d.policy}:{target:d.target,profile_yaml:d.profile_yaml||""});
+}
+async function exportEnsurePolicy(){
+ const d=nativeExportUI.draft;if(!d||d.policy||d.profileLoading)return;
+ d.profileLoading=true;exportRender();
+ try{
+  const result=await exportResolvePolicy(d);
+  if(nativeExportUI.draft!==d)return;
+  d.policy=result.profile;d.profile_yaml=result.profile_yaml;
+  if(!nativeExportUI.profileOptions)nativeExportUI.profileOptions=await fetchJSON("/api/export-options");
+ }catch(error){if(nativeExportUI.draft===d)nativeExportUI.error=error.message;}
+ finally{d.profileLoading=false;if(nativeExportUI.draft===d&&state.view==="export")exportRender();}
+}
+async function exportPreviewProfile(){
+ exportCapture();
+ if(!catalogUI.enabled){setView("browse");setExportMode(true);return;}
+ const current=nativeExportUI.draft;if(!current||nativeExportUI.busy)return;const d=JSON.parse(JSON.stringify(current));
+ // Reserve the tab in the click handler so async validation does not trigger a popup block.
+ const tab=window.open("about:blank","_blank");
+ if(!tab){nativeExportUI.error="Allow a new tab for the export preview.";exportRender();return;}
+ try{
+  const result=await exportResolvePolicy(d);
+  tab.sessionStorage.setItem("rommeta.export-preview",JSON.stringify({profile_yaml:result.profile_yaml,target:d.target,platform:d.all?"":d.platform,name:d.profile_name||"Export profile"}));
+  tab.opener=null;tab.location.replace("/?export-preview=1");
+ }catch(error){tab.close();nativeExportUI.error=error.message;if(state.view==="export")exportRender();}
+}
+function exportProfilePending(){
+ const pending=nativeExportUI.draft?.profileRaw!==undefined;
+ document.querySelectorAll("[data-profile-field], [data-profile-media], [data-profile-source], [data-profile-move], #export-profile-copy-sources, #export-save-destination, #export-run-form button[type=submit], [data-export-preview]").forEach(el=>{if(pending){if(el.profileDisabled===undefined)el.profileDisabled=el.disabled;el.disabled=true;}else if(el.profileDisabled!==undefined){el.disabled=el.profileDisabled;delete el.profileDisabled;}});
+ if($("export-profile-pending"))$("export-profile-pending").hidden=!pending;
+}
+function exportBindProfile(){
+ const d=nativeExportUI.draft;if(!d)return;
+ exportProfilePending();
+ $("export-profile-yaml-discard")?.addEventListener("click",()=>{delete d.profileRaw;d.rawOpen=false;nativeExportUI.error="";exportRender();});
+ $("export-profile-reset")?.addEventListener("click",()=>{exportCapture();delete d.policy;delete d.profileRaw;d.profile_yaml="";d.profile_mode="defaults";d.profile_name="Library settings";nativeExportUI.error="";exportEnsurePolicy();});
+ document.querySelectorAll("[data-profile-field]").forEach(el=>el.addEventListener(el.tagName==="SELECT"?"change":"input",()=>{
+  const key=el.dataset.profileField,path=key.split("."),field=path.pop(),obj=path[0]==="rule"?exportProfileRule(d,d.ruleKey):path.reduce((obj,k)=>obj[k],d.policy);
+  obj[field]=["languages","regions"].includes(field)?el.value.split(",").map(s=>s.trim()).filter(Boolean):el.value;
+  exportPolicyChanged();
+ }));
+ document.querySelectorAll("[data-profile-media]").forEach(el=>el.addEventListener("change",()=>{
+  const key=el.dataset.profileMedia;d.disabledMedia=d.disabledMedia||{};
+  if(el.checked)d.policy.selection.media[key]=d.disabledMedia[key]||{scope:"release",order:["region","source","format"],sources:[...(nativeExportUI.profileOptions?.[key==="video"?"video_sources":"artwork_sources"]||[])],...(key==="manual"?{formats:["pdf"]}:{})};
+  else{d.disabledMedia[key]=d.policy.selection.media[key];delete d.policy.selection.media[key];}
+  exportPolicyChanged();exportRender();
+ }));
+ $("export-policy-rule")?.addEventListener("change",e=>{d.ruleKey=e.target.value;exportRender();});
+ document.querySelectorAll("[data-profile-source]").forEach(el=>el.addEventListener("change",()=>{
+  const rule=exportProfileRule(d,d.ruleKey),source=el.dataset.profileSource;rule.sources=el.checked?[...(rule.sources||[]),source]:(rule.sources||[]).filter(x=>x!==source);
+  exportPolicyChanged();exportRender();
+ }));
+ document.querySelectorAll("[data-profile-move]").forEach(el=>el.addEventListener("click",()=>{
+  const list=exportProfileRule(d,d.ruleKey).sources,i=list.indexOf(el.dataset.profileMove),j=i+Number(el.dataset.step);
+  if(i<0||j<0||j>=list.length)return;[list[i],list[j]]=[list[j],list[i]];exportPolicyChanged();exportRender();
+ }));
+ $("export-profile-copy-sources")?.addEventListener("click",()=>{for(const rule of Object.values(d.policy.selection.fields))rule.sources=[...d.policy.selection.description.sources];exportPolicyChanged();exportRender();});
+ document.querySelector?.(".export-policy-priorities")?.addEventListener("toggle",e=>{d.prioritiesOpen=e.target.open;});
+ document.querySelector?.(".export-policy-raw")?.addEventListener("toggle",async e=>{
+  d.rawOpen=e.target.open;if(!d.rawOpen||d.profileRaw!==undefined)return;
+  try{const signature=JSON.stringify(d.policy),result=await exportResolvePolicy(d);if(nativeExportUI.draft===d&&d.rawOpen&&d.profileRaw===undefined&&JSON.stringify(d.policy)===signature){d.profile_yaml=result.profile_yaml;$("export-policy-yaml").value=result.profile_yaml;}}
+  catch(error){d.rawOpen=false;nativeExportUI.error=error.message;exportRender();}
+ });
+ $("export-policy-yaml")?.addEventListener("input",e=>{d.profileRaw=e.target.value;exportProfilePending();});
+ $("export-profile-yaml-apply")?.addEventListener("click",async()=>{
+  const raw=d.profileRaw??$("export-policy-yaml").value;
+  try{const result=await catalogPost("/api/export/profile",{target:d.target,profile_yaml:raw});if(nativeExportUI.draft!==d||d.profileRaw!==undefined&&d.profileRaw!==raw)return;d.policy=result.profile;delete d.profileRaw;d.profile_yaml=result.profile_yaml;d.profile_mode="custom";d.profile_name="Custom profile";nativeExportUI.error="";exportRender();}
+  catch(error){if(nativeExportUI.draft===d){nativeExportUI.error=error.message;exportRender();}}
+ });
+}
+
+
+async function exportUseBrowserProfile(){
+ try{const result=await requestPreview([]);if(!nativeExportUI.draft)nativeExportUI.draft=exportDraft();Object.assign(nativeExportUI.draft,{target:result.target,policy:result.profile,profile_yaml:result.profile_yaml,profile_mode:"custom",profile_name:"Custom profile"});libraryNavigate("export");}catch(error){$("export-error").textContent=error.message;$("export-error").classList.remove("hidden");}
 }

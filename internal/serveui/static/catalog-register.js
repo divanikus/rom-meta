@@ -1,9 +1,9 @@
 // One draft for game.yaml and fingerprints.yaml; the server validates both.
-const catalogRegister={base:null,revision:"",raw:null,releases:[],fingerprints:[],defaultRelease:"",page:0,query:"",loaded:false};
+const catalogRegister={base:null,revision:"",raw:null,releases:[],fingerprints:[],defaultRelease:"",pages:{},open:{},query:"",loaded:false};
 const registerClone=value=>JSON.parse(JSON.stringify(value));
 function catalogRegisterInstall(snapshot,baseline=false){
  const r=catalogRegister;
- if(baseline){r.base=snapshot?registerClone(snapshot):null;r.revision=snapshot?.revision||"";r.raw=null;r.query="";r.page=0;}
+ if(baseline){r.base=snapshot?registerClone(snapshot):null;r.revision=snapshot?.revision||"";r.raw=null;r.query="";r.pages={};r.open={};}
  r.loaded=!!snapshot;
  r.releases=(snapshot?.releases||[]).map(x=>({original:x.name,name:x.name,fields:registerClone(x.fields),base:registerClone(x.fields)}));
  r.fingerprints=(snapshot?.fingerprints||[]).map(x=>({index:x.index,fields:registerClone(x.fields),base:registerClone(x.fields)}));
@@ -52,19 +52,19 @@ function catalogRegisterPreview(card,dirty){
  if(!card.register||!catalogRegister.loaded)return;
  if(dirty){catalogRegister.raw=card.register.yaml;catalogRegisterInstall(card.register);}
 }
-function catalogRegisterAdd(kind){
+function catalogRegisterAdd(kind,owner){
  if(catalogInline.saving)return;
  const r=catalogRegister;
  if(kind==="release")r.releases.push({original:"",name:"",fields:{},base:{}});
- else {r.fingerprints.push({index:-1,fields:{release:r.releases.find(x=>!x.deleted)?.name||"",file:{name:"",size:0}},base:{}});r.query="";r.page=Math.floor((r.fingerprints.length-1)/20);}
+ else {const target=owner??("release:"+ (r.releases.find(x=>!x.deleted)?.name||""));const [type,...name]=target.split(":");const fields={file:{name:"",size:0}};if(type==="release"||type==="variant")fields[type]=name.join(":");r.fingerprints.push({index:-1,fields,base:{}});r.query="";r.open[r.fingerprints.length-1]=true;r.pages[target]=Math.floor((r.fingerprints.filter(x=>registerOwner(x)===target).length-1)/20);}
  catalogRegisterChanged();catalogInlineRender();
  const selector=kind==="release"?'[data-register-field="name"]':'[data-register-field="file.name"]';
- const inputs=document.querySelectorAll(selector);inputs[inputs.length-1]?.focus?.();
+ const index=kind==="release"?r.releases.length-1:r.fingerprints.length-1;document.querySelector?.('[data-register-record="'+kind+'-'+index+'"] '+selector)?.focus?.();
 }
 function catalogRegisterDelete(kind,index){
  if(catalogInline.saving)return;
  const entry=(kind==="release"?catalogRegister.releases:catalogRegister.fingerprints)[index];
- entry.deleted=!entry.deleted;if(entry.deleted)catalogInline.invalid.delete("register:"+index+":size");catalogRegisterChanged();catalogInlineRender();
+ entry.deleted=!entry.deleted;if(kind==="fingerprint"&&entry.deleted)catalogInline.invalid.delete("register:"+index+":size");catalogRegisterChanged();catalogInlineRender();
 }
 function catalogRegisterChange(kind,index,key,text){
  if(catalogInline.saving)return;
@@ -73,7 +73,7 @@ function catalogRegisterChange(kind,index,key,text){
  else if(key==="name"){
   const previous=entry.name;entry.name=text;
   if(previous){
-   if(r.defaultRelease===previous)r.defaultRelease=text;
+   if(previous&&r.defaultRelease===previous)r.defaultRelease=text;
    r.fingerprints.forEach(fp=>{if(fp.fields.release===previous)fp.fields.release=text;});
   }
  }else if(key==="target"){
@@ -98,40 +98,48 @@ function registerOptions(value,variant=false){
  const r=catalogRegister,options=[...r.releases.filter(x=>!x.deleted&&x.name).map(x=>["release:"+x.name,x.name]),...(variant?(r.snapshot?.variants||[]).map(x=>["variant:"+x.name,"Variant · "+x.name]):[])];
  return '<option value="">Choose a release'+(variant?' or variant':'')+'</option>'+(!options.some(([id])=>id===value)&&value?'<option value="'+escapeAttr(value)+'" selected>Missing · '+cEscape(value.replace(/^(release|variant):/,""))+'</option>':'')+options.map(([id,name])=>'<option value="'+escapeAttr(id)+'" '+(id===value?'selected':'')+'>'+cEscape(name)+'</option>').join("");
 }
+function registerOwner(fp){return fp.fields.variant?"variant:"+fp.fields.variant:fp.fields.release?"release:"+fp.fields.release:"unassigned";}
+function registerRemove(kind,index,deleted){
+ return '<button type="button" class="tab-button '+(deleted?'':'register-delete')+'" data-register-delete="'+kind+'" data-register-index="'+index+'" '+(catalogInline.saving?'disabled':'')+'>'+(deleted?'Undo removal':'Remove')+'</button>';
+}
+function registerFiles(owner){
+ const r=catalogRegister,all=r.fingerprints.map((x,i)=>({x,i})).filter(({x})=>registerOwner(x)===owner),filtered=all.filter(({x})=>!r.query||JSON.stringify(x.fields).toLowerCase().includes(r.query.toLowerCase()));
+ const page=r.pages[owner]=Math.max(0,Math.min(r.pages[owner]||0,Math.ceil(filtered.length/20)-1));
+ return '<div class="register-files"><div class="register-heading"><h4>Files / fingerprints <span>'+all.filter(({x})=>!x.deleted).length+'</span></h4>'+
+ (owner!=="unassigned"?'<button type="button" class="tab-button" data-register-add="fingerprint" data-register-owner="'+escapeAttr(owner)+'" '+(owner==="release:"?'disabled title="Name the release first"':'')+'>+ Add file</button>':'')+'</div>'+
+ (!filtered.length?'<p class="secondary">'+(r.query?'No matching files.':'No registered files yet.')+'</p>':'')+
+ filtered.slice(page*20,page*20+20).map(({x,i})=>'<details class="register-file" data-register-open="'+i+'" '+(r.open[i]?'open':'')+'><summary><span>'+cEscape(x.fields.file?.name||"New fingerprint")+'</span><small>'+ (x.deleted?'Removal pending':cEscape(x.fields.file?.size??"Unknown size")+" bytes")+'</small></summary><fieldset class="register-record" data-register-record="fingerprint-'+i+'" '+(catalogInline.saving?'disabled':'')+'><div class="register-heading"><strong>File identity</strong>'+registerRemove("fingerprint",i,x.deleted)+'</div>'+
+ (x.deleted?'<p class="register-removal">Will be removed on Save. The ROM file is not deleted.</p>':'<div class="register-fields">'+registerInput("fingerprint",i,"file.name","File name",x.fields.file?.name)+
+ '<label><span>Move to release or variant</span><select aria-label="Move to release or variant" data-register-kind="fingerprint" data-register-index="'+i+'" data-register-field="target">'+registerOptions((x.fields.variant?'variant:'+x.fields.variant:x.fields.release?'release:'+x.fields.release:''),true)+'</select></label>'+
+ registerInput("fingerprint",i,"file.size","Size in bytes",x.fields.file?.size,"number")+registerInput("fingerprint",i,"file.crc32","CRC32 · 8 hex characters",x.fields.file?.crc32)+registerInput("fingerprint",i,"file.md5","MD5 · 32 hex characters",x.fields.file?.md5)+registerInput("fingerprint",i,"file.sha1","SHA1 · 40 hex characters",x.fields.file?.sha1)+registerInput("fingerprint",i,"file.sha256","SHA256 · 64 hex characters",x.fields.file?.sha256)+'</div>'+
+ (x.fields.file?.kind?'<p class="secondary">Identity kind: '+cEscape(x.fields.file.kind)+'</p>':'')+'<p class="secondary register-hint">At least one hash is required. Source provenance and additional fields are retained.</p>')+'</fieldset></details>').join("")+
+ (filtered.length>20?'<div class="register-heading register-pages"><button type="button" class="tab-button" data-register-page="-1" data-register-owner="'+escapeAttr(owner)+'" '+(!page?'disabled':'')+'>Previous</button><span>Page '+(page+1)+' of '+Math.ceil(filtered.length/20)+'</span><button type="button" class="tab-button" data-register-page="1" data-register-owner="'+escapeAttr(owner)+'" '+((page+1)*20>=filtered.length?'disabled':'')+'>Next</button></div>':'')+'</div>';
+}
 function catalogRenderRegister(){
  const r=catalogRegister;
  if(!r.loaded)return '<p class="secondary">Open the release editor to load these records.</p><button class="tab-button" id="register-load">Load releases & fingerprints</button>';
- const filtered=r.fingerprints.map((x,i)=>({x,i})).filter(({x})=>!r.query||JSON.stringify(x.fields).toLowerCase().includes(r.query.toLowerCase()));
- r.page=Math.max(0,Math.min(r.page,Math.ceil(filtered.length/20)-1));
- const fieldset=(kind,index,body)=>'<fieldset class="register-record" '+(catalogInline.saving?'disabled':'')+' data-register-record="'+kind+'-'+index+'">'+body+'</fieldset>';
- const remove=(kind,index,deleted)=>'<button type="button" class="tab-button '+(deleted?'':'register-delete')+'" data-register-delete="'+kind+'" data-register-index="'+index+'" '+(catalogInline.saving?'disabled':'')+'>'+(deleted?'Undo removal':'Remove')+'</button>';
- return '<div class="register-editor"><div class="register-heading"><p class="secondary">Edit release definitions and registered file identities. ROM files stay unchanged.</p><button class="tab-button" id="register-validate" '+(catalogInline.saving?'disabled':'')+'>Validate changes</button></div>'+
- '<section><div class="register-heading"><h3>Releases <span>'+r.releases.filter(x=>!x.deleted).length+'</span></h3><button class="tab-button" data-register-add="release">+ Add release</button></div>'+
- '<label class="register-default">Default release<select id="register-default" aria-label="Default release" '+(catalogInline.saving?'disabled':'')+'>'+registerOptions(r.defaultRelease?'release:'+r.defaultRelease:'')+'</select></label>'+
- '<div class="register-release-list">'+r.releases.map((x,i)=>fieldset("release",i,'<div class="register-heading"><strong>'+cEscape(x.name||"New release")+'</strong>'+remove("release",i,x.deleted)+'</div>'+
- (x.deleted?'<p class="register-removal">Will be removed on Save. Existing references must be removed or reassigned.</p><label>Reassign its references to<select aria-label="Reassign its references to" data-register-kind="release" data-register-index="'+i+'" data-register-field="replacement">'+registerOptions(x.replacement?'release:'+x.replacement:'')+'</select></label>':'<div class="register-fields">'+registerInput("release",i,"name","Release name",x.name)+registerInput("release",i,"title","Display title",x.fields.title)+registerInput("release",i,"regions","Regions · comma separated",x.fields.regions)+registerInput("release",i,"languages","Languages · comma separated",x.fields.languages)+registerInput("release",i,"release_date","Release date",x.fields.release_date)+'</div><p class="secondary register-hint">Renaming updates this card’s source, default, variant and fingerprint references.</p>'))).join("")+'</div></section>'+
- '<section><div class="register-heading"><h3>Fingerprints <span>'+r.fingerprints.filter(x=>!x.deleted).length+'</span></h3><button class="tab-button" data-register-add="fingerprint">+ Add fingerprint</button></div>'+
- '<div class="register-heading"><label class="register-search">Find file, hash or release<input id="register-search" aria-label="Find file, hash or release" value="'+escapeAttr(r.query)+'" type="search"></label><span class="secondary">'+filtered.length+' records · 20 per page</span></div>'+
- '<div class="register-fingerprint-list">'+filtered.slice(r.page*20,r.page*20+20).map(({x,i})=>fieldset("fingerprint",i,'<div class="register-heading"><strong>'+cEscape(x.fields.file?.name||"New fingerprint")+'</strong>'+remove("fingerprint",i,x.deleted)+'</div>'+
- (x.deleted?'<p class="register-removal">Will be removed on Save. The ROM file is not deleted.</p>':'<div class="register-fields">'+registerInput("fingerprint",i,"file.name","File name",x.fields.file?.name)+
- '<label><span>Belongs to</span><select aria-label="Belongs to" data-register-kind="fingerprint" data-register-index="'+i+'" data-register-field="target">'+registerOptions((x.fields.variant?'variant:'+x.fields.variant:x.fields.release?'release:'+x.fields.release:''),true)+'</select></label>'+
- registerInput("fingerprint",i,"file.size","Size in bytes",x.fields.file?.size,"number")+registerInput("fingerprint",i,"file.crc32","CRC32 · 8 hex characters",x.fields.file?.crc32)+registerInput("fingerprint",i,"file.md5","MD5 · 32 hex characters",x.fields.file?.md5)+registerInput("fingerprint",i,"file.sha1","SHA1 · 40 hex characters",x.fields.file?.sha1)+registerInput("fingerprint",i,"file.sha256","SHA256 · 64 hex characters",x.fields.file?.sha256)+
- '</div>'+(x.fields.file?.kind?'<p class="secondary">Identity kind: '+cEscape(x.fields.file.kind)+'</p>':'')+
- '<p class="secondary register-hint">At least one hash is required. Source provenance and additional fields are retained.</p>'))).join("")+'</div>'+
- (filtered.length>20?'<div class="register-heading register-pages"><button class="tab-button" id="register-prev" '+(!r.page?'disabled':'')+'>Previous</button><span>Page '+(r.page+1)+' of '+Math.ceil(filtered.length/20)+'</span><button class="tab-button" id="register-next" '+((r.page+1)*20>=filtered.length?'disabled':'')+'>Next</button></div>':'')+'</section></div>';
+ const owners=new Set(r.releases.map(x=>"release:"+x.name));
+ const extra=[...new Set(r.fingerprints.map(registerOwner))].filter(owner=>!owners.has(owner));
+ return '<div class="register-editor"><div class="register-heading"><p class="secondary">Each release contains its registered files. Changes are saved together; ROM files stay unchanged.</p><button class="tab-button" id="register-validate" '+(catalogInline.saving?'disabled':'')+'>Validate changes</button></div>'+
+ '<div class="register-heading"><h3>Releases <span>'+r.releases.filter(x=>!x.deleted).length+'</span></h3><button type="button" class="tab-button" data-register-add="release">+ Add release</button></div>'+
+ '<div class="register-fields"><label class="register-default">Default release<select id="register-default" aria-label="Default release" '+(catalogInline.saving?'disabled':'')+'>'+registerOptions(r.defaultRelease?'release:'+r.defaultRelease:'')+'</select></label><label class="register-search">Find a file or hash<input id="register-search" aria-label="Find a file or hash" value="'+escapeAttr(r.query)+'" type="search"></label></div>'+
+ '<div class="register-release-list">'+r.releases.map((x,i)=>'<section class="register-record register-release" data-register-record="release-'+i+'"><div class="register-heading"><h3>'+cEscape(x.name||"New release")+'</h3>'+registerRemove("release",i,x.deleted)+'</div>'+
+ (x.deleted?'<p class="register-removal">Release removal pending. Remove its files below or reassign its references before saving.</p><label>Reassign its references to<select aria-label="Reassign its references to" data-register-kind="release" data-register-index="'+i+'" data-register-field="replacement">'+registerOptions(x.replacement?'release:'+x.replacement:'')+'</select></label>':'<div class="register-fields">'+registerInput("release",i,"name","Release name",x.name)+registerInput("release",i,"title","Display title",x.fields.title)+registerInput("release",i,"regions","Regions · comma separated",x.fields.regions)+registerInput("release",i,"languages","Languages · comma separated",x.fields.languages)+registerInput("release",i,"release_date","Release date",x.fields.release_date)+'</div>')+
+ registerFiles("release:"+x.name)+'</section>').join("")+
+ extra.map(owner=>'<section class="register-record"><h3>'+cEscape(owner.startsWith("variant:")?"Variant · "+owner.slice(8):owner==="unassigned"?"Unassigned files":"Missing release · "+owner.slice(8))+'</h3><p class="secondary">'+(owner.startsWith("variant:")?'These files belong to a derived variant, not to an official release.':'Assign these files to a release or variant before saving.')+'</p>'+registerFiles(owner)+'</section>').join("")+'</div></div>';
 }
 function catalogBindRegister(){
  if(state.detailTab!=="files")return;
  $("register-load")?.addEventListener("click",async()=>{await catalogEnsureRegister();catalogInlineRender();});
  $("register-validate")?.addEventListener("click",catalogMaterializeDraft);
- document.querySelectorAll("[data-register-add]").forEach(el=>el.addEventListener("click",()=>catalogRegisterAdd(el.dataset.registerAdd)));
+ document.querySelectorAll("[data-register-add]").forEach(el=>el.addEventListener("click",()=>catalogRegisterAdd(el.dataset.registerAdd,el.dataset.registerOwner)));
  document.querySelectorAll("[data-register-delete]").forEach(el=>el.addEventListener("click",()=>catalogRegisterDelete(el.dataset.registerDelete,Number(el.dataset.registerIndex))));
+ document.querySelectorAll("[data-register-open]").forEach(el=>el.addEventListener("toggle",()=>{catalogRegister.open[el.dataset.registerOpen]=el.open;}));
  document.querySelectorAll("[data-register-field]").forEach(el=>{
   el.addEventListener(el.tagName==="SELECT"?"change":"input",()=>catalogRegisterChange(el.dataset.registerKind,Number(el.dataset.registerIndex),el.dataset.registerField,el.value));
-  if(el.dataset.registerField==="name")el.addEventListener("change",catalogInlineRender);
+  if(["name","target"].includes(el.dataset.registerField))el.addEventListener("change",catalogInlineRender);
  });
  $("register-default")?.addEventListener("change",e=>{catalogRegister.defaultRelease=e.target.value.replace(/^release:/,"");catalogRegisterChanged();});
- $("register-search")?.addEventListener("input",e=>{catalogRegister.query=e.target.value;catalogRegister.page=0;catalogInlineRender();$("register-search")?.focus?.();});
- $("register-prev")?.addEventListener("click",()=>{catalogRegister.page--;catalogInlineRender();});
- $("register-next")?.addEventListener("click",()=>{catalogRegister.page++;catalogInlineRender();});
+ $("register-search")?.addEventListener("input",e=>{catalogRegister.query=e.target.value;catalogRegister.pages={};catalogInlineRender();$("register-search")?.focus?.();});
+ document.querySelectorAll("[data-register-page]").forEach(el=>el.addEventListener("click",()=>{catalogRegister.pages[el.dataset.registerOwner]+=Number(el.dataset.registerPage);catalogInlineRender();}));
 }

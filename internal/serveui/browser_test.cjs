@@ -450,3 +450,12 @@ test('automatic Edition names region selection and escapes catalog release text'
  b.run(`state.edition='release:Japan';state.detailPreview.release='Japan'`);
  assert.doesNotMatch(b.run(`renderExportEdition({game:{releases:[{name:'USA'},{name:'Japan'}]}})`),/Region preference · Japan/);
 });
+
+test('separate-tab snapshot preview sends exact YAML for cards and XML downloads',async()=>{
+ const calls=[],b=browser(async(path,options)=>{calls.push(JSON.parse(options.body));return json({profile_yaml:'same',games:[]})});
+ b.run('state.exportMode=true;state.previewProfileYAML="schema_version: 1\\ntitles:\\n  mode: release\\n";state.platform="Console"');
+ await b.run('requestPreview([{folder:"One"}],undefined,state.exportSettings,true)');
+ assert.equal(calls[0].profile_yaml,'schema_version: 1\ntitles:\n  mode: release\n');assert.equal(calls[0].include_raw,true);
+ b.run('state.exportMode=false');await b.run('requestPreview([])');
+ assert.equal(calls[1].profile_yaml,undefined);
+});

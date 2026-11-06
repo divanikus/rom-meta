@@ -44,10 +44,11 @@ type previewGameRequest struct {
 }
 
 type exportPreviewRequest struct {
-	Platform   string               `json:"platform,omitempty"`
-	Settings   exportSettings       `json:"settings"`
-	Games      []previewGameRequest `json:"games,omitempty"`
-	IncludeRaw bool                 `json:"include_raw,omitempty"`
+	ProfileYAML string               `json:"profile_yaml,omitempty"`
+	Platform    string               `json:"platform,omitempty"`
+	Settings    exportSettings       `json:"settings"`
+	Games       []previewGameRequest `json:"games,omitempty"`
+	IncludeRaw  bool                 `json:"include_raw,omitempty"`
 }
 
 type previewGame struct {
@@ -216,7 +217,7 @@ func (s *server) exportPreview(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, fmt.Errorf("POST required"))
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	var request exportPreviewRequest
@@ -243,7 +244,14 @@ func (s *server) exportPreview(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	p, content, target, err := s.exportProfile(request.Settings)
+	var p exporter.Profile
+	var content, target string
+	var err error
+	if request.ProfileYAML != "" {
+		p, content, target, err = s.resolveExportProfile(request.ProfileYAML, request.Settings.Target)
+	} else {
+		p, content, target, err = s.exportProfile(request.Settings)
+	}
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return

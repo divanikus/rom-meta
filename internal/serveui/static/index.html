@@ -961,9 +961,10 @@
             <div class="secondary source-help">Choose sources with checkboxes. Move a source up to prefer it. Saved catalog overrides take priority.</div>
             <div id="export-source-controls">Loading source choices…</div>
           </div></details>
-          <button class="tab-button" id="save-profile" type="button">Save profile</button><button class="catalog-primary" type="button" onclick="libraryNavigate('export')">Use this profile →</button>
+          <button class="tab-button" id="save-profile" type="button">Save profile</button><button class="catalog-primary" type="button" onclick="exportUseBrowserProfile()">Use this profile →</button>
         </div>
         <div class="export-notice hidden" id="export-notice"></div>
+        <div class="export-snapshot hidden" id="export-snapshot"><strong>Profile snapshot</strong><span id="export-snapshot-name"></span><span class="secondary">Change settings in your original export tab, then open a new preview.</span><button type="button" class="tab-button" onclick="downloadProfile()">Download profile</button></div>
         <div class="error hidden" id="export-error" role="status"></div>
       </div>
       <div class="top-status" id="top-status">Loading...</div>
@@ -1082,7 +1083,8 @@
       state.exportMode = enabled;
       $("library-mode").classList.toggle("active", !enabled);
       $("library-mode").setAttribute("aria-pressed", String(!enabled));
-      $("export-controls").classList.toggle("hidden", !enabled);
+      $("export-controls").classList.toggle("hidden", !enabled || !!state.previewProfileYAML);
+      $("export-snapshot").classList.toggle("hidden", !enabled || !state.previewProfileYAML);
       $("export-notice").classList.toggle("hidden", !enabled);
       if (enabled) loadExportSources();
       renderRegionControls();
@@ -1249,7 +1251,7 @@
     }
 
     async function requestPreview(games, signal, settings = state.exportSettings, includeRaw = false) {
-      const response = await fetch("/api/export-preview", {method:"POST", signal, headers:{"Content-Type":"application/json", Accept:"application/json"}, body:JSON.stringify({platform:state.platform, settings, games, ...(includeRaw ? {include_raw:true} : {})})});
+      const response = await fetch("/api/export-preview", {method:"POST", signal, headers:{"Content-Type":"application/json", Accept:"application/json"}, body:JSON.stringify({platform:state.platform, settings, games, ...(state.exportMode && state.previewProfileYAML ? {profile_yaml:state.previewProfileYAML} : {}), ...(includeRaw ? {include_raw:true} : {})})});
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || response.statusText);
       return body;
@@ -1460,7 +1462,7 @@
         $("platform-count").textContent = formatNumber(state.platforms.length);
         renderPlatforms();
         if (state.platforms.length > 0) {
-          if (state.view === "browse") await selectPlatform(state.platforms[0].platform);
+          if (state.view === "browse") await selectPlatform(state.platforms.some(p=>p.platform===state.previewPlatform)?state.previewPlatform:state.platforms[0].platform);
         } else {
           setStatus("No platforms found");
         }
@@ -2265,6 +2267,18 @@
       return escapeHTML(value);
     }
 
+    function restoreExportSnapshot(){
+      if(typeof window==="undefined"||!new URLSearchParams(window.location.search).has("export-preview"))return;
+      try{
+        const snapshot=JSON.parse(window.sessionStorage.getItem("rommeta.export-preview")||"null");
+        if(!snapshot?.profile_yaml||!["es-de","launchbox"].includes(snapshot.target))throw Error("Export preview snapshot is unavailable. Open it again from export setup.");
+        state.previewProfileYAML=snapshot.profile_yaml;state.previewPlatform=snapshot.platform;
+        state.exportSettings.target=snapshot.target;$("export-target").value=snapshot.target;
+        $("export-snapshot-name").textContent=(snapshot.target==="es-de"?"ES-DE":"LaunchBox")+" · "+(snapshot.name||"Export profile");
+        setExportMode(true);
+      }catch(error){setStatus(error.message,true);}
+    }
+    restoreExportSnapshot();
     loadPlatforms();
   </script>
 </body>

@@ -4,7 +4,6 @@ const importStages={opening:"Opening DAT",parsing:"Reading releases",planning:"P
 const operationLabels={needs_selection:"Choose a DAT",planning:"Preparing plan",ready:"Ready to import",needs_review:"Needs attention",importing:"Importing",succeeded:"Complete",failed:"Could not finish"};
 function libraryNavigate(view){
  if(typeof catalogLeaveInline==="function"&&!catalogLeaveInline())return;
- if(view==="export"&&state.view==="browse"&&state.exportMode&&typeof nativeExportUI!=="undefined"&&nativeExportUI.draft?.profile_mode==="current")nativeExportUI.draft.target=state.exportSettings.target;
  libraryUI.view=view;
  if(view==="library"){setView("browse");setExportMode(false);}
  else setView(view);

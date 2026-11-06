@@ -129,12 +129,14 @@ LaunchBox. The CLI remains available through the same exporter.
 2. Choose the ROM folder and layout: one platform's ROMs, or a parent containing
    all platform folders. Select the catalog platform for the single-platform case.
    Batch mode uses the CLI folder recognition and reports skipped systems.
-3. Choose **Library settings (saved priorities)**, **Profile edited in this
-   browser**, or upload a YAML profile (up to 1 MiB). **View effective profile**
-   shows resolved title/language/source/media rules and the complete YAML.
-   **Edit browser profile** opens the existing catalog
-   preview and source/language/media controls; **Use this profile →** returns to
-   setup using those settings. YAML profiles retain the ordinary CLI validation.
+3. Edit **Selection profile** directly in this setup: titles, description language
+   order and scope, media types, and source priorities per field/media role.
+   Start from library settings or **Load YAML** (up to 1 MiB). Advanced profile
+   YAML is editable with **Validate & use YAML**. Other profile rules are retained.
+   **Preview in new tab** opens an independent snapshot of this exact profile;
+   the original setup keeps its paths, ROM selection and edits. Change settings
+   in setup and open another preview to compare. The preview is a catalog projection;
+   **Prepare export plan** still checks actual ROM matches and native writes.
 4. **Save destination** stores the paths and selected profile policy in
    `config/export-destinations.yaml`. Saved entries survive server restarts.
    Renaming updates the selected entry; choose New destination for another.
@@ -242,7 +244,7 @@ fields. Explicitly scoped manual descriptions never borrow from another release,
 even when provider description scope is Whole game. Use per-language descriptions
 for translations; shared description text applies to all languages.
 
-Enable and order variants in **Export → Advanced → Metadata sources**, or save
+Enable and order variants in **Export → Selection profile → Source priorities**, or save
 library defaults in **Settings → Source priorities**. New variants start disabled.
 Saved export profiles reference stable IDs, so renaming keeps their selection
 valid. Title, developer, publisher, date, genres, players and descriptions use the same
@@ -337,8 +339,9 @@ replaced by release/file forms. You can also enter editing while already on this
   languages and date; choose the card's default release separately.
 - Renaming updates this card's default, source scopes, variant bases and fingerprint
   references. Original DAT/provider provenance and media paths remain unchanged.
-- **Add fingerprint** records a filename, size in bytes, a release or existing
-  variant, and one or more CRC32/MD5/SHA1/SHA256 hashes. Existing fingerprints can
+- Inside each release, **Add file** records a filename, size in bytes, its release or an existing
+  variant, and one or more CRC32/MD5/SHA1/SHA256 hashes. Expand a filename to edit
+  its fingerprint; new files inherit the containing release. Existing fingerprints can
   be edited or removed. This registers an identity; it does not hash or alter ROMs.
 - **Remove** marks a record for deletion; **Undo removal** restores it.
   For a referenced release, choose a surviving release in **Reassign its references
