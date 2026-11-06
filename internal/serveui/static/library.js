@@ -50,7 +50,7 @@ function operationProgressMeter(current,total,unit="items",options={}){
  current=Math.max(0,Number(current)||0);total=Math.max(0,Number(total)||0);
  const known=options.known??total>0,format=options.bytes?operationBytes:formatNumber;
  const label=options.label||unit,percent=total>0?Math.min(100,Math.floor(current/total*100)):100;
- const text=known?format(current)+" / "+format(total)+" "+unit+" · "+percent+"%":format(current)+" "+unit+" · "+(options.unknown||"Total not known yet");
+ const text=known?format(current)+" / "+format(total)+" "+unit+" · "+percent+"%":format(current)+" "+unit;
  return '<span class="progress-count">'+escapeHTML(text)+'</span><progress aria-label="'+escapeAttr(label)+'" '+(known?'value="'+(total>0?Math.min(total,current):1)+'" max="'+(total||1)+'"':'')+'></progress>';
 }
 function importProgressUnit(stage){return stage==="bundling"?"releases":["writing","checking","matching","checking existing"].includes(stage)?"cards":"items";}

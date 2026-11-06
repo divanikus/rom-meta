@@ -464,5 +464,5 @@ test('statistics distinguishes platform totals, zero progress and unknown game t
  const b=browser(async()=>json({}));
  assert.equal(b.run('statsStageProgress({Stage:"scanning catalog",Current:1,Total:4})'),' | 1 / 4 platforms');
  assert.equal(b.run('statsStageProgress({Stage:"checking media",Current:0,Total:200})'),' | 0 / 200 games');
- assert.equal(b.run('statsStageProgress({Stage:"counting games",Current:18,Total:0})'),' | 18 games; total not known yet');
+ assert.equal(b.run('statsStageProgress({Stage:"counting games",Current:18,Total:0})'),' | 18 games');
 });

@@ -64,7 +64,7 @@ function enrichmentProgress(job){
  let meter="";
  if(downloading){
   if(!t.DiscoveryComplete&&t.DiscoveryTotal>0)meter+='<div class="progress-section"><span>Checking for files</span>'+operationProgressMeter(t.DiscoveryCurrent,t.DiscoveryTotal,enrichmentUnit(t.DiscoveryStage,task))+'</div>';
-  meter+='<div class="progress-section"><span>Downloads</span>'+operationProgressMeter(Number(t.Downloaded||0)+Number(t.Failed||0),t.Queued,"files processed",{known:!!t.DiscoveryComplete,unknown:"Final file count is not known yet; still checking the catalog."})+'</div>';
+  meter+='<div class="progress-section"><span>Downloads</span>'+operationProgressMeter(Number(t.Downloaded||0)+Number(t.Failed||0),t.Queued,"files processed",{known:!!t.DiscoveryComplete})+'</div>';
  }else if(p.BytesTotal>0||p.Stage==="downloading")meter=operationProgressMeter(p.BytesCurrent,p.BytesTotal,"received",{bytes:true});
  else meter=operationProgressMeter(p.Current,p.Total,enrichmentUnit(p.Stage,task));
  return '<div class="operation-progress" role="status"><strong>'+escapeHTML(downloading?"Downloading files":enrichmentStages[p.Stage]||p.Stage||"Starting")+'</strong>'+meter+

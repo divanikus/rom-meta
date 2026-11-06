@@ -9,7 +9,8 @@ CLI fetch remains available independently, including its advanced options.
 
 Operations shows numeric counts beside each stage: games, packages, files or bytes.
 Media discovery and downloads run together. While discovery is still running,
-the number of files found is provisional and the download bar is indeterminate;
+the number of files found is provisional and the download bar is indeterminate.
+Labels report available counts without promising a future total;
 the catalog scan keeps its own game count. Once discovery finishes, downloads
 show the final processed/total file count. Processed includes failed attempts;
 downloaded, already present, failed and pending remain separate. Later extraction

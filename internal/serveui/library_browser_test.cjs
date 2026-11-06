@@ -390,7 +390,7 @@ test('growing media discovery does not imply an almost finished download task',(
  const b=browser();b.context.progress={Stage:'files',Transfers:{Queued:126,Downloaded:125,Failed:0,Existing:0,Bytes:1048576,DiscoveryCurrent:18,DiscoveryTotal:228,DiscoveryStage:'scanning',DiscoveryComplete:false}};
  const html=b.run('enrichmentProgress({enrichment:{jobs:[{source:"screenscraper",type:"artwork"}],current:0,progress}})');
  assert.match(html,/18 \/ 228 games/);assert.match(html,/125 files processed/);assert.match(html,/126 files found to download so far/);
- assert.match(html,/Final file count is not known yet/);assert.doesNotMatch(html,/max="126"|99%/);
+ assert.doesNotMatch(html,/not known yet|still checking|Final file count|max="126"|99%/);
 });
 test('finished discovery exposes final file totals and distinguishes failures and existing files',()=>{
  const b=browser();b.context.progress={Stage:'files',Transfers:{Queued:200,Downloaded:125,Failed:2,Existing:10,Bytes:1024,DiscoveryComplete:true}};
@@ -413,7 +413,7 @@ test('known and unknown byte downloads retain visible byte counters for snapshot
  assert.match(html,/1 KiB \/ 4 KiB received · 25%/);assert.match(html,/value="1024" max="4096"/);
  b.context.progress.BytesTotal=0;
  html=b.run('enrichmentProgress({enrichment:{jobs:[],progress,workers:{1:{Stage:"downloading",Item:"file",BytesCurrent:2048,BytesTotal:0}}}})');
- assert.match(html,/1 KiB received · Total not known yet/);assert.match(html,/2 KiB received · Total not known yet/);assert.doesNotMatch(html,/value=/);
+ assert.match(html,/1 KiB received/);assert.match(html,/2 KiB received/);assert.doesNotMatch(html,/value=/);
 });
 test('empty known queue and all-existing media never invent a pending download',()=>{
  const b=browser();b.context.progress={Stage:'files',Transfers:{Queued:0,Downloaded:0,Failed:0,Existing:12,DiscoveryComplete:true}};
@@ -431,7 +431,7 @@ test('DAT and native export stages show counts with their actual units',()=>{
   assert.match(b.run('nativeExportDetail({state:"planning",export:{destination:{},progress}})'),new RegExp('4 / 9 '+unit));
  }
  b.context.progress={Stage:'ROMs',Current:25,Total:0};
- assert.match(b.run('nativeExportDetail({state:"planning",export:{destination:{},progress}})'),/25 ROM files · Total not known yet/);
+ assert.match(b.run('nativeExportDetail({state:"planning",export:{destination:{},progress}})'),/25 ROM files/);
 });
 test('upload progress reports bytes and only uses a percentage for a known total',()=>{
  const b=browser();b.run('libraryUI.uploadProgress={loaded:1024,total:4096}');

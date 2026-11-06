@@ -94,7 +94,7 @@ function catalogProfilePreview(card,emptyMessage="Preview the result to inspect 
 }
 function catalogStageProgress(p){
  const unit=/platforms|committing/i.test(p.Stage)?"platforms":/groups|checking files|applying|writing ignore/i.test(p.Stage)?"groups":"games";
- return p.Total?" · "+formatNumber(p.Current||0)+" / "+formatNumber(p.Total)+" "+unit:p.Current>0?" · "+formatNumber(p.Current)+" "+unit+"; total not known yet":"";
+ return p.Total?" · "+formatNumber(p.Current||0)+" / "+formatNumber(p.Total)+" "+unit:p.Current>0?" · "+formatNumber(p.Current)+" "+unit:"";
 }
 async function catalogReadPlan(response){
  if(!response.ok){const data=await response.json();throw new Error(data.error||"Could not build a plan");}

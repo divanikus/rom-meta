@@ -1595,7 +1595,7 @@
     function statsStageProgress(p) {
       if (!p.Current && !p.Total) return "";
       const unit = /platforms|scanning catalog/i.test(p.Stage) ? "platforms" : "games";
-      return " | " + formatNumber(p.Current || 0) + (p.Total ? " / " + formatNumber(p.Total) : "") + " " + unit + (p.Total ? "" : "; total not known yet");
+      return " | " + formatNumber(p.Current || 0) + (p.Total ? " / " + formatNumber(p.Total) : "") + " " + unit;
     }
     async function fetchStats(platform, signal, onProgress) {
       const response = await fetch("/api/stats?platform=" + encodeURIComponent(platform) + "&stream=1", {signal, headers: {Accept: "application/x-ndjson"}});
