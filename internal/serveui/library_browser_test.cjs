@@ -582,7 +582,7 @@ test('included manual export choice stays a draft and is restored from Operation
  assert.equal(b.run('exportReviewDirty(job)'),true);
  assert.equal(b.calls.length,0);
  const html=b.run('exportIssues(job)');
- assert.match(html,/Manual choice/);assert.match(html,/Change game/);assert.match(html,/Reset match/);assert.match(html,/Update the plan/);
+ assert.match(html,/Manual choice/);assert.match(html,/Change game/);assert.match(html,/Reset match/);assert.match(b.run('exportPrimaryAction(job)'),/Update export plan/);
  b.run('const choices=[...exportIssueDraft(job).bindings.values()];job.revision++;job.export.excluded=[];job.export.bindings=choices;nativeExportUI.reviewDrafts.clear()');
  assert.equal(b.run('exportReviewDirty(job)'),false);
  assert.equal(b.run('exportIssueDraft(job).bindings.get("input").release'),'Chosen (USA)');
@@ -803,7 +803,31 @@ test('focused inclusion checkbox updates row actions immediately without waiting
  b.run('const job={id:"j",kind:"export",revision:1,state:"ready",export:{destination:{},totals:{issues:[{id:"i",rom:"Game.zip",can_bind:true,status:"ambiguous",suggestions:[{game:"g",title:"Game"}]}]}}};libraryUI.jobs=[job];libraryUI.selected="j";libraryRenderOperations()');
  b.context.document.activeElement=checkbox;pane.contains=e=>e===checkbox;
  checkbox.checked=false;checkbox.listeners.change();
- assert.match(pane.innerHTML,/is-excluded/);assert.match(pane.innerHTML,/data-export-match="i" disabled/);assert.match(pane.innerHTML,/Update the plan/);assert.equal(refocused,true);
+ assert.match(pane.innerHTML,/is-excluded/);assert.match(pane.innerHTML,/data-export-match="i" disabled/);assert.match(pane.innerHTML,/Update export plan/);assert.equal(refocused,true);
  checkbox.checked=true;checkbox.listeners.change();
  assert.doesNotMatch(pane.innerHTML,/is-excluded/);assert.match(pane.innerHTML,/data-export-include="i" checked/);assert.equal(b.calls.length,0);
+});
+
+
+test('accepted matches and excluded documentation offer one active update action before apply',async()=>{
+ const b=browser(),update=b.element('update'),apply=b.element('apply'),include=b.element('include');include.dataset={exportInclude:'docs'};
+ b.context.document.querySelectorAll=s=>({'[data-export-review-update]':[update],'[data-native-export-apply]':[apply],'[data-export-include]':[include]})[s]||[];
+ b.run('libraryRenderOperations=()=>{};const job={id:"j",kind:"export",revision:1,state:"ready",export:{destination:{},totals:{files:5,issues:[{id:"g",rom:"Game.zip",status:"ambiguous",can_bind:true,suggestions:[{game:"chosen",title:"Game"}]},{id:"docs",rom:"Docs.zip",status:"unmatched"}]}}};libraryUI.jobs=[job];fetchJSON=async()=>({target:{game:"chosen",game_revision:"digest"}})');
+ await b.run('exportAcceptSingleSuggestions(job)');b.run('nativeExportBindOperation(job)');include.checked=false;include.listeners.change();
+ const html=b.run('nativeExportDetail(job)');assert.equal((html.match(/data-export-review-update/g)||[]).length,1);assert.match(html,/class="catalog-primary" data-export-review-update >Update export plan/);assert.doesNotMatch(html,/data-native-export-apply/);assert.doesNotMatch(b.run('exportIssues(job)'),/data-export-review-update/);
+ b.run('const sent=[];libraryImportAction=async(path,body)=>sent.push({path,body})');await update.listeners.click();
+ const requests=JSON.parse(b.run('JSON.stringify(sent)'));assert.equal(requests.length,1);assert.equal(requests[0].path,'/api/export/review');assert.deepEqual(requests[0].body.excluded,['docs']);assert.equal(requests[0].body.bindings[0].game,'chosen');
+ await apply.listeners.click();assert.equal(b.run('sent.length'),1);
+ b.run('job.export.bindings=[...exportIssueDraft(job).bindings.values()];job.export.excluded=["docs"];job.revision=2;nativeExportBindOperation(job)');
+ assert.match(b.run('nativeExportDetail(job)'),/data-native-export-apply="j">Apply export/);assert.doesNotMatch(b.run('nativeExportDetail(job)'),/data-export-review-update/);assert.equal(b.run('sent.length'),1);
+ await apply.listeners.click();assert.equal(b.run('sent[1].path'),'/api/export/apply');assert.equal(b.run('sent[1].body.revision'),2);
+});
+
+test('primary export action waits for suggestions, keeps conflicts blocked, and handles no-op plans',()=>{
+ const b=browser();b.run('const job={id:"j",revision:1,state:"ready",export:{totals:{files:0}}};const d=exportIssueDraft(job)');
+ assert.match(b.run('exportPrimaryAction(job)'),/Finish — already up to date/);
+ b.run('d.suggestionBatch={done:0,total:1}');assert.match(b.run('exportPrimaryAction(job)'),/disabled>Accepting matches/);assert.doesNotMatch(b.run('exportPrimaryAction(job)'),/data-native-export-apply/);
+ b.run('d.suggestionBatch=null;job.state="needs_review"');assert.equal(b.run('exportPrimaryAction(job)'),'');
+ b.run('d.excluded.add("docs")');assert.match(b.run('exportPrimaryAction(job)'),/Update export plan/);
+ for(const state of ['planning','exporting','succeeded','incomplete','failed']){b.context.nextState=state;b.run('job.state=nextState');assert.equal(b.run('exportPrimaryAction(job)'),'')}
 });

@@ -187,12 +187,16 @@ LaunchBox. The CLI remains available through the same exporter.
    game metadata, not an exact release or translation version. **Choose game** searches cards
    in the input's platform as you type; select a release when known, or **Game only** to use
    default metadata. **Use this game** stages the choice. You can change it,
-   restore the automatic match, or exclude the input. **Update plan** recalculates
-   metadata, artwork and native files from the retained scan without writing or
-   re-scanning ROMs. Manual choices are labelled explicitly, not hash-verified.
+   restore the automatic match, or exclude the input. After a choice changes, the
+   main action becomes **Update export plan**. It recalculates metadata, artwork
+   and native files from the retained scan without writing or re-scanning ROMs.
+   Once the updated plan is ready, the main action becomes **Apply export**;
+   Updating the plan never starts the export automatically. Manual choices are
+   labelled explicitly, not hash-verified.
    Unsupported inputs still require correcting their reader/file problem.
-   Choices stay with this operation after browser closure; they do not modify
-   cards/fingerprints or carry over into a new export or a server restart.
+   After updating the plan, choices stay with this operation after browser
+   closure; they do not modify cards/fingerprints or carry over into a new export
+   or a server restart.
    Recognized inputs are included automatically; **Download full plan** includes
    all native changes and filenames. Preparing writes no destination files.
 6. Close the target frontend and choose **Apply export** after review. The server

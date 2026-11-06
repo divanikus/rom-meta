@@ -125,6 +125,12 @@ function exportRenderFolder(){
  $("export-folder-use").addEventListener("click",()=>{nativeExportUI.draft[f.field]=f.path;exportCloseFolder();exportRender();});
  dialog.querySelectorAll("[data-export-folder]").forEach(b=>b.addEventListener("click",()=>exportBrowse(f.field,f.folders[Number(b.dataset.exportFolder)].path)));
 }
+function exportPrimaryAction(job){
+ if(!["ready","needs_review"].includes(job.state))return "";
+ const pending=exportSuggestionsPending(job);
+ if(exportReviewDirty(job)||pending)return '<button class="catalog-primary" data-export-review-update '+(pending?'disabled':'')+'>'+(pending?'Accepting matches…':'Update export plan')+'</button>';
+ return job.state==="ready"?'<button class="catalog-primary" data-native-export-apply="'+job.id+'">'+(job.export.totals?.files?'Apply export':'Finish — already up to date')+'</button>':"";
+}
 function nativeExportDetail(job){
  const x=job.export,d=x.destination,n=x.totals,p=x.progress||{},busy=operationBusy(job),review=["ready","needs_review"].includes(job.state);
  return '<article class="operation-detail">'+operationDismiss(job,"",true)+'<div class="operation-eyebrow">FRONTEND EXPORT · '+operationStatus(job.state,exportStates[job.state]||job.state)+'</div><h2>'+escapeHTML(d.name)+'</h2>'+
@@ -136,8 +142,9 @@ function nativeExportDetail(job){
  (n.warnings?.length?'<details><summary>Warnings ('+n.warnings.length+')</summary><ul>'+n.warnings.map(v=>'<li>'+escapeHTML(v)+'</li>').join("")+'</ul></details>':"")+
  (n.skipped?.length?'<details><summary>Skipped platforms ('+n.skipped.length+')</summary><ul>'+n.skipped.map(v=>'<li>'+escapeHTML(v.system)+': '+escapeHTML(v.reason)+'</li>').join("")+'</ul></details>':"")+
  exportIssues(job):"")+
- (review?'<p>Close the frontend before applying.</p>':job.state==="succeeded"?'<p>'+(x.written?"Export completed.":"The destination is already up to date; no files were written.")+'</p>':job.state==="incomplete"?'<p>Some files were written before the error. Prepare another plan against the current destination.</p>':"")+
- '<div class="operation-actions">'+(job.state==="ready"?'<button class="catalog-primary" data-native-export-apply="'+job.id+'">'+(n?.files?"Apply export":"Finish — already up to date")+'</button>':"")+
+ (review&&!exportReviewDirty(job)&&!exportSuggestionsPending(job)?'<p>Close the frontend before applying.</p>':job.state==="succeeded"?'<p>'+(x.written?"Export completed.":"The destination is already up to date; no files were written.")+'</p>':job.state==="incomplete"?'<p>Some files were written before the error. Prepare another plan against the current destination.</p>':"")+
+ (review&&exportReviewDirty(job)?'<p id="export-review-hint" class="secondary">'+exportReviewHint(job)+'</p>':"")+
+ '<div class="operation-actions">'+exportPrimaryAction(job)+
  (review?'<a class="tab-button" href="/api/export/plan?id='+encodeURIComponent(job.id)+'" download>Download full plan</a>':"")+
  (!busy?'<button class="tab-button" data-native-export-again>'+(["failed","incomplete"].includes(job.state)?"Retry — review a new plan":"Prepare another plan")+'</button>'+operationDismiss(job):"")+'</div></article>';
 }
@@ -168,7 +175,7 @@ function exportReviewDirty(job){
  const d=exportIssueDraft(job),saved=job.export.excluded||[],bindings=job.export.bindings||[];
  return d.excluded.size!==saved.length||saved.some(id=>!d.excluded.has(id))||d.bindings.size!==bindings.length||bindings.some(x=>!d.bindings.has(x.id)||exportBindingKey(x)!==exportBindingKey(d.bindings.get(x.id)));
 }
-function exportReviewHint(job){const d=exportIssueDraft(job);return exportReviewDirty(job)?"Update the plan to review these choices.":d.bindings.size+" manually assigned · "+d.excluded.size+" excluded from this export.";}
+function exportReviewHint(job){const d=exportIssueDraft(job);return exportReviewDirty(job)?"Choices changed. Review the updated plan before applying.":d.bindings.size+" manually assigned · "+d.excluded.size+" excluded from this export.";}
 function exportIssueRow(x,d,review){
  const binding=d.bindings.get(x.id),game=binding?.game||x.game,release=binding?binding.release:x.release,excluded=d.excluded.has(x.id),disabled=excluded?'disabled ':'';
  const choose=review&&x.can_bind?'<button type="button" class="tab-button" data-export-match="'+escapeAttr(x.id)+'" '+disabled+'>'+(binding?'Change game':'Choose game')+'</button>':"";
@@ -188,7 +195,7 @@ function exportIssues(job){
  const singles=exportSingleSuggestions(job,d),batch=d.suggestionBatch;
  const bulk=review&&(singles.length||batch)?'<button type="button" class="catalog-primary" data-export-accept-single '+(exportSuggestionsPending(job)?'disabled ':'')+'title="All pages; existing choices and exclusions are kept" aria-live="polite">'+(batch?'Accepting '+batch.done+' / '+batch.total+'…':'Accept all with one candidate ('+singles.length+')')+'</button>':"";
  return '<section class="export-review"><h3>Inputs needing attention ('+issues.length+')</h3>'+
- (!issues.length?'<p>No unresolved or ambiguous ROMs. Recognized inputs are included automatically.</p>':'<p>Confirm matches for the checked files.</p><div class="export-issue-tools"><input id="export-issue-search" aria-label="Filter problem inputs" placeholder="Filter filenames or reasons" value="'+escapeAttr(d.query)+'">'+bulk+(review?'<button type="button" class="tab-button" data-export-uncheck-unresolved>Uncheck unresolved</button><button type="button" class="tab-button" data-export-restore-all title="Clear manual matches and check all files">Reset choices</button>':'')+'</div><div class="export-issues">'+filtered.slice(d.page*40,(d.page+1)*40).map(x=>exportIssueRow(x,d,review)).join("")+'</div><div class="operation-actions">'+(pages>1?'<button class="tab-button" data-export-issue-page="-1" '+(!d.page?'disabled':'')+'>Previous</button><span>'+(d.page+1)+' / '+pages+' · '+filtered.length+' inputs</span><button class="tab-button" data-export-issue-page="1" '+(d.page===pages-1?'disabled':'')+'>Next</button>':"")+(review?'<button class="tab-button" data-export-review-update '+(!exportReviewDirty(job)||exportSuggestionsPending(job)?'disabled':'')+'>Update plan</button>':'')+'<span id="export-review-hint" class="secondary">'+exportReviewHint(job)+'</span></div>')+'</section>';
+ (!issues.length?'<p>No unresolved or ambiguous ROMs. Recognized inputs are included automatically.</p>':'<p>Confirm matches for the checked files.</p><div class="export-issue-tools"><input id="export-issue-search" aria-label="Filter problem inputs" placeholder="Filter filenames or reasons" value="'+escapeAttr(d.query)+'">'+bulk+(review?'<button type="button" class="tab-button" data-export-uncheck-unresolved>Uncheck unresolved</button><button type="button" class="tab-button" data-export-restore-all title="Clear manual matches and check all files">Reset choices</button>':'')+'</div><div class="export-issues">'+filtered.slice(d.page*40,(d.page+1)*40).map(x=>exportIssueRow(x,d,review)).join("")+'</div>'+(pages>1?'<div class="operation-actions"><button class="tab-button" data-export-issue-page="-1" '+(!d.page?'disabled':'')+'>Previous</button><span>'+(d.page+1)+' / '+pages+' · '+filtered.length+' inputs</span><button class="tab-button" data-export-issue-page="1" '+(d.page===pages-1?'disabled':'')+'>Next</button></div>':""))+'</section>';
 }
 function exportBindReview(job){
  const d=exportIssueDraft(job);
