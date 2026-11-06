@@ -30,7 +30,7 @@ then use the **Fetch metadata**, **Merge** or **Statistics** buttons above the
 platform list. These icon buttons have hover tooltips and accessible names.
 The action strip stays in that column and shows the selection
 count. Without checked platforms it uses the currently browsed platform.
-Statistics requires one platform. The edit pencil lives on the card. **API** and
+Statistics requires one platform. **Edit card** lives on the card. **API** and
 **API docs** remain in the header across views and open in a separate tab.
 Settings edits library configuration, as described below. The sun/moon icon in the upper-right corner
 chooses a neutral dark or light palette, remembered by this browser.
@@ -173,7 +173,7 @@ LaunchBox. The CLI remains available through the same exporter.
    matching counts, native file count, game actions, conflicts and skipped systems.
    **Inputs needing attention** lists unresolved, ambiguous and game-only matches
    with filenames, reasons and candidate evidence. **Choose game** searches cards
-   in the input's platform; select a release when known, or **Game only** to use
+   in the input's platform as you type; select a release when known, or **Game only** to use
    default metadata. **Use this game** stages the choice. You can change it,
    restore the automatic match, or exclude the input. **Update plan** recalculates
    metadata, artwork and native files from the retained scan without writing or
@@ -239,35 +239,32 @@ fields the current consumers do not use.
 
 ## Correct a card
 
-In **Library**, choose **Edit card** (or a pencil beside a value). The card stays
-in place: its cover and facts stay on the left, with title and description on the
-right. Edit card initially selects a saved source contributing to the displayed
-card, or the last chosen manual variant. A field pencil selects an explicit card
-override when present, otherwise a contributing source. Opening the editor never
-copies resolved values into overrides.
+In **Library**, choose **Edit card**. The fields become editable in place.
+The editor initially selects a saved source contributing to the displayed card,
+or the last chosen manual variant. Opening it never copies resolved values into
+overrides.
 
 **Source tabs** identify the destination: Card fields, a provider, or your named
 variant. **Entry** appears only when that source has several records or scopes.
 A short caption identifies what you are editing. Existing description languages
 have text areas and a **× Remove translation** control; **Add a translation** adds
-another. Removal changes only the selected record and takes effect on Save;
-Discard restores it. Removing the last language removes its descriptions field.
+another. Removal changes only the selected record and takes effect on **Done**;
+**Discard** cancels it. Removing the last language removes its descriptions field.
 **Other fields** keeps IDs,
 service details and structured values out of the common form until needed.
 You can add or remove source fields without replacing the whole record.
 
-Switching records retains their drafts. **Save changes** commits all edited
-records of this card together; **Discard** restores saved values while
-keeping the current valid source selected. **Done** ends editing; browsing and
-comparison controls then return. Leaving with unsaved changes asks before
-discarding them. Invalid or stale saves retain the drafts. Drafts are not saved
+Switching records retains their drafts. **Done** validates and saves all edited
+records together, then closes the editor. **Discard** cancels all card edits and
+closes it. Invalid or stale saves keep the editor and drafts open. Navigating
+away with unsaved changes asks before discarding them. Drafts are not saved
 across a page/server restart; this differs from server-owned import operations.
 
 ### Named manual variants
 
 Choose **+ My variant** beside the source tabs, enter your own name,
 then contribute the fields you want to curate. You can create several variants and reuse each across cards.
-Creating a variant saves its name immediately; **Save changes** saves its card
+Creating a variant saves its name immediately; **Done** saves its card
 fields. A variant stores only contributed values, never an implicit copy of the
 resolved card. **Rename variant** changes its label while retaining its stable ID.
 
@@ -346,7 +343,7 @@ renames release keys, ROMs, fingerprints, launch paths or native game/version ID
 In edit mode, **Raw** exposes the complete `game.yaml` as an editable text area.
 Form changes are included when switching to Raw; returning to Overview validates
 the YAML and restores source forms from that draft. **Validate YAML** changes no
-catalog data. **Save changes** always validates again before writing.
+catalog data. **Done** always validates again before writing.
 
 Validation checks one mapping document, duplicate keys, known field types,
 default/source release references, derivative relationships and existing
@@ -381,9 +378,10 @@ replaced by release/file forms. You can also enter editing while already on this
   For a referenced release, choose a surviving release in **Reassign its references
   to**, or remove/reassign the dependent records yourself. Source evidence is
   retained when its scope moves; release fields are not copied into the replacement.
-- **Validate changes** checks the complete draft without writing. **Save changes**
-  validates again and saves all card/source/release/fingerprint changes. **Discard**
-  restores both documents. File search and paging retain edits to other records.
+- **Validate changes** checks the complete draft without writing. **Done**
+  validates again, saves all card/source/release/fingerprint changes and closes
+  editing. **Discard** cancels the complete draft and closes editing.
+  File search and paging retain edits to other records.
 
 Validation rejects duplicate release names, broken source/default/variant/file
 references, invalid dates, fractional/negative sizes and malformed hashes.
@@ -436,11 +434,14 @@ access repair; build a new one. Applying ordinary groups still uses a whole-plat
 transaction, so all files required for that copy must be readable.
 
 **Compare** opens all candidates. Use **Include in merge** to select at least two
-cards; excluded cards stay unchanged. For identity doubts, **Confirm selection**
-records your same-game decision and prepares the group for batch apply.
+cards; excluded cards stay unchanged.
 **Agree & next** validates and queues the group, then opens the next unresolved
 comparison. **Keep separate** queues evidence rejection; **Skip for now** leaves
 the group unresolved. None of these actions writes the catalog.
+The fixed upper bar shows progress and how many groups still need review;
+ready groups already have a prepared decision. Skipped groups are counted separately.
+Previewing a result does not advance review progress until you choose a decision.
+Keep separate, Skip and Agree stay together in a fixed action bar while cards scroll.
 A changed selection needs fresh confirmation. Confirmation is the owner's
 catalog decision, not new provider evidence. Real data conflicts keep apply
 unavailable until resolved. Editable saved-field differences can be resolved

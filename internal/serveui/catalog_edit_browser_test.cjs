@@ -63,7 +63,7 @@ test('hard conflicts do not offer field edits or identity confirmation as a solu
  assert.match(html,/Identity confirmation cannot discard conflicting data/);
  assert.match(html,/id="catalog-commit" disabled/);
  assert.match(html,/id="catalog-preview-group" disabled/);
- assert.match(b.element('catalog-subtitle').textContent,/Resolve the data conflict or change the selection/);
+ assert.match(html,/Merge blocked/);
  assert.doesNotMatch(html,/Correct the result|catalog-confirm-identity|Result matches the current preview|Choose the saved values/);
 });
 test('editable-field and identity reviews retain their distinct guidance',()=>{
@@ -72,9 +72,9 @@ test('editable-field and identity reviews retain their distinct guidance',()=>{
  assert.match(b.element('catalog-content').innerHTML,/Choose the highlighted saved values/);
  assert.match(b.element('catalog-content').innerHTML,/Correct the result/);
  assert.doesNotMatch(b.element('catalog-content').innerHTML,/id="catalog-preview-group" disabled/);
- assert.match(b.element('catalog-subtitle').textContent,/Needs your decision/);
+ assert.match(b.element('catalog-content').innerHTML,/to review/);
  b.run('catalogUI.group.conflicts=[];catalogUI.group.needs_identity=true;catalogRenderReview()');
- assert.match(b.element('catalog-content').innerHTML,/Review now, apply together/);
+ assert.match(b.element('catalog-content').innerHTML,/Confirm that the selected cards belong together/);
  assert.match(b.element('catalog-content').innerHTML,/Agree & next/);
  assert.doesNotMatch(b.element('catalog-content').innerHTML,/cannot override the conflict/);
  b.run('catalogUI.group.group.ReviewAccepted=true;catalogUI.group.conflicts=["description"];catalogRenderReview()');
@@ -259,19 +259,19 @@ test('the toolbar can finish editing while a card is loading or failed to load',
   assert.equal(b.run('catalogInline.card'),null);
  }
 });
-test('save commits drafts for multiple records and stays in edit mode',async()=>{
+test('Done commits drafts for multiple records and closes edit mode',async()=>{
  let sent;const card={revision:'new',fields:{title:'Orbit'},profile:{title:'Orbit'},records:[],registry:{sources:[]}};
  const b=browser(async(path,options)=>{sent={path,body:JSON.parse(options.body)};return json({card});});
  b.run('Object.assign(catalogInline,{mode:true,platform:"Console",folder:"One",card:{revision:"old",fields:{title:"Orbit"},records:[]}});catalogEditorChange("developer","My studio");catalogInline.target={kind:"source",source:"launchbox",match:1};catalogEditorChange("publisher","Corrected publisher");state.game={game:{title:"Orbit"},source_blocks:[{source:"launchbox"}]}');
- await b.run('catalogSaveInline()');
+ await b.run('catalogFinishInline()');
  assert.equal(sent.body.edits.length,2);assert.deepEqual(sent.body.edits[1],{target:{kind:'source',source:'launchbox',match:1},fields:{publisher:'Corrected publisher'}});
- assert.equal(sent.body.revision,'old');assert.equal(b.run('catalogInline.mode'),true);assert.equal(b.run('catalogInline.dirty'),false);
- assert.equal(b.run('catalogInline.card.revision'),'new');
+ assert.equal(sent.body.revision,'old');assert.equal(b.run('catalogInline.mode'),false);assert.equal(b.run('catalogInline.dirty'),false);
+ assert.equal(b.run('state.game.profile.title'),'Orbit');
 });
 test('failed saves retain all drafts and block navigation only during the request',async()=>{
  let resolve;const b=browser(()=>new Promise(r=>resolve=r));
- b.run('Object.assign(catalogInline,{platform:"Console",folder:"One",card:{revision:"old",fields:{}}});catalogEditorChange("developer","New")');
- const pending=b.run('catalogSaveInline()');assert.equal(b.run('catalogLeaveInline()'),false);
+ b.run('Object.assign(catalogInline,{mode:true,platform:"Console",folder:"One",card:{revision:"old",fields:{}}});catalogEditorChange("developer","New")');
+ const pending=b.run('catalogFinishInline()');assert.equal(b.run('catalogLeaveInline()'),false);
  resolve({ok:false,json:async()=>({error:'Card changed; reload before saving'})});await pending;
  assert.equal(b.run('catalogTargetValues().developer'),'New');assert.equal(b.run('catalogInline.dirty'),true);assert.match(b.run('catalogInline.error'),/Card changed/);
  assert.equal(b.run('catalogInline.saving'),false);
@@ -415,14 +415,13 @@ test('batch fold candidates and cached covers stay scoped to their platform',asy
  assert.match(b.element('catalog-content').innerHTML,/catalog-platform-label">Other/);
 });
 
-test('discard restores saved values while retaining the selected source',()=>{
- const b=browser(async()=>json({}));
- b.run('catalogInlineRender=()=>{};catalogInline.savedCard={fields:{title:"Orbit"},registry:{sources:[]},records:[{target:{kind:"source",source:"launchbox",match:0},fields:{title:"Provider"}}]};catalogInline.card=catalogInline.savedCard;catalogInline.target={kind:"source",source:"launchbox",match:0};catalogEditorChange("title","Draft");catalogInline.extra.add("publisher");catalogDiscardInline()');
- assert.equal(b.run('catalogInline.target.source'),'launchbox');
- assert.equal(b.run('catalogTargetValues().title'),'Provider');
- assert.equal(b.run('catalogInline.dirty'),false);assert.equal(b.run('catalogInline.extra.size'),0);
- b.run('catalogInline.target={kind:"source",source:"launchbox",match:99};catalogDiscardInline()');
- assert.equal(b.run('catalogInline.target.match'),0);
+test('discard drops every draft and exits without saving or asking again',()=>{
+ const b=browser(()=>{throw Error('Discard must not write')});
+ b.run('window.confirm=()=>{throw Error("Discard must not prompt")};catalogInlineRender=()=>{};catalogInline.mode=true;catalogInline.savedCard={fields:{title:"Orbit"}};catalogInline.card=catalogInline.savedCard;catalogInline.target={kind:"library"};catalogEditorChange("title","Draft");catalogInline.invalid.set("rating","Invalid");catalogInline.raw="broken: [";catalogInline.extra.add("publisher");catalogDiscardInline()');
+ assert.equal(b.run('catalogInline.mode'),false);
+ assert.equal(b.run('catalogInline.card'),null);
+ assert.equal(b.run('catalogInline.dirty'),false);assert.equal(b.run('catalogInline.edits.size'),0);
+ assert.equal(b.run('catalogInline.invalid.size'),0);assert.equal(b.run('catalogInline.extra.size'),0);
 });
 
 test('opening an editor uses displayed source values without copying them to library overrides',async()=>{
@@ -455,8 +454,8 @@ test('removing a translation stays scoped to its source and supports removing th
  b.run('catalogRemoveDescription("en")');
  assert.equal(b.run('[...catalogInline.edits.values()][0].fields.descriptions'),null);
  html=b.run('catalogRenderEditor({},"")');assert.doesNotMatch(html,/data-card-description=/);assert.match(html,/catalog-translation-tools" open/);
- b.run('catalogDiscardInline()');
- assert.equal(b.run('catalogTargetValues().descriptions.ru'),'Russian');assert.equal(b.run('catalogInline.dirty'),false);
+ b.run('const original=catalogInline.card;catalogDiscardInline()');
+ assert.equal(b.run('original.records[0].fields.descriptions.ru'),'Russian');assert.equal(b.run('catalogInline.mode'),false);assert.equal(b.run('catalogInline.dirty'),false);
 });
 test('removing an empty added translation creates no edit, and cannot change an in-flight save',()=>{
  const b=browser(async()=>json({}));b.run('catalogInline.card={fields:{}};catalogInline.extra.add("en");catalogRemoveDescription("en")');
@@ -502,8 +501,8 @@ test('release rename updates visible fingerprint/default references and all chan
  assert.equal(b.run('catalogRegister.fingerprints[0].fields.file.custom'),'keep');
  assert.equal(b.run('catalogInline.dirty'),true);
  b.run('catalogInline.card={fields:{},records:[],registry:{sources:[]}};catalogDiscardInline()');
- assert.equal(b.run('catalogRegister.releases[0].name'),'USA');
- assert.equal(b.run('catalogInline.dirty'),false);
+ assert.equal(b.run('catalogRegister.releases.length'),0);
+ assert.equal(b.run('catalogInline.mode'),false);assert.equal(b.run('catalogInline.dirty'),false);
 });
 test('removal is reversible and unsaved new records leave no deletion operation',()=>{
  const b=browser(async()=>json({}));
@@ -582,4 +581,36 @@ test('final merge review opts out of backups until explicitly checked',async()=>
   await b.run('catalogApply(catalogBatchDecisions())');
   assert.equal(request.keep_backup,keep);
  }
+});
+
+
+test('review progress counts prepared and decided groups once, keeping skipped work visible',()=>{
+ const b=browser(async()=>json({}));
+ b.run('catalogUI.plan={groups:[{id:0,status:"ready"},{id:1,status:"review"},{id:2,status:"blocked"},{id:3,status:"review"}]};catalogUI.decisions=new Map()');
+ assert.ok(b.run('catalogReviewProgress()').includes('1 / 4 groups'));assert.match(b.run('catalogReviewProgress()'),/3 to review/);
+ b.run('catalogUI.decisions.set(1,{action:"merge"});catalogUI.decisions.set(2,{action:"separate"})');
+ assert.ok(b.run('catalogReviewProgress()').includes('3 / 4 groups'));
+ b.run('catalogUI.decisions.set(1,{action:"merge"});catalogUI.decisions.set(3,{action:"skip"})');
+ assert.ok(b.run('catalogReviewProgress()').includes('4 / 4 groups'));assert.match(b.run('catalogReviewProgress()'),/0 to review · 1 automatic · 1 skipped/);
+});
+test('Done without changes closes without a write; invalid drafts remain open',async()=>{
+ const b=browser(()=>{throw Error('No write expected')});
+ b.run('catalogInline.mode=true;catalogInline.invalid.set("field","bad")');await b.run('catalogFinishInline()');
+ assert.equal(b.run('catalogInline.mode'),true);
+ b.run('catalogInline.invalid.clear()');await b.run('catalogFinishInline()');
+ assert.equal(b.run('catalogInline.mode'),false);
+});
+test('displayed fields and title do not expose misleading per-field edit actions',()=>{
+ const b=browser(async()=>json({}));b.run('catalogUI.enabled=true');
+ assert.doesNotMatch(b.run('catalogInlineField("developer","Studio","<p>Studio</p>")+catalogInlineTitle("Title")'),/data-inline-edit|catalog-pencil|<button/);
+});
+
+
+test('previewing a review group does not advance progress before a decision',()=>{
+ const b=browser(async()=>json({}));
+ b.run('catalogUI.plan={groups:[{id:0,status:"ready"},{id:1,status:"review"}]};catalogReviewProgress();catalogUI.plan.groups[1].status="ready"');
+ assert.match(b.run('catalogReviewProgress()'),/1 to review/);
+ assert.equal(b.run('catalogNextGroup().id'),1);
+ b.run('catalogUI.decisions=new Map([[1,{action:"merge"}]])');
+ assert.match(b.run('catalogReviewProgress()'),/0 to review/);assert.equal(b.run('catalogNextGroup()'),undefined);
 });

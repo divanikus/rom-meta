@@ -196,19 +196,29 @@ function exportOpenMatch(job,id){
  exportLoadMatch();
 }
 function exportCloseMatch(){
- const previous=nativeExportUI.match?.returnFocus;
+ const m=nativeExportUI.match,previous=m?.returnFocus;
+ clearTimeout(m?.timer);m?.controller?.abort();
  nativeExportUI.match=null;$("export-match-dialog").classList.add("hidden");$("app").inert=false;
  if(previous?.isConnected)previous.focus();
 }
+function exportSearchMatch(immediate=false){
+ const m=nativeExportUI.match;if(!m)return;
+ clearTimeout(m.timer);m.controller?.abort();m.request=(m.request||0)+1;
+ m.query=$("export-match-query").value;m.offset=0;m.target=null;m.loading=true;m.error="";
+ exportRenderMatch();
+ if(immediate)return exportLoadMatch();
+ m.timer=setTimeout(()=>{if(nativeExportUI.match===m)exportLoadMatch();},180);
+}
 async function exportLoadMatch(game=""){
  const m=nativeExportUI.match;if(!m)return;
+ clearTimeout(m.timer);m.controller?.abort();m.controller=new AbortController();
  const request=(m.request||0)+1;m.request=request;m.loading=true;m.error="";exportRenderMatch();
  try{
-  const data=await fetchJSON("/api/export/match-options?"+new URLSearchParams({id:m.job.id,revision:m.job.revision,input:m.id,q:m.query,offset:m.offset,...(game?{game}:{})}));
+  const data=await fetchJSON("/api/export/match-options?"+new URLSearchParams({id:m.job.id,revision:m.job.revision,input:m.id,q:m.query,offset:m.offset,...(game?{game}:{})}),m.controller.signal);
   if(nativeExportUI.match!==m||m.request!==request)return;
   if(game){m.target=data.target;m.release="";}else{m.games=data.games;m.total=data.total;m.target=null;}
- }catch(error){if(nativeExportUI.match!==m||m.request!==request)return;m.error=error.message;}
- finally{if(nativeExportUI.match===m&&m.request===request){m.loading=false;exportRenderMatch();}}
+ }catch(error){if(nativeExportUI.match!==m||m.request!==request||error.name==="AbortError")return;m.error=error.message;}
+ finally{if(nativeExportUI.match===m&&m.request===request){m.loading=false;exportRenderMatch();if(game&&m.target)$("export-match-release").focus();}}
 }
 function exportUseMatch(){
  const m=nativeExportUI.match;if(!m?.target||m.loading||m.error)return;
@@ -218,35 +228,45 @@ function exportUseMatch(){
  d.bindings.set(m.id,{id:m.id,game:m.target.game,release:m.release,game_revision:m.target.game_revision});d.excluded.delete(m.id);
  exportCloseMatch();libraryRenderOperations();
 }
+function exportMatchResults(m){
+ const disabled=m.loading?'disabled':'';
+ return (m.error?'<p class="operation-error" role="alert">'+escapeHTML(m.error)+'</p>':"")+
+ (m.loading?'<p role="status">Searching…</p>':m.target?'':'<p class="secondary" role="status">'+m.total+' '+(m.total===1?'game':'games')+'</p>')+
+ (m.target?'<section class="export-match-selection"><h3>'+escapeHTML(m.target.title)+'</h3><small>'+escapeHTML(m.target.game)+'</small><label>Release<select id="export-match-release" '+disabled+'><option value="">Game only — use default metadata</option>'+m.target.releases.map(x=>'<option value="'+escapeAttr(x)+'" '+(x===m.release?'selected':'')+'>'+escapeHTML(x)+'</option>').join("")+'</select></label><p class="secondary">Choose a release when you know the edition. This records your choice, not a fingerprint match.</p><div class="operation-actions"><button class="tab-button" id="export-match-back" '+disabled+'>Back to games</button><button class="catalog-primary" id="export-match-use" '+disabled+'>Use this game</button></div></section>':
+ '<div class="export-match-results">'+(m.games?.length?m.games.map(x=>'<button type="button" class="export-match-result" data-export-match-game="'+escapeAttr(x.game)+'" '+disabled+'><strong>'+escapeHTML(x.name)+'</strong><small>'+escapeHTML(x.platform)+'</small><span aria-hidden="true">→</span></button>').join(""):!m.loading?'<p>No games found. Try another name.</p>':'')+'</div><div class="operation-actions"><button class="tab-button" id="export-match-prev" '+(!m.offset||m.loading?'disabled':'')+'>Previous</button><button class="tab-button" id="export-match-next" '+(m.offset+40>=m.total||m.loading?'disabled':'')+'>Next</button></div>');
+}
 function exportRenderMatch(){
  const m=nativeExportUI.match;if(!m)return;
  const dialog=$("export-match-dialog");dialog.classList.remove("hidden");$("app").inert=true;
- dialog.innerHTML='<div class="export-folder-box export-match-box"><div class="management-heading"><h2>Choose a library game</h2><button type="button" class="tab-button" id="export-match-close">Close</button></div><p class="export-match-rom">'+escapeHTML(m.rom)+'</p><p class="secondary">Select the card whose metadata and artwork should be used for this ROM.</p>'+
- (m.error?'<p class="operation-error" role="alert">'+escapeHTML(m.error)+'</p>':"")+
- '<form id="export-match-search" class="export-path-control"><input id="export-match-query" aria-label="Search game folders" placeholder="Search games in this platform" value="'+escapeAttr(m.query)+'"><button class="tab-button">Search</button></form>'+
- (m.loading?'<p role="status">Loading games…</p>':m.target?'<section class="export-match-selection"><h3>'+escapeHTML(m.target.title)+'</h3><small>'+escapeHTML(m.target.game)+'</small><label>Release<select id="export-match-release"><option value="">Game only — use default metadata</option>'+m.target.releases.map(x=>'<option value="'+escapeAttr(x)+'" '+(x===m.release?'selected':'')+'>'+escapeHTML(x)+'</option>').join("")+'</select></label><p class="secondary">Choose a release when you know the edition. This records your choice, not a fingerprint match.</p><div class="operation-actions"><button class="tab-button" id="export-match-back">Back to games</button><button class="catalog-primary" id="export-match-use">Use this game</button></div></section>':
- '<div class="export-match-results">'+(m.games.length?m.games.map(x=>'<button type="button" class="export-match-result" data-export-match-game="'+escapeAttr(x.game)+'"><strong>'+escapeHTML(x.name)+'</strong><small>'+escapeHTML(x.platform)+'</small><span aria-hidden="true">→</span></button>').join(""):'<p>No games found. Try another name.</p>')+'</div><div class="operation-actions"><button class="tab-button" id="export-match-prev" '+(!m.offset?'disabled':'')+'>Previous</button><span>'+m.total+' games</span><button class="tab-button" id="export-match-next" '+(m.offset+40>=m.total?'disabled':'')+'>Next</button></div>')+
- '<p class="secondary">Update the plan to review your choices.</p></div>';
- $("export-match-close").addEventListener("click",exportCloseMatch);
- $("export-match-search").addEventListener("submit",e=>{e.preventDefault();m.query=$("export-match-query").value;m.offset=0;exportLoadMatch();});
+ const body=exportMatchResults(m);
+ if(!m.rendered){
+  dialog.innerHTML='<div class="export-folder-box export-match-box"><div class="management-heading"><h2>Choose a library game</h2><button type="button" class="tab-button" id="export-match-close">Close</button></div><p class="export-match-rom">'+escapeHTML(m.rom)+'</p>'+
+  '<form id="export-match-search" class="export-path-control"><input type="search" id="export-match-query" aria-label="Search games" placeholder="Search games in this platform" maxlength="256" autocomplete="off" value="'+escapeAttr(m.query)+'"></form>'+
+  '<div id="export-match-body">'+body+'</div></div>';
+  m.rendered=true;
+  $("export-match-close").addEventListener("click",exportCloseMatch);
+  $("export-match-query").addEventListener("input",()=>exportSearchMatch());
+  $("export-match-search").addEventListener("submit",e=>{e.preventDefault();exportSearchMatch(true);});
+  dialog.onkeydown=e=>{
+   if(e.key==="Escape"){e.preventDefault();exportCloseMatch();}
+   if(e.key==="Tab"){
+    const controls=[...dialog.querySelectorAll("button:not(:disabled),input,select")],first=controls[0],last=controls.at(-1);
+    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}
+    else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}
+   }
+  };
+  $("export-match-query").focus();
+ }else $("export-match-body").innerHTML=body;
+ $("export-match-body").setAttribute("aria-busy",String(!!m.loading));
  dialog.querySelectorAll("[data-export-match-game]").forEach(b=>b.addEventListener("click",()=>exportLoadMatch(b.dataset.exportMatchGame)));
  if(!m.loading&&m.target){
   $("export-match-release").addEventListener("change",e=>m.release=e.target.value);
-  $("export-match-back").addEventListener("click",()=>{m.target=null;exportRenderMatch();});
+  $("export-match-back").addEventListener("click",()=>{m.target=null;exportRenderMatch();$("export-match-query").focus();});
   $("export-match-use").addEventListener("click",exportUseMatch);
- }else if(!m.loading){
+ }else if(!m.target){
   $("export-match-prev").addEventListener("click",()=>{m.offset=Math.max(0,m.offset-40);exportLoadMatch();});
   $("export-match-next").addEventListener("click",()=>{m.offset+=40;exportLoadMatch();});
  }
- dialog.onkeydown=e=>{
-  if(e.key==="Escape"){e.preventDefault();exportCloseMatch();}
-  if(e.key==="Tab"){
-   const controls=[...dialog.querySelectorAll("button:not(:disabled),input,select")],first=controls[0],last=controls.at(-1);
-   if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}
-   else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}
-  }
- };
- if(!m.loading)(m.target?$("export-match-release"):$("export-match-query")).focus();
 }
 
 const exportArtworkVariants={original:["original","unknown","reconstructed","fanart"],reconstructed:["reconstructed","original","unknown","fanart"]};

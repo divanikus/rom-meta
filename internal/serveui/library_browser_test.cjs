@@ -4,15 +4,15 @@ const {readFileSync}=require('node:fs');
 const vm=require('node:vm');
 const script=readFileSync(require('node:path').join(__dirname,'static/library.js'),'utf8').replace(/librarySyncNavigation\(\);\s*libraryPollOperations\(\);\s*$/,'');
 function browser(){
- const elements=new Map(),calls=[],timers=[];
+ const elements=new Map(),calls=[],timers=[],pendingTimers=new Map();
  function element(id){if(!elements.has(id))elements.set(id,{innerHTML:'',textContent:'',value:'',files:[],listeners:{},classes:new Set(),classList:{remove(name){element(id).classes.delete(name)},add(name){element(id).classes.add(name)},toggle(name,on){on?element(id).classes.add(name):element(id).classes.delete(name)}},setAttribute(){},replaceChildren(){},querySelectorAll:()=>[],addEventListener(k,v){this.listeners[k]=v},contains:()=>false,focus(){}});return elements.get(id);}
- const context=vm.createContext({console,URLSearchParams,$:element,window:{addEventListener(){},confirm:()=>true},document:{documentElement:{dataset:{}},addEventListener(){},activeElement:null,querySelectorAll:()=>[],createTextNode:s=>s},
+ const context=vm.createContext({console,URLSearchParams,AbortController,$:element,window:{addEventListener(){},confirm:()=>true},document:{documentElement:{dataset:{}},addEventListener(){},activeElement:null,querySelectorAll:()=>[],createTextNode:s=>s},
   state:{view:'browse',exportMode:false,platforms:[],platformsLoaded:true,platform:'Console',game:{id:'kept'},games:[{id:'kept'}]},
   catalogUI:{enabled:true},escapeHTML:s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),escapeAttr:s=>String(s??'').replaceAll('"','&quot;').replaceAll('<','&lt;'),formatNumber:n=>String(n??0),
   fetchJSON:async path=>{calls.push(['GET',path]);return []},catalogPost:async(path,body)=>{calls.push(['POST',path,JSON.parse(JSON.stringify(body))]);return {id:body.id,revision:body.revision,state:'importing',filename:'example.dat'}},
   platformMenuClose(){},renderPlatforms(){},sourceLabel:s=>s,setView:view=>{context.state.view=view},setExportMode:on=>{context.state.exportMode=on},catalogLeaveInline:()=>true,
-  setTimeout:(fn,ms)=>{timers.push(ms);return timers.length},clearTimeout(){},selectPlatform:async()=>{}});
- vm.runInContext(readFileSync(require('node:path').join(__dirname,'static/export.js'),'utf8'),context);vm.runInContext(script,context);vm.runInContext(readFileSync(require('node:path').join(__dirname,'static/enrichment.js'),'utf8'),context);return {run:c=>vm.runInContext(c,context),element,calls,timers,context};
+  setTimeout:(fn,ms)=>{timers.push(ms);pendingTimers.set(timers.length,fn);return timers.length},clearTimeout:id=>pendingTimers.delete(id),selectPlatform:async()=>{}});
+ vm.runInContext(readFileSync(require('node:path').join(__dirname,'static/export.js'),'utf8'),context);vm.runInContext(script,context);vm.runInContext(readFileSync(require('node:path').join(__dirname,'static/enrichment.js'),'utf8'),context);return {run:c=>vm.runInContext(c,context),element,calls,timers,context,runTimers(){const batch=[...pendingTimers.values()];pendingTimers.clear();for(const fn of batch)fn();}};
 }
 test('reconnection only reads server operations and finds the running job',async()=>{
  const b=browser();b.run('fetchJSON=async()=>[{id:"same-job",state:"importing",filename:"games.dat",progress:{Stage:"writing",Current:4,Total:9}}]');
@@ -663,4 +663,28 @@ test('backup deletion requires confirmation and uses the displayed revision',asy
  assert.equal(b.calls[0][0],'/api/catalog/backups');
  assert.deepEqual(JSON.parse(JSON.stringify(b.calls[0][1])),{id:'Console.fold-backup-123',revision:'reviewed',confirm:true});
  assert.match(b.element('settings-pane').innerHTML,/No retained backups/);
+});
+
+
+test('live manual search debounces typing and preserves the search input',async()=>{
+ const b=browser();b.context.fetchJSON=async path=>{b.calls.push(path);return {games:[{name:'Chosen',game:'chosen'}],total:1}};
+ b.run('nativeExportUI.match={job:{id:"j",revision:1},id:"i",rom:"file",query:"",offset:0,games:[],total:0};exportRenderMatch()');
+ const shell=b.element('export-match-dialog').innerHTML;
+ const search=b.element('export-match-query');
+ search.value='Or';search.listeners.input();
+ search.value='Orbit';search.listeners.input();
+ assert.equal(b.calls.length,0);
+ b.runTimers();await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(b.calls.length,1);assert.match(b.calls[0],/q=Orbit/);
+ assert.equal(b.element('export-match-dialog').innerHTML,shell);
+ assert.match(b.element('export-match-body').innerHTML,/Chosen/);
+ assert.equal(search.value,'Orbit');
+ search.value='Next';search.listeners.input();b.run('exportCloseMatch()');b.runTimers();
+ assert.equal(b.calls.length,1);
+});
+
+test('typing invalidates a response even before the debounce timer runs',async()=>{
+ const b=browser();b.run('let reply;fetchJSON=()=>new Promise(resolve=>reply=resolve);nativeExportUI.match={job:{id:"j",revision:1},id:"i",query:"Old",offset:0,games:[],total:0};const request=exportLoadMatch()');
+ b.element('export-match-query').value='New';b.run('exportSearchMatch();reply({games:[{name:"Stale",game:"stale"}],total:1})');await b.run('request');
+ assert.equal(b.run('nativeExportUI.match.games.length'),0);assert.equal(b.run('nativeExportUI.match.loading'),true);
 });

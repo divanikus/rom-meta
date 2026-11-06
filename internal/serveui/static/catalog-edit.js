@@ -12,7 +12,7 @@ async function catalogPost(path, body, signal) {
  if(!r.ok){const error=new Error(data.error || "The catalog operation could not finish.");error.consumed=data.consumed;error.result=data.result;throw error;}return data;
 }
 function catalogNotice(text,kind=""){return '<div class="catalog-notice '+kind+'" role="status">'+cEscape(text)+'</div>';}
-function catalogHeader(title,subtitle){catalogStopPlanArt();$("catalog-dialog").classList.toggle("is-plan",catalogUI.mode==="plan");$("catalog-dialog").classList.toggle("is-decisions",catalogUI.mode==="decisions");$("catalog-title").textContent=title;$("catalog-subtitle").textContent=subtitle||"";}
+function catalogHeader(title,subtitle){catalogStopPlanArt();$("catalog-dialog").classList.toggle("is-plan",catalogUI.mode==="plan");$("catalog-dialog").classList.toggle("is-decisions",catalogUI.mode==="decisions");$("catalog-dialog").classList.toggle("is-review",catalogUI.mode==="review");$("catalog-title").textContent=title;$("catalog-subtitle").textContent=subtitle||"";}
 function catalogOpen(title,subtitle){
  catalogUI.version=(catalogUI.version||0)+1;catalogHeader(title,subtitle);const dialog=$("catalog-dialog");if(!dialog.open)dialog.showModal();$("catalog-content").innerHTML='<div class="catalog-progress"><span class="catalog-spinner"></span><span id="catalog-progress-text">Preparing your workspace…</span></div>';
 }
@@ -143,7 +143,7 @@ function catalogPlanCard(pg){
  (ready?'<div class="catalog-plan-card-actions"><label><input type="checkbox" aria-label="Include '+escapeAttr(title)+'" data-plan-select="'+pg.id+'" '+(catalogUI.selected.has(pg.id)?'checked':'')+'>Include</label><button class="tab-button" data-plan-review="'+pg.id+'">Compare</button></div></article>':'</button>');
 }
 function catalogRenderPlan(){
- catalogUI.mode="plan";catalogUI.group=null;catalogUI.dirty=false;
+ catalogUI.mode="plan";catalogUI.group=null;catalogUI.dirty=false;catalogInitialReady();
  const plan=catalogUI.plan;if(!plan)return;catalogHeader("Review duplicates",catalogScopeLabel()+" · Compare cards, decide what belongs together, then apply.");
  const groups=plan.groups.filter(g=>catalogUI.decisions?.get(g.id)?.action!=="separate"),ready=groups.filter(g=>g.status==="ready");
  catalogUI.selected=new Set([...catalogUI.selected].filter(id=>ready.some(g=>g.id===id)));
@@ -221,8 +221,15 @@ function catalogCandidate(card,index,fields){
   return '<div class="catalog-field '+(differs?'different':'')+'"><div class="catalog-field-label"><span>'+cEscape(catalogLabels[key])+(differs?' · differs':'')+' · '+(local?'saved':'source')+'</span>'+(included&&local&&key!=="title"&&!catalogUI.group.group.NativeDigest&&catalogUI.group.status!=="blocked"?'<button class="tab-button" data-candidate-value="'+index+'" data-value-key="'+key+'">Use value</button>':'')+'</div><div class="catalog-field-value">'+cEscape(values[index]||"—")+'</div></div>';
  }).join("")+'<details><summary>Releases, media & evidence</summary>'+renderReleases(p.releases||g.releases||[])+'<p>'+cEscape((card.local_media||[]).length)+" local media files"+'</p><button class="tab-button" data-candidate-inspect="'+index+'">Inspect full card</button><pre>'+cEscape(card.catalog_yaml||"")+'</pre></details></article>';
 }
+function catalogInitialReady(){
+ if(catalogUI.progressPlan!==catalogUI.plan){
+  catalogUI.progressPlan=catalogUI.plan;catalogUI.initialReady=new Set((catalogUI.plan?.groups||[]).filter(g=>g.status==="ready").map(g=>g.id));
+ }
+ return catalogUI.initialReady||new Set();
+}
+function catalogNeedsReview(g){return !catalogUI.decisions?.has(g.id)&&(!catalogInitialReady().has(g.id)||g.status!=="ready");}
 function catalogNextGroup(exclude=[]){
- const groups=(catalogUI.plan?.groups||[]).filter(g=>!exclude.includes(g.id)&&!catalogUI.decisions?.has(g.id)&&g.status!=="ready");
+ const groups=(catalogUI.plan?.groups||[]).filter(g=>!exclude.includes(g.id)&&catalogNeedsReview(g));
  return groups.find(g=>g.status==="review")||groups.find(g=>g.status==="blocked")||groups[0];
 }
 function catalogCandidates(pg){
@@ -254,6 +261,7 @@ function catalogPending(message){
 }
 async function catalogReviewGroup(id){
  if(catalogUI.busy)return;
+ catalogInitialReady();
  const group=catalogUI.plan.groups.find(g=>g.id===id);if(!group)return;
  catalogUI.busy=true;catalogUI.mode="review";catalogUI.version=(catalogUI.version||0)+1;const version=catalogUI.version;
  catalogPending("Opening comparison…");
@@ -270,15 +278,32 @@ function catalogAcceptGroup(group){
  catalogUI.group=group;const i=catalogUI.plan.groups.findIndex(g=>g.id===group.id);catalogUI.plan.groups[i]=group;
  if(group.status==="ready")catalogUI.selected.add(group.id);else catalogUI.selected.delete(group.id);
 }
+function catalogReviewProgress(){
+ const groups=catalogUI.plan?.groups||[],total=groups.length;
+ const ready=catalogInitialReady(),remaining=groups.filter(catalogNeedsReview).length;
+ const skipped=groups.filter(g=>catalogUI.decisions?.get(g.id)?.action==="skip").length;
+ const done=total-remaining;
+ return '<div class="catalog-review-progress"><div><strong>'+done+' / '+total+' groups</strong><span>'+remaining+' to review'+(ready.size?' · '+ready.size+' automatic':'')+(skipped?' · '+skipped+' skipped':'')+'</span></div><progress aria-label="Duplicate group review progress" value="'+done+'" max="'+Math.max(1,total)+'"></progress></div>';
+}
 function catalogRenderReview(){
  const pg=catalogUI.group,g=pg.group,blocked=pg.status==="blocked",included=catalogIncluded(),enough=included.size>=2,pendingIdentity=(pg.needs_identity&&!g.ReviewAccepted)||catalogUI.selectionDirty;
  const oldScroll=document.querySelector?.(".catalog-candidates");const scrollLeft=oldScroll?.scrollLeft||0,scrollTop=oldScroll?.scrollTop||0;
- catalogHeader("Compare cards for merging",((catalogUI.platforms||[]).length>1?pg.group.Platform+" · ":"")+included.size+" of "+catalogUI.cards.length+" cards selected · "+(catalogUI.selectionDirty?"Selection changed":catalogStatus[pg.status])+". "+(blocked&&!catalogUI.selectionDirty?"Resolve the data conflict or change the selection.":"Choose the cards to keep together. Unselected cards stay unchanged."));
- $("catalog-content").innerHTML=catalogSessionSummary()+catalogQueueNotice()+'<div class="catalog-queue-toolbar"><button class="tab-button" id="catalog-skip-group">Skip for now →</button><button class="tab-button" id="catalog-review-decisions">Review decisions</button></div><button class="catalog-back" id="catalog-back">← Back to plan</button><div id="catalog-feedback">'+(pg.reason?catalogNotice(catalogGroupReason(pg),pg.status==="blocked"?"error":"warn"):'')+'</div><div class="catalog-comparison"><section class="catalog-candidate-area"><p class="catalog-scroll-hint">Scroll sideways to compare cards →</p><div class="catalog-candidates" tabindex="0" role="region" aria-label="Candidate cards; scroll horizontally to compare">'+catalogUI.cards.map((card,i)=>catalogCandidate(card,i,["title","alternate_titles","description","descriptions","developer","publisher","release_date","genres","players"])).join("")+'</div></section><section class="catalog-result"><span class="catalog-eyebrow">'+(blocked?"Merge status":"Result")+'</span><h3>'+cEscape(blocked?"Merge blocked":g.Keep.Title||g.Keep.Folder)+'</h3>'+
- (blocked?'':g.NativeDigest?'<p>MAME chooses its primary from the accepted snapshot. Edit individual cards in the library before rebuilding this plan.</p>':'<details><summary>Correct the result</summary><div id="catalog-form-host"></div></details>')+
- (!blocked&&pendingIdentity?'<div class="catalog-notice warn">'+cEscape(pg.identity_reason||"Confirm that these cards belong together as one game.")+'</div><p class="secondary">Review now, apply together at the end.</p>':!blocked&&g.ReviewAccepted&&pg.status==="ready"?'<p class="secondary">Ready for the final review.</p>':'')+
- '<div class="catalog-actions"><button class="tab-button" id="catalog-preview-group" '+(!enough||(blocked&&!catalogUI.selectionDirty)?'disabled':'')+'>'+(pendingIdentity?'Confirm selection':'Preview result')+'</button><button class="catalog-primary" id="catalog-commit" '+(!enough||(blocked&&!catalogUI.selectionDirty)||(pg.status==="review"&&!pendingIdentity&&!catalogUI.dirty)?'disabled':'')+'>'+'Agree & next'+'</button></div><p class="secondary" id="catalog-preview-feedback">'+(blocked?"Merge unavailable for this group.":catalogUI.dirty?"Changes need a new preview.":pg.status==="review"?"A decision is needed before applying.":"Result matches the current preview.")+'</p><div id="catalog-result-preview">'+catalogProfilePreview(catalogUI.preview,catalogReviewHint(pg))+'</div><details><summary>Why this group?</summary>'+(g.Evidence||[]).map(e=>'<p>'+cEscape(e.Source+": "+e.Field+" · "+e.Value)+'</p>').join("")+'</details><details><summary>Affected files</summary><pre>'+cEscape((g.FileChanges||[]).map(f=>f.Action+": "+f.FromFolder+"/"+f.Path+" → "+f.Target).join("\n")||"Catalog documents and merged card folders")+'</pre></details>'+
- '<div class="catalog-actions"><button class="tab-button" id="catalog-keep-separate" '+(!g.Evidence?.length||g.NativeDigest||catalogUI.dirty?'disabled':'')+'>Keep separate</button></div></section></div>';
+ catalogHeader("Compare cards for merging",(g.Platform||catalogUI.platform)+" · "+included.size+" of "+catalogUI.cards.length+" cards selected");
+ const canSeparate=!!g.Evidence?.length&&!g.NativeDigest;
+ $("catalog-content").innerHTML='<div class="catalog-review-top"><button class="tab-button" id="catalog-back">← All groups</button>'+catalogReviewProgress()+'<button class="tab-button" id="catalog-review-decisions">Review decisions ('+catalogBatchDecisions().length+')</button></div>'+
+ '<div id="catalog-feedback">'+(pg.reason?catalogNotice(catalogGroupReason(pg),blocked?"error":"warn"):'')+'</div>'+
+ '<div class="catalog-comparison"><section class="catalog-candidate-area"><p class="catalog-scroll-hint">Scroll sideways to compare cards →</p><div class="catalog-candidates" tabindex="0" role="region" aria-label="Candidate cards; scroll horizontally to compare">'+catalogUI.cards.map((card,i)=>catalogCandidate(card,i,["title","alternate_titles","description","descriptions","developer","publisher","release_date","genres","players"])).join("")+'</div></section>'+
+ '<section class="catalog-result"><span class="catalog-eyebrow">'+(blocked?"Merge status":"Result")+'</span><h3>'+cEscape(blocked?"Merge blocked":g.Keep.Title||g.Keep.Folder)+'</h3>'+
+ (blocked?'':g.NativeDigest?'<p>MAME chooses its primary from the accepted snapshot.</p>':'<details><summary>Correct the result</summary><div id="catalog-form-host"></div></details>')+
+ (!blocked&&pendingIdentity&&pg.identity_reason?'<p class="secondary">'+cEscape(pg.identity_reason)+'</p>':'')+
+ '<p class="secondary" id="catalog-preview-feedback">'+(blocked?cEscape(catalogReviewHint(pg)):catalogUI.dirty?"Changes need a new preview.":pg.status==="review"?catalogReviewHint(pg):"Ready to merge.")+'</p>'+
+ '<div id="catalog-result-preview">'+(catalogUI.preview?catalogProfilePreview(catalogUI.preview,""):"")+'</div>'+
+ '<details><summary>Why this group?</summary>'+(g.Evidence||[]).map(e=>'<p>'+cEscape(e.Source+": "+e.Field+" · "+e.Value)+'</p>').join("")+'</details>'+
+ '<details><summary>Affected files</summary><pre>'+cEscape((g.FileChanges||[]).map(f=>f.Action+": "+f.FromFolder+"/"+f.Path+" → "+f.Target).join("\n")||"Catalog documents and merged card folders")+'</pre></details></section></div>'+
+ '<div class="catalog-review-actions"><button class="tab-button" id="catalog-preview-group" '+(!enough||(blocked&&!catalogUI.selectionDirty)?'disabled':'')+'>Preview result</button><span class="catalog-action-space"></span>'+
+ '<button class="tab-button" id="catalog-keep-separate" '+(!canSeparate?'disabled title="This group cannot store a separation rule. Use Skip for now."':'')+'>Keep separate</button>'+
+ '<button class="tab-button" id="catalog-skip-group">Skip for now</button>'+
+ '<button class="catalog-primary" id="catalog-commit" '+(!enough||(blocked&&!catalogUI.selectionDirty)||(pg.status==="review"&&!pendingIdentity&&!catalogUI.dirty)?'disabled':'')+'>Agree & next →</button></div>';
  catalogRenderForm();
  const newScroll=document.querySelector?.(".catalog-candidates");if(newScroll){newScroll.scrollLeft=scrollLeft;newScroll.scrollTop=scrollTop;}
  document.querySelectorAll("[data-candidate-include]").forEach(input=>input.addEventListener("change",()=>{catalogUI.included=new Set(catalogIncluded());const folder=catalogUI.cards[Number(input.dataset.candidateInclude)].game.folder;if(input.checked)catalogUI.included.add(folder);else catalogUI.included.delete(folder);catalogUI.selectionDirty=true;catalogUI.primary="";catalogUI.patch={};catalogUI.preview=null;catalogDirty();catalogRenderReview();}));
@@ -294,9 +319,7 @@ function catalogRenderReview(){
  document.querySelectorAll("[data-candidate-value]").forEach(button=>button.addEventListener("click",()=>{
   const card=catalogUI.cards[Number(button.dataset.candidateValue)];catalogUI.patch[button.dataset.valueKey]=card.edit.fields[button.dataset.valueKey];catalogDirty();catalogRenderForm();
  }));
- document.querySelectorAll("[data-candidate-inspect]").forEach(button=>button.addEventListener("click",()=>{
-  catalogInspectCandidate(button,Number(button.dataset.candidateInspect));
- }));
+ document.querySelectorAll("[data-candidate-inspect]").forEach(button=>button.addEventListener("click",()=>catalogInspectCandidate(button,Number(button.dataset.candidateInspect))));
 }
 async function catalogInspectCandidate(button,index,offset=0){
  const card=catalogUI.cards[index],section=button.parentElement;
@@ -466,12 +489,9 @@ function catalogInlineOrigin(key){
 function catalogInlineField(key,label,value,body=""){
  if(!catalogInlineAvailable())return body||fact(label,value);
  if(!value&&!body)return "";
- return '<div class="'+(body?'catalog-inline-block':'fact-row catalog-inline-field')+'"><div class="catalog-inline-label"><span class="fact-label">'+cEscape(label)+'</span><button type="button" class="catalog-pencil" data-inline-edit="'+key+'" aria-label="Edit '+escapeAttr(label)+'">✎</button></div>'+(body||'<div class="fact-value">'+cEscape(value)+'</div>')+'<small class="catalog-value-origin">'+cEscape(catalogInlineOrigin(key))+'</small></div>';
+ return '<div class="'+(body?'catalog-inline-block':'fact-row catalog-inline-field')+'"><div class="catalog-inline-label"><span class="fact-label">'+cEscape(label)+'</span></div>'+(body||'<div class="fact-value">'+cEscape(value)+'</div>')+'<small class="catalog-value-origin">'+cEscape(catalogInlineOrigin(key))+'</small></div>';
 }
-function catalogInlineTitle(value){
- if(!catalogInlineAvailable())return cEscape(value);
- return cEscape(value)+(catalogInline.mode?"":' <button type="button" class="catalog-pencil" data-inline-edit="title" aria-label="Edit library title">✎</button>');
-}
+function catalogInlineTitle(value){return cEscape(value);}
 function catalogEditorTargets(){
  const f=catalogInline,result=[{target:{kind:"library",match:-1},label:"Library fields · explicit overrides"}],sources=f.card?.registry?.sources||[];
  for(const source of sources){
@@ -514,8 +534,8 @@ function catalogInlineBanner(){
  if(!f.card)return '<div class="catalog-inline-banner"><span role="alert">'+cEscape(f.error)+'</span><button class="tab-button" id="catalog-editor-reload">Retry</button><button class="tab-button" id="catalog-inline-cancel">Done</button></div>';
  const key=catalogTargetKey(f.target),targets=catalogEditorTargets().filter(r=>(r.target.source||"")===(f.target.source||"")).filter(r=>r.target.match!==-1||r.target.kind!=="source"||Object.keys(f.card.records.find(v=>catalogTargetKey(v.target)===catalogTargetKey(r.target))?.fields||{}).length),
  source=f.card.registry?.sources?.find(s=>s.id===f.target.source),disabled=f.saving?' disabled':'',raw=state.detailTab==="raw",register=state.detailTab==="files";
- const hint=register?"Releases & fingerprints · changes are validated and saved together.":raw?"Edit the complete card YAML. Save validates it before writing.":f.target.kind==="library"?"Card fields · values saved directly in this card. Blank fields use source data.":source?'Your variant “'+source.name+'” · choose it in export priorities to use these values.':sourceLabel(f.target.source)+" · editing its saved values. Fetching this source again may replace them.";
- return '<div class="catalog-inline-banner catalog-editor-bar"><div class="catalog-editor-top"><strong>Edit card</strong><div class="catalog-inline-actions"><button class="catalog-primary" id="catalog-inline-save" '+(!f.dirty||f.saving||f.invalid.size?'disabled':'')+'>'+(f.saving?'Saving…':'Save changes')+'</button><button class="tab-button" id="catalog-editor-discard" '+((!f.dirty&&!f.invalid.size)||f.saving?'disabled':'')+'>Discard</button><button class="tab-button" id="catalog-inline-cancel"'+disabled+'>Done</button></div></div>'+
+ const hint=register?"Releases & fingerprints · changes are validated and saved together.":raw?"Edit the complete card YAML. Done validates and saves it.":f.target.kind==="library"?"Card fields · values saved directly in this card. Blank fields use source data.":source?'Your variant “'+source.name+'” · choose it in export priorities to use these values.':sourceLabel(f.target.source)+" · editing its saved values. Fetching this source again may replace them.";
+ return '<div class="catalog-inline-banner catalog-editor-bar"><div class="catalog-editor-top"><strong>Edit card</strong><div class="catalog-inline-actions"><button class="tab-button" id="catalog-editor-discard"'+disabled+'>Discard</button><button class="catalog-primary" id="catalog-inline-save" '+(f.saving||f.invalid.size?'disabled':'')+'>'+(f.saving?'Saving…':'Done')+'</button></div></div>'+
  (!raw&&!register?'<nav class="catalog-source-tabs" aria-label="Edit source">'+catalogEditorSources().map(s=>'<button type="button" class="tab-button'+((f.target.source||"")===s.id?' active':'')+'" data-editor-source="'+escapeAttr(s.id)+'" aria-pressed="'+((f.target.source||"")===s.id)+'"'+disabled+'>'+cEscape(s.name)+'</button>').join("")+'<button class="tab-button" id="catalog-new-source" aria-label="Add named variant"'+disabled+'>+ My variant</button></nav>'+
  ((targets.length>1||source||f.target.kind==="manual")?'<div class="catalog-record-choice">'+
  (targets.length>1?'<label>Entry<select id="catalog-editor-target"'+disabled+'>'+targets.map(r=>'<option value="'+escapeAttr(catalogTargetKey(r.target))+'" '+(catalogTargetKey(r.target)===key?'selected':'')+'>'+cEscape(catalogEditorTargetLabel(r))+(f.edits.has(catalogTargetKey(r.target))?' · edited':'')+'</option>').join("")+'</select></label>':"")+
@@ -594,11 +614,13 @@ function catalogInitialTarget(card,key){
  return record?.target||{kind:"library",match:-1};
 }
 function catalogDiscardInline(){
- const f=catalogInline,target=f.target;
- catalogRegisterInstall(catalogRegister.base,true);
- f.card=f.savedCard||f.card;f.raw=null;f.edits=new Map();f.invalid=new Map();f.extra=new Set();
- const valid=target.kind==="library"||(target.kind==="manual"?(f.card.registry?.sources||[]).some(s=>s.id===target.source):(f.card.records||[]).some(r=>catalogTargetKey(r.target)===catalogTargetKey(target)));
- f.target=valid?target:catalogInitialTarget(f.card);f.dirty=false;f.error="";f.message="";f.nameMode="";catalogInlineRender();
+ if(catalogLeaveInline(true))catalogInlineRender();
+}
+async function catalogFinishInline(){
+ const f=catalogInline;if(f.saving||f.invalid.size)return;
+ const version=f.version;
+ if(f.dirty&&!await catalogSaveInline())return;
+ if(f.version===version&&catalogLeaveInline())catalogInlineRender();
 }
 function catalogEqualValue(a,b){
  const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==="object"?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
@@ -622,21 +644,21 @@ function catalogRemoveDescription(lang){
 }
 function catalogEditorActions(){
  const f=catalogInline;
- if($("catalog-inline-save"))$("catalog-inline-save").disabled=!f.dirty||f.saving||f.invalid.size>0;
- if($("catalog-editor-discard"))$("catalog-editor-discard").disabled=(!f.dirty&&!f.invalid.size)||f.saving;
+ if($("catalog-inline-save"))$("catalog-inline-save").disabled=f.saving||f.invalid.size>0;
+ if($("catalog-editor-discard"))$("catalog-editor-discard").disabled=f.saving;
  if($("catalog-editor-count"))$("catalog-editor-count").textContent=f.edits.size+" changed "+(f.edits.size===1?"record":"records");
  if($("catalog-editor-status"))$("catalog-editor-status").textContent=f.error||f.message||(f.invalid.size?"Check structured field values":f.dirty?"Unsaved changes":"");
 }
 function catalogInlineRender(){const scroll=$("detail-body").scrollTop;renderDetails();$("detail-body").scrollTop=scroll;catalogUpdateTools();}
-function catalogLeaveInline(){
+function catalogLeaveInline(discard=false){
  const f=catalogInline;if(f.saving)return false;
- if((f.dirty||f.invalid.size)&&!window.confirm("Discard unsaved card changes?"))return false;
+ if(!discard&&(f.dirty||f.invalid.size)&&!window.confirm("Discard unsaved card changes?"))return false;
  catalogRegisterInstall(null,true);
  f.version++;f.mode=false;f.loading=false;f.dirty=false;f.edits=new Map();f.invalid=new Map();f.extra=new Set();f.card=null;f.savedCard=null;f.raw=null;f.baseRevision="";f.error="";f.message="";f.nameMode="";return true;
 }
 async function catalogEditCard(){
  if(!catalogInlineAvailable()||catalogUI.busy)return;
- if(catalogInline.mode){if(catalogLeaveInline())catalogInlineRender();return;}
+ if(catalogInline.mode){await catalogFinishInline();return;}
  await catalogStartInline();
 }
 async function catalogStartInline(key){
@@ -660,7 +682,7 @@ async function catalogStartInline(key){
 }
 async function catalogSaveInline(){
  const f=catalogInline;if(f.saving||!f.dirty||f.invalid.size||!catalogInlineCurrent())return;
- const platform=f.platform,folder=f.folder,target=f.target;f.saving=true;catalogUI.busy=true;f.error="";catalogInlineRender();
+ let saved=false;const platform=f.platform,folder=f.folder,target=f.target;f.saving=true;catalogUI.busy=true;f.error="";catalogInlineRender();
  try{
   const response=await catalogPost("/api/catalog/edit",{platform,game:folder,revision:f.baseRevision||f.card.revision,edits:catalogEditorEdits(),...catalogRegisterPayload()});
   catalogRegisterInstall(response.card.register||null,true);
@@ -679,9 +701,10 @@ async function catalogSaveInline(){
     if(typeof renderSourceControls==="function")renderSourceControls();
    }catch(error){f.message+=" Could not refresh: "+error.message;}
   }
-  catalogUI.cardsCache=new Map();
+  catalogUI.cardsCache=new Map();saved=true;
  }catch(error){f.error=error.message;}
  finally{f.saving=false;catalogUI.busy=false;catalogInlineRender();}
+ return saved;
 }
 async function catalogSaveSourceName(){
  const f=catalogInline;if(f.saving)return;
@@ -691,7 +714,7 @@ async function catalogSaveSourceName(){
   const response=await catalogPost("/api/catalog/curation",{revision:f.card.registry.revision,id,name});
   f.card.registry=response.registry;if(f.savedCard)f.savedCard.registry=response.registry;f.nameMode="";f.preferredSource=response.source.id;
   if(!id){f.target={kind:"manual",source:response.source.id,match:-1,scope:""};f.extra=new Set();}
-  f.message=id?"Variant renamed. Saved profiles keep the same source.":"Variant created. Add its fields, then Save changes; enable it in your metadata priorities.";
+  f.message=id?"Variant renamed. Saved profiles keep the same source.":"Variant created. Add its fields, then Done; enable it in your metadata priorities.";
   if(state.sourceDefaults)state.sourceDefaults.source_labels={...(state.sourceDefaults.source_labels||{}),[response.source.id]:response.source.name};
   try{state.sourceDefaults=await fetchJSON("/api/export-options");if(typeof renderSourceControls==="function")renderSourceControls();}catch(error){f.message+=" Could not refresh source choices: "+error.message;}
   if(typeof librarySettingsUI!=="undefined")librarySettingsUI.sections=null;
@@ -699,7 +722,6 @@ async function catalogSaveSourceName(){
  finally{f.saving=false;catalogUI.busy=false;catalogInlineRender();}
 }
 function catalogBindInline(){
- document.querySelectorAll("[data-inline-edit]").forEach(e=>e.addEventListener("click",()=>catalogStartInline(e.dataset.inlineEdit)));
  if(!catalogEditorActive())return;
  catalogBindRegister();
  const f=catalogInline;
@@ -714,7 +736,7 @@ function catalogBindInline(){
  $("catalog-source-name")?.addEventListener("input",e=>{f.nameDraft=e.target.value;});
  $("catalog-save-source-name")?.addEventListener("click",catalogSaveSourceName);
  $("catalog-cancel-source-name")?.addEventListener("click",()=>{f.nameMode="";catalogInlineRender();});
- $("catalog-inline-save")?.addEventListener("click",catalogSaveInline);
+ $("catalog-inline-save")?.addEventListener("click",catalogFinishInline);
  $("catalog-inline-cancel")?.addEventListener("click",()=>{if(catalogLeaveInline())catalogInlineRender();});
  $("catalog-editor-discard")?.addEventListener("click",catalogDiscardInline);
  document.querySelectorAll("[data-card-field]").forEach(input=>input.addEventListener("input",()=>{
