@@ -692,7 +692,7 @@ test('typing invalidates a response even before the debounce timer runs',async()
 test('translation suggestion is explicit, escaped and stays a game-only draft',async()=>{
  const b=browser();b.run('libraryRenderOperations=()=>{};const job={id:"j",revision:1,state:"ready",export:{excluded:["i"],totals:{issues:[{id:"i",rom:"Translation.zip",status:"ambiguous",can_bind:true,suggestions:[{game:"platforms/x/Quest",title:"<Quest>"}]}]}}};libraryUI.jobs=[job]');
  const html=b.run('exportIssues(job)');
- assert.match(html,/Needs confirmation/);assert.match(html,/&lt;Quest>/);assert.match(html,/Use this game/);assert.equal(b.calls.length,0);
+ assert.match(html,/Needs confirmation/);assert.match(html,/&lt;Quest>/);assert.match(html,/Accept match/);assert.match(html,/catalog-primary export-accept-suggestion/);assert.equal(b.calls.length,0);
  b.run('fetchJSON=async()=>({target:{game:"platforms/x/Quest",game_revision:"digest"}})');
  await b.run('exportAcceptSuggestion(job,"i","platforms/x/Quest")');
  assert.equal(b.run('exportIssueDraft(job).bindings.get("i").release'),"");
@@ -705,5 +705,55 @@ test('late suggestion cannot override a changed plan or a newer exclusion',async
   const b=browser();b.run('libraryRenderOperations=()=>{};const job={id:"j",revision:1,state:"ready",export:{totals:{issues:[{id:"i",can_bind:true,suggestions:[{game:"platforms/x/Quest",title:"Quest"}]}]}}};libraryUI.jobs=[job];let reply;fetchJSON=()=>new Promise(resolve=>reply=resolve);const pending=exportAcceptSuggestion(job,"i","platforms/x/Quest")');
   b.run(change+';reply({target:{game:"platforms/x/Quest",game_revision:"digest"}})');await b.run('pending');
   assert.equal(b.run('exportIssueDraft(job).bindings.size'),0);
+ }
+});
+
+
+test('bulk acceptance spans pages and filters while preserving choices and exclusions',async()=>{
+ const b=browser();b.run('libraryRenderOperations=()=>{};const single=id=>({id,rom:id,status:"ambiguous",can_bind:true,suggestions:[{game:"platforms/x/"+id,title:id}]});const job={id:"bulk",revision:1,state:"ready",export:{excluded:["excluded"],bindings:[{id:"chosen",game:"platforms/x/Owner",release:"Owner release",game_revision:"old"}],totals:{issues:[...Array.from({length:45},(_,i)=>single("i"+i)),single("excluded"),single("chosen"),{...single("unsupported"),can_bind:false},{...single("many"),suggestions:[{game:"a",title:"A"},{game:"b",title:"B"}]}]}}};libraryUI.jobs=[job];exportIssueDraft(job).query="i0"');
+ assert.match(b.run('exportIssues(job)'),/Accept all with one candidate \(45\)/);
+ let active=0,peak=0;
+ b.context.fetchJSON=async path=>{b.calls.push(['GET',path]);active++;peak=Math.max(peak,active);await new Promise(resolve=>setImmediate(resolve));active--;return {target:{game:new URLSearchParams(path.split('?')[1]).get('game'),game_revision:'current'}}};
+ await b.run('exportAcceptSingleSuggestions(job)');
+ assert.equal(peak,4);assert.equal(b.calls.length,45);assert.equal(b.run('exportIssueDraft(job).bindings.size'),46);
+ assert.equal(b.run('exportIssueDraft(job).bindings.get("chosen").release'),'Owner release');
+ assert.equal(b.run('exportIssueDraft(job).excluded.has("excluded")'),true);
+ for(const id of ['many','unsupported','excluded'])assert.equal(b.run('exportIssueDraft(job).bindings.has('+JSON.stringify(id)+')'),false);
+ assert.equal(b.run('exportIssueDraft(job).bindings.get("i44").release'),'');
+ assert.equal(b.run('exportSuggestionsPending(job)'),false);assert.equal(b.run('exportReviewDirty(job)'),true);
+ assert.doesNotMatch(b.run('exportIssues(job)'),/data-export-accept-single/);
+ assert.equal(b.calls.filter(x=>x[0]==='POST').length,0);
+});
+
+test('bulk keeps successful choices and lets failed suggestions retry',async()=>{
+ const b=browser();b.run('libraryRenderOperations=()=>{};const job={id:"j",revision:1,state:"ready",export:{totals:{issues:["ok","failed","missing"].map(id=>({id,can_bind:true,suggestions:[{game:id,title:id}]}))}}};libraryUI.jobs=[job]');
+ b.context.fetchJSON=async path=>{const game=new URLSearchParams(path.split('?')[1]).get('game');if(game==='failed')throw Error('Temporarily unavailable');return game==='missing'?{}:{target:{game,game_revision:'r'}}};
+ await b.run('exportAcceptSingleSuggestions(job)');
+ assert.equal(b.run('exportIssueDraft(job).bindings.size'),1);assert.equal(b.run('exportIssueDraft(job).suggestionErrors.size'),2);
+ assert.match(b.run('exportIssues(job)'),/Temporarily unavailable/);assert.match(b.run('exportIssues(job)'),/Accept all with one candidate \(2\)/);
+ b.context.fetchJSON=async path=>({target:{game:new URLSearchParams(path.split('?')[1]).get('game'),game_revision:'r'}});
+ await b.run('exportAcceptSingleSuggestions(job)');
+ assert.equal(b.run('exportIssueDraft(job).bindings.size'),3);assert.equal(b.run('exportIssueDraft(job).suggestionErrors.size'),0);
+});
+
+test('pending bulk blocks update/apply and reset cancels active and queued choices',async()=>{
+ const b=browser();const selectors={'[data-native-export-apply]':b.element('apply'),'[data-export-review-update]':b.element('update'),'[data-export-restore-all]':b.element('reset')};
+ b.context.document.querySelectorAll=s=>selectors[s]?[selectors[s]]:[];
+ b.run('libraryRenderOperations=()=>{};const job={id:"j",kind:"export",revision:1,state:"ready",export:{totals:{issues:Array.from({length:8},(_,i)=>({id:"i"+i,can_bind:true,suggestions:[{game:"g"+i,title:"G"}]}))}}};libraryUI.jobs=[job];const replies=[];fetchJSON=path=>new Promise(resolve=>replies.push(()=>resolve({target:{game:new URLSearchParams(path.split("?")[1]).get("game"),game_revision:"r"}})));const pending=exportAcceptSingleSuggestions(job);nativeExportBindOperation(job)');
+ assert.equal(b.run('replies.length'),4);assert.equal(selectors['[data-native-export-apply]'].disabled,true);assert.equal(selectors['[data-export-review-update]'].disabled,true);
+ assert.match(b.run('exportIssues(job)'),/Accepting 0 \/ 8/);
+ await selectors['[data-native-export-apply]'].listeners.click();await selectors['[data-export-review-update]'].listeners.click();
+ await b.run('exportAcceptSingleSuggestions(job)');assert.equal(b.run('replies.length'),4);assert.equal(b.calls.length,0);
+ selectors['[data-export-restore-all]'].listeners.click();b.run('replies.forEach(reply=>reply())');await b.run('pending');
+ assert.equal(b.run('replies.length'),4);assert.equal(b.run('exportIssueDraft(job).bindings.size'),0);assert.equal(b.run('exportSuggestionsPending(job)'),false);
+});
+
+test('bulk stops on a new plan and cannot overwrite a newer individual choice',async()=>{
+ for(const change of ['libraryUI.jobs=[{...job,revision:2}]','exportIssueDraft(job).suggestionPending.delete("i4");exportIssueDraft(job).bindings.set("i4",{game:"owner",release:"chosen",game_revision:"r"})']){
+  const b=browser();b.run('libraryRenderOperations=()=>{};const job={id:"j",revision:1,state:"ready",export:{totals:{issues:Array.from({length:5},(_,i)=>({id:"i"+i,can_bind:true,suggestions:[{game:"g"+i,title:"G"}]}))}}};libraryUI.jobs=[job];const d=exportIssueDraft(job),replies=[];fetchJSON=path=>new Promise(resolve=>replies.push(()=>resolve({target:{game:new URLSearchParams(path.split("?")[1]).get("game"),game_revision:"r"}})));const pending=exportAcceptSingleSuggestions(job)');
+  b.run(change+';replies.forEach(reply=>reply())');await b.run('pending');
+  assert.equal(b.run('replies.length'),4);
+  if(change.startsWith('libraryUI'))assert.equal(b.run('d.bindings.size'),0);else assert.equal(b.run('d.bindings.get("i4").game'),'owner');
+  assert.equal(b.run('d.suggestionPending.size'),0);
  }
 });

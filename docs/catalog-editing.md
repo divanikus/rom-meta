@@ -174,9 +174,11 @@ LaunchBox. The CLI remains available through the same exporter.
    **Inputs needing attention** lists unresolved, ambiguous and game-only matches
    with filenames, reasons and candidate evidence. Unrecognized translated ROMs
    can show **Suggested by name** cards: full titles and aliases are compared
-   after removing filename tags. Even one suggestion needs **Use this game**
-   confirmation; it selects game metadata, not an exact release or translation
-   version. **Choose game** searches cards
+   after removing filename tags. **Accept match** beside the title confirms a
+   suggestion. **Accept all with one candidate** stages every remaining unique
+   suggestion across all pages, keeping existing choices and exclusions. Inputs
+   with multiple candidates remain for individual review. Both actions select
+   game metadata, not an exact release or translation version. **Choose game** searches cards
    in the input's platform as you type; select a release when known, or **Game only** to use
    default metadata. **Use this game** stages the choice. You can change it,
    restore the automatic match, or exclude the input. **Update plan** recalculates
