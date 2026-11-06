@@ -633,6 +633,13 @@ accepts an operation ID, revision, excluded issue input IDs and optional
 40 with `offset`. Supplying `game` instead returns its title, release keys and
 SHA256 revision for selection. Both routes require editable mode.
 
+Unknown translated payloads may have export-only `suggestions` containing
+`game` (catalog-relative path) and `title`. They remain `ambiguous`, even for one
+suggestion, without a game/release/variant binding. Full normalized titles and
+aliases qualify; series prefixes alone do not. The browser obtains the current
+card revision through match-options and asks the owner to confirm a game-only
+manual association. Exact fingerprint matches and consumer lookup are unchanged.
+
 Review rebuilds native output from the retained scan without destination writes
 or ROM payload reads. Manual choices have `matched_by: manual` and never create
 fingerprints or persistent bindings. Selected card revisions, platform scope and

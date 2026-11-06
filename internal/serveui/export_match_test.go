@@ -211,3 +211,44 @@ func TestManualExportPickerScopePagingAndCapability(t *testing.T) {
 		t.Fatal(code)
 	}
 }
+
+func TestSuggestedTranslationNeedsExplicitReview(t *testing.T) {
+	s, _, d := webExportFixture(t, "es-de")
+	input := "translations/en/Orbit (Japan) [T-En by Team v1.0].z64"
+	writeEnrichmentFixture(t, filepath.Join(d.ROMRoot, filepath.FromSlash(input)), "synthetic patched payload")
+	first := webExportPlan(t, s, d)
+	op := waitImport(t, s, first.ID, "ready")
+	if op.Export.Totals.Matched != 1 || op.Export.Totals.Ambiguous != 1 {
+		t.Fatal(op.Export.Totals)
+	}
+	issue := op.Export.Totals.Issues[0]
+	if !issue.CanBind || len(issue.Suggestions) != 1 || issue.Game != "" {
+		t.Fatal(issue)
+	}
+	options, code := matchOptions(t, s, op, issue.ID, issue.Suggestions[0].Game)
+	if code != 200 {
+		t.Fatal(code)
+	}
+	binding := exportjob.ManualBinding{ID: issue.ID, ManualMatch: exporter.ManualMatch{Game: options.Target.Game, GameRevision: options.Target.GameRevision}}
+	before := exportFiles(t, d.Path)
+	w, _ := catalogCall(t, s, "/api/export/review", exportReviewRequest{ID: op.ID, Revision: op.Revision, Bindings: []exportjob.ManualBinding{binding}})
+	if w.Code != 202 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	reviewed := waitImport(t, s, op.ID, "ready")
+	_, record, ok := exportReviewInput(reviewed.exportJob, issue.ID)
+	if !ok || record.MatchedBy != "manual" || record.Release != "" || record.Variant != "" || len(record.Suggestions) != 0 {
+		t.Fatal(record)
+	}
+	if !reflect.DeepEqual(before, exportFiles(t, d.Path)) {
+		t.Fatal("review wrote frontend")
+	}
+	w, _ = catalogCall(t, s, "/api/export/review", exportReviewRequest{ID: reviewed.ID, Revision: reviewed.Revision})
+	if w.Code != 202 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	restored := waitImport(t, s, op.ID, "ready")
+	if len(restored.Export.Totals.Issues[0].Suggestions) != 1 || restored.Export.Totals.Matched != 1 {
+		t.Fatal("suggestion lost after reset")
+	}
+}

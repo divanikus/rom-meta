@@ -74,6 +74,13 @@ fingerprints. Export recognizes those files and inherits the base metadata/media
 while preserving translated display identity and launch paths. See
 [variant preparation and proof limits](catalog-variants.md).
 
+Unknown translated cartridge/raw payloads can produce name-based game suggestions
+in the export plan. These are unresolved (`ambiguous`), including a unique
+suggestion, and are omitted until explicitly associated in the
+[browser export review](catalog-editing.md). Suggestions do not register a
+translation or infer its release, patch version or fingerprint. CLI and API plans
+expose the same candidates; exact prepared fingerprints continue to take priority.
+
 ## Export from a remote catalog
 
 On the catalog machine, bind `serve` to its LAN address (default is loopback):

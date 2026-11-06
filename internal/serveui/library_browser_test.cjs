@@ -688,3 +688,22 @@ test('typing invalidates a response even before the debounce timer runs',async()
  b.element('export-match-query').value='New';b.run('exportSearchMatch();reply({games:[{name:"Stale",game:"stale"}],total:1})');await b.run('request');
  assert.equal(b.run('nativeExportUI.match.games.length'),0);assert.equal(b.run('nativeExportUI.match.loading'),true);
 });
+
+test('translation suggestion is explicit, escaped and stays a game-only draft',async()=>{
+ const b=browser();b.run('libraryRenderOperations=()=>{};const job={id:"j",revision:1,state:"ready",export:{excluded:["i"],totals:{issues:[{id:"i",rom:"Translation.zip",status:"ambiguous",can_bind:true,suggestions:[{game:"platforms/x/Quest",title:"<Quest>"}]}]}}};libraryUI.jobs=[job]');
+ const html=b.run('exportIssues(job)');
+ assert.match(html,/Needs confirmation/);assert.match(html,/&lt;Quest>/);assert.match(html,/Use this game/);assert.equal(b.calls.length,0);
+ b.run('fetchJSON=async()=>({target:{game:"platforms/x/Quest",game_revision:"digest"}})');
+ await b.run('exportAcceptSuggestion(job,"i","platforms/x/Quest")');
+ assert.equal(b.run('exportIssueDraft(job).bindings.get("i").release'),"");
+ assert.equal(b.run('exportIssueDraft(job).excluded.size'),0);
+ assert.equal(b.run('exportReviewDirty(job)'),true);assert.equal(b.calls.filter(x=>x[0]==="POST").length,0);
+ assert.doesNotMatch(b.run('exportIssues(job)'),/Suggested by name/);
+});
+test('late suggestion cannot override a changed plan or a newer exclusion',async()=>{
+ for(const change of ['libraryUI.jobs=[{...job,revision:2}]','exportIssueDraft(job).suggestionPending.delete("i");exportIssueDraft(job).excluded.add("i")']){
+  const b=browser();b.run('libraryRenderOperations=()=>{};const job={id:"j",revision:1,state:"ready",export:{totals:{issues:[{id:"i",can_bind:true,suggestions:[{game:"platforms/x/Quest",title:"Quest"}]}]}}};libraryUI.jobs=[job];let reply;fetchJSON=()=>new Promise(resolve=>reply=resolve);const pending=exportAcceptSuggestion(job,"i","platforms/x/Quest")');
+  b.run(change+';reply({target:{game:"platforms/x/Quest",game_revision:"digest"}})');await b.run('pending');
+  assert.equal(b.run('exportIssueDraft(job).bindings.size'),0);
+ }
+});

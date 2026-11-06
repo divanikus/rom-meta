@@ -148,6 +148,9 @@ func nameFallback(root string, index *catalogIndex, record *Record, profile Prof
 		}
 	}
 	if translationInput(record) {
+		if record.Disc == nil && suggestTranslationNames(root, index, record) {
+			return nil
+		}
 		matches, games = nil, nil
 	}
 	if len(matches) == 1 {

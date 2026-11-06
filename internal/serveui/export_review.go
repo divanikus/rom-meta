@@ -12,18 +12,19 @@ import (
 )
 
 type exportIssue struct {
-	CanBind    bool     `json:"can_bind"`
-	ID         string   `json:"id"`
-	Platform   string   `json:"platform"`
-	ROM        string   `json:"rom"`
-	Status     string   `json:"status"`
-	Reason     string   `json:"reason,omitempty"`
-	Game       string   `json:"game,omitempty"`
-	Release    string   `json:"release,omitempty"`
-	MatchedBy  string   `json:"matched_by,omitempty"`
-	Candidates []string `json:"candidates,omitempty"`
-	Warnings   []string `json:"warnings,omitempty"`
-	Excluded   bool     `json:"excluded"`
+	Suggestions []exporter.NameSuggestion `json:"suggestions,omitempty"`
+	CanBind     bool                      `json:"can_bind"`
+	ID          string                    `json:"id"`
+	Platform    string                    `json:"platform"`
+	ROM         string                    `json:"rom"`
+	Status      string                    `json:"status"`
+	Reason      string                    `json:"reason,omitempty"`
+	Game        string                    `json:"game,omitempty"`
+	Release     string                    `json:"release,omitempty"`
+	MatchedBy   string                    `json:"matched_by,omitempty"`
+	Candidates  []string                  `json:"candidates,omitempty"`
+	Warnings    []string                  `json:"warnings,omitempty"`
+	Excluded    bool                      `json:"excluded"`
 }
 
 func exportInputs(job *exportjob.Job, onlyIssues bool, excluded []string) []exportIssue {
@@ -41,7 +42,7 @@ func exportInputs(job *exportjob.Job, onlyIssues bool, excluded []string) []expo
 				continue
 			}
 			id := exportjob.InputKey(p.Platform, r.ROM)
-			result = append(result, exportIssue{CanBind: exporter.CanManuallyMatch(r), ID: id, Platform: p.Platform, ROM: r.ROM, Status: r.Status, Reason: r.Reason, Game: r.Game, Release: r.Release, MatchedBy: r.MatchedBy, Candidates: r.Candidates, Warnings: r.Warnings, Excluded: omit[id]})
+			result = append(result, exportIssue{Suggestions: r.Suggestions, CanBind: exporter.CanManuallyMatch(r), ID: id, Platform: p.Platform, ROM: r.ROM, Status: r.Status, Reason: r.Reason, Game: r.Game, Release: r.Release, MatchedBy: r.MatchedBy, Candidates: r.Candidates, Warnings: r.Warnings, Excluded: omit[id]})
 		}
 	}
 	return result

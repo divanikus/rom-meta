@@ -132,7 +132,7 @@ func BindManual(p *Plan, r Record, choice ManualMatch) (Record, error) {
 		return Record{}, err
 	}
 	r.Variant, r.VariantInfo, r.TitleContext, r.SelectedTitle = "", nil, nil, nil
-	r.DiscVariants, r.Candidates = nil, nil
+	r.DiscVariants, r.Candidates, r.Suggestions = nil, nil, nil
 	r.Warnings = append([]string(nil), r.Warnings...)
 	r.Status, r.MatchedBy, r.Reason = "matched", "manual", "Selected by you for this export; not verified by fingerprint"
 	if err = attachRecord(p.DataRoot, g, choice.Release, &r, p.Profile, p.System); err != nil {

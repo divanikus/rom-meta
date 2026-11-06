@@ -151,7 +151,7 @@ function nativeExportBindOperation(job){
 function exportIssueDraft(job){
  let d=nativeExportUI.reviewDrafts.get(job.id);
  const saved=JSON.stringify([job.export.excluded||[],job.export.bindings||[]]);
- if(!d||d.revision!==job.revision||d.saved!==saved){d={saved,revision:job.revision,excluded:new Set(job.export.excluded||[]),bindings:new Map((job.export.bindings||[]).map(x=>[x.id,{...x}])),query:"",page:0};nativeExportUI.reviewDrafts.set(job.id,d);}
+ if(!d||d.revision!==job.revision||d.saved!==saved){d={saved,revision:job.revision,excluded:new Set(job.export.excluded||[]),bindings:new Map((job.export.bindings||[]).map(x=>[x.id,{...x}])),suggestionPending:new Map(),suggestionErrors:new Map(),query:"",page:0};nativeExportUI.reviewDrafts.set(job.id,d);}
  return d;
 }
 function exportBindingKey(x){return JSON.stringify([x.game,x.release||"",x.game_revision]);}
@@ -162,10 +162,12 @@ function exportReviewDirty(job){
 function exportReviewHint(job){const d=exportIssueDraft(job);return exportReviewDirty(job)?"Update the plan to review these choices.":d.bindings.size+" manually assigned · "+d.excluded.size+" excluded from this export.";}
 function exportIssueRow(x,d,review){
  const binding=d.bindings.get(x.id),game=binding?.game||x.game,release=binding?binding.release:x.release;
- return '<div class="export-issue"><div class="export-issue-heading"><strong>'+escapeHTML(x.rom)+'</strong><span class="secondary">'+escapeHTML(binding?"Manual choice":x.matched_by==="manual"?"Automatic match will be restored":x.status)+'</span></div>'+
+ return '<div class="export-issue"><div class="export-issue-heading"><strong>'+escapeHTML(x.rom)+'</strong><span class="secondary">'+escapeHTML(binding?"Manual choice":x.matched_by==="manual"?"Automatic match will be restored":x.suggestions?.length?"Needs confirmation":x.status)+'</span></div>'+
  '<small>'+escapeHTML(x.platform)+' · '+escapeHTML(binding?"Selected by you; not verified by fingerprint":x.reason||x.warnings?.join("; ")||"Review match evidence")+'</small>'+
  (game?'<small>'+(binding?'Selected: ':'Matched: ')+escapeHTML(game)+(release?' / '+escapeHTML(release):binding?' · game only':"")+'</small>':"")+
- (!binding&&x.candidates?.length?'<small>Candidates: '+escapeHTML(x.candidates.join("; "))+'</small>':"")+
+ (!binding&&!x.suggestions?.length&&x.candidates?.length?'<small>Candidates: '+escapeHTML(x.candidates.join("; "))+'</small>':"")+
+ (!binding&&x.suggestions?.length?'<div class="export-suggestions"><small>Suggested by name</small>'+x.suggestions.map(v=>'<div><strong>'+escapeHTML(v.title)+'</strong> '+(review&&x.can_bind?'<button type="button" class="tab-button" data-export-suggestion="'+escapeAttr(x.id)+'" data-export-suggestion-game="'+escapeAttr(v.game)+'" '+(d.suggestionPending?.has(x.id)?'disabled':'')+'>Use this game</button>':'')+'</div>').join("")+'</div>':"")+
+ (d.suggestionErrors?.get(x.id)?'<small class="operation-error" role="alert">'+escapeHTML(d.suggestionErrors.get(x.id))+'</small>':"")+
  '<div class="export-issue-actions">'+(review&&x.can_bind?'<button type="button" class="tab-button" data-export-match="'+escapeAttr(x.id)+'">'+(binding?'Change game':'Choose game')+'</button>':"")+
  (review&&binding?'<button type="button" class="tab-button" data-export-match-reset="'+escapeAttr(x.id)+'">Use automatic match</button>':"")+
  '<label><input type="checkbox" data-export-exclude="'+escapeAttr(x.id)+'" '+(d.excluded.has(x.id)?'checked ':'')+(!review?'disabled ':'')+'aria-label="'+escapeAttr("Exclude "+x.rom)+'">Exclude from export</label></div></div>';
@@ -179,17 +181,32 @@ function exportIssues(job){
 function exportBindReview(job){
  const d=exportIssueDraft(job);
  const update=()=>{document.querySelectorAll("[data-native-export-apply]").forEach(b=>b.disabled=exportReviewDirty(job));document.querySelectorAll("[data-export-review-update]").forEach(b=>b.disabled=!exportReviewDirty(job));const hint=$("export-review-hint");if(hint)hint.textContent=exportReviewHint(job);};
- document.querySelectorAll("[data-export-exclude]").forEach(c=>c.addEventListener("change",()=>{if(c.checked){d.excluded.add(c.dataset.exportExclude);d.bindings.delete(c.dataset.exportExclude);}else d.excluded.delete(c.dataset.exportExclude);libraryRenderOperations();}));
+ document.querySelectorAll("[data-export-exclude]").forEach(c=>c.addEventListener("change",()=>{d.suggestionPending.delete(c.dataset.exportExclude);if(c.checked){d.excluded.add(c.dataset.exportExclude);d.bindings.delete(c.dataset.exportExclude);}else d.excluded.delete(c.dataset.exportExclude);libraryRenderOperations();}));
+ document.querySelectorAll("[data-export-suggestion]").forEach(b=>b.addEventListener("click",()=>exportAcceptSuggestion(job,b.dataset.exportSuggestion,b.dataset.exportSuggestionGame)));
  document.querySelectorAll("[data-export-match]").forEach(b=>b.addEventListener("click",()=>exportOpenMatch(job,b.dataset.exportMatch)));
- document.querySelectorAll("[data-export-match-reset]").forEach(b=>b.addEventListener("click",()=>{d.bindings.delete(b.dataset.exportMatchReset);libraryRenderOperations();}));
- document.querySelectorAll("[data-export-exclude-all]").forEach(b=>b.addEventListener("click",()=>{for(const x of job.export.totals.issues||[])if(x.status!=="matched"&&!d.bindings.has(x.id))d.excluded.add(x.id);libraryRenderOperations();}));
- document.querySelectorAll("[data-export-restore-all]").forEach(b=>b.addEventListener("click",()=>{d.excluded.clear();d.bindings.clear();libraryRenderOperations();}));
+ document.querySelectorAll("[data-export-match-reset]").forEach(b=>b.addEventListener("click",()=>{d.suggestionPending.delete(b.dataset.exportMatchReset);d.bindings.delete(b.dataset.exportMatchReset);libraryRenderOperations();}));
+ document.querySelectorAll("[data-export-exclude-all]").forEach(b=>b.addEventListener("click",()=>{d.suggestionPending.clear();for(const x of job.export.totals.issues||[])if(x.status!=="matched"&&!d.bindings.has(x.id))d.excluded.add(x.id);libraryRenderOperations();}));
+ document.querySelectorAll("[data-export-restore-all]").forEach(b=>b.addEventListener("click",()=>{d.suggestionPending.clear();d.excluded.clear();d.bindings.clear();libraryRenderOperations();}));
  document.querySelectorAll("[data-export-issue-page]").forEach(b=>b.addEventListener("click",()=>{d.page+=Number(b.dataset.exportIssuePage);libraryRenderOperations();}));
  $("export-issue-search")?.addEventListener("input",event=>{d.query=event.target.value;d.page=0;const pos=event.target.selectionStart;event.target.blur();libraryRenderOperations();$("export-issue-search")?.focus();$("export-issue-search")?.setSelectionRange(pos,pos);});
  document.querySelectorAll("[data-export-review-update]").forEach(b=>b.addEventListener("click",async()=>{b.disabled=true;await libraryImportAction("/api/export/review",{id:job.id,revision:job.revision,excluded:[...d.excluded],bindings:[...d.bindings.values()]});}));
  update();
 }
+async function exportAcceptSuggestion(job,id,game){
+ const issue=job.export.totals.issues.find(x=>x.id===id),d=exportIssueDraft(job);
+ if(!issue?.can_bind||!issue.suggestions?.some(x=>x.game===game)||d.suggestionPending.has(id))return;
+ const request={};d.suggestionPending.set(id,request);d.suggestionErrors.delete(id);libraryRenderOperations();
+ try{
+  const data=await fetchJSON("/api/export/match-options?"+new URLSearchParams({id:job.id,revision:job.revision,input:id,game}));
+  const current=libraryUI.jobs.find(x=>x.id===job.id);
+  if(d.suggestionPending.get(id)!==request||!current||current.revision!==job.revision||!["ready","needs_review"].includes(current.state)||exportIssueDraft(current)!==d)return;
+  if(data.target?.game!==game||!data.target.game_revision)throw new Error("Suggested card is no longer available.");
+  d.bindings.set(id,{id,game,release:"",game_revision:data.target.game_revision});d.excluded.delete(id);
+ }catch(error){d.suggestionErrors.set(id,error.message);}
+ finally{if(d.suggestionPending.get(id)===request)d.suggestionPending.delete(id);libraryRenderOperations();}
+}
 function exportOpenMatch(job,id){
+ exportIssueDraft(job).suggestionPending.delete(id);
  const issue=job.export.totals.issues.find(x=>x.id===id);
  if(!issue?.can_bind)return;
  nativeExportUI.match={job,id,rom:issue.rom,query:"",offset:0,games:[],total:0,target:null,release:"",returnFocus:document.activeElement};

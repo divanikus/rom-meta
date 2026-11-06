@@ -172,7 +172,11 @@ LaunchBox. The CLI remains available through the same exporter.
 5. **Prepare export plan** starts a background scan. Operations shows its progress,
    matching counts, native file count, game actions, conflicts and skipped systems.
    **Inputs needing attention** lists unresolved, ambiguous and game-only matches
-   with filenames, reasons and candidate evidence. **Choose game** searches cards
+   with filenames, reasons and candidate evidence. Unrecognized translated ROMs
+   can show **Suggested by name** cards: full titles and aliases are compared
+   after removing filename tags. Even one suggestion needs **Use this game**
+   confirmation; it selects game metadata, not an exact release or translation
+   version. **Choose game** searches cards
    in the input's platform as you type; select a release when known, or **Game only** to use
    default metadata. **Use this game** stages the choice. You can change it,
    restore the automatic match, or exclude the input. **Update plan** recalculates
