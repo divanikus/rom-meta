@@ -794,3 +794,16 @@ test('uncheck unresolved keeps confirmed choices and reset checks every row',()=
  reset.listeners.click();assert.equal(b.run('exportIssueDraft(job).excluded.size'),0);assert.equal(b.run('exportIssueDraft(job).bindings.size'),0);assert.equal(b.calls.length,0);
  assert.equal((b.run('exportIssues(job)').match(/data-export-include="[^"]+" checked/g)||[]).length,3);
 });
+
+
+test('focused inclusion checkbox updates row actions immediately without waiting for a blur',()=>{
+ const b=browser(),checkbox=b.element('include'),pane=b.element('operations-pane');
+ checkbox.dataset={exportInclude:'i'};checkbox.tagName='INPUT';let refocused=false;checkbox.focus=()=>{refocused=true};
+ b.context.document.querySelectorAll=s=>s==='[data-export-include]'?[checkbox]:[];
+ b.run('const job={id:"j",kind:"export",revision:1,state:"ready",export:{destination:{},totals:{issues:[{id:"i",rom:"Game.zip",can_bind:true,status:"ambiguous",suggestions:[{game:"g",title:"Game"}]}]}}};libraryUI.jobs=[job];libraryUI.selected="j";libraryRenderOperations()');
+ b.context.document.activeElement=checkbox;pane.contains=e=>e===checkbox;
+ checkbox.checked=false;checkbox.listeners.change();
+ assert.match(pane.innerHTML,/is-excluded/);assert.match(pane.innerHTML,/data-export-match="i" disabled/);assert.match(pane.innerHTML,/Update the plan/);assert.equal(refocused,true);
+ checkbox.checked=true;checkbox.listeners.change();
+ assert.doesNotMatch(pane.innerHTML,/is-excluded/);assert.match(pane.innerHTML,/data-export-include="i" checked/);assert.equal(b.calls.length,0);
+});
