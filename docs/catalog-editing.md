@@ -136,15 +136,24 @@ LaunchBox. The CLI remains available through the same exporter.
    **Artwork** selects original or reconstructed images first, with fallback when
    unavailable; video/manual rules are unchanged. **Loaded profile priorities**
    restores the image ranking from the loaded profile or library settings.
-   **Save profile** validates and downloads the current YAML for **Load YAML** or
-   CLI `--profile`. It includes artwork choices, source order and all other rules,
-   without ROM/destination paths. It does not require a destination or start an export.
+   Choose a **Saved profile**, or enter a **Profile name** and **Save profile** to
+   keep it in this library. **Update profile** replaces the selected profile;
+   change the name and **Save as new** to keep another variant. Profiles survive
+   browser/server restarts in `config/export-profiles.yaml`.
+   **Download YAML** exports a portable copy for **Load YAML** or CLI `--profile`.
+   These actions include all profile rules without ROM/destination paths and
+   neither require a destination nor start an export.
    **Preview in new tab** opens an independent snapshot of this exact profile;
    the original setup keeps its paths, ROM selection and edits. Change settings
    in setup and open another preview to compare. The preview is a catalog projection;
    **Prepare export plan** still checks actual ROM matches and native writes.
-4. **Save destination** stores the paths and selected profile policy in
-   `config/export-destinations.yaml`. Saved entries survive server restarts.
+4. **Save destination** stores the paths and a reference to the selected saved
+   profile in `config/export-destinations.yaml`. Unsaved policy edits are stored
+   inline instead. Updating a linked profile affects future exports; already
+   prepared plans keep their policy snapshot. Referenced profiles cannot be
+   removed until their destinations select another profile or an inline policy.
+   Saved entries survive server restarts. CLI uses the same entries through
+   `--destination-name` and `--profile-name`; see [saved choices](frontend-export.md#saved-profiles-and-destinations).
    Renaming updates the selected entry; choose New destination for another.
    Removing an entry removes only its settings, never frontend files.
 5. **Prepare export plan** starts a background scan. Operations shows its progress,

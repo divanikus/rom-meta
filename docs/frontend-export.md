@@ -77,6 +77,38 @@ Assets are written before native XML. A failed write removes its partial file.
 Already-added assets may remain; later metadata is not published after a failed
 asset write.
 
+## Saved profiles and destinations
+
+The web export form saves named profiles and destinations in the library. Use the
+same local `--data-root` in CLI to list or reuse them:
+
+```powershell
+rom-meta export --data-root "D:\Catalog" --list-profiles
+rom-meta export --data-root "D:\Catalog" --list-destinations
+rom-meta export --data-root "D:\Catalog" --destination-name "Living room"
+rom-meta export --data-root "D:\Catalog" --destination-name "Living room" --profile-name "Original artwork"
+```
+
+Names are case-insensitive; stable IDs shown in the lists also work. A destination
+supplies frontend, destination/media paths, ROM folder, platform layout and policy.
+Explicit flags override saved values; `--platform`, `--platforms` or `--all`
+replaces its saved scope. `--profile-name` overrides the destination's policy;
+`--profile file.yaml` remains supported and cannot be combined with
+`--profile-name`. A named profile also works with explicit ROM/destination flags
+without a saved destination. An explicit `--target` selects the frontend and the
+chosen profile is validated against it.
+
+These commands only prepare a plan. Add `--apply` after reviewing it to write.
+Saved destinations reference a saved profile's latest version; existing inline
+policies remain usable. Files live in `config/export-profiles.yaml` and
+`config/export-destinations.yaml`, shared with serve and retained after restart.
+
+Saved paths belong to the machine running the command. If serve runs inside a
+container, override mount-relative paths as needed for host CLI use. Named choices
+use a local library; with `--api`, continue using explicit local paths and
+`--profile` YAML downloaded from the web form. Remote server paths are never
+silently used as client paths.
+
 ## CHD recognition and full-file checks
 
 Ordinary CHD v5 exports read the 124-byte header, size and modification time, then

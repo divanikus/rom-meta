@@ -20,6 +20,12 @@ func runExport(args []string) error {
 	api := ""
 	var destination, packageRoot, mediaRoot, report string
 	all, list := false, false
+	var profileName, destinationName string
+	var listProfiles, listDestinations bool
+	flags.StringVar(&profileName, "profile-name", "", "Saved profile name or ID from this library")
+	flags.StringVar(&destinationName, "destination-name", "", "Saved destination name or ID; explicit flags override its values")
+	flags.BoolVar(&listProfiles, "list-profiles", false, "List profiles saved in --data-root")
+	flags.BoolVar(&listDestinations, "list-destinations", false, "List destinations saved in --data-root")
 	flags.StringVar(&api, "api", "", "Catalog HTTP(S) origin; reads local ROMs without a local catalog")
 	flags.StringVar(&target, "target", "es-de", "Output target (es-de or launchbox)")
 	flags.StringVar(&options.DataRoot, "data-root", ".", "Local catalog root")
@@ -52,6 +58,26 @@ func runExport(args []string) error {
 	}
 	if flags.NArg() != 0 {
 		return fmt.Errorf("unexpected positional export arguments")
+	}
+	if listProfiles || listDestinations {
+		if listProfiles && listDestinations {
+			return fmt.Errorf("choose --list-profiles or --list-destinations")
+		}
+		if err := validateExportModeFlags(flags, "saved settings listing", "data-root", "list-profiles", "list-destinations"); err != nil {
+			return err
+		}
+		return listExportSettings(options.DataRoot, listProfiles)
+	}
+	if profileName != "" || destinationName != "" {
+		if api != "" {
+			return fmt.Errorf("saved choices use a local --data-root; with --api use --profile YAML and explicit local destination paths")
+		}
+		if packageRoot != "" || list {
+			return fmt.Errorf("saved choices cannot be combined with --package or platform listing")
+		}
+		if err := applySavedExportSettings(flags, &options, &target, &destination, &mediaRoot, &all, destinationName, profileName); err != nil {
+			return err
+		}
 	}
 	normalizedTarget, err := exporter.NormalizeTarget(target)
 	if err != nil {

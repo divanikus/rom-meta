@@ -337,6 +337,40 @@ test('export setup and profile preview belong to Operations in the header',()=>{
  assert.equal(b.run('state.preview'),true);assert.equal(b.calls.filter(c=>c[0]==='POST').length,0);
 });
 
+
+test('named profile save stores policy separately, update and copy retain explicit identity',async()=>{
+ const b=browser();profileSetup(b);b.element('export-saved-profile-name').value='My images';
+ const requests=[];let version=0;
+ b.context.catalogPost=async(path,body)=>{
+  requests.push([path,JSON.parse(JSON.stringify(body))]);
+  if(path==='/api/export/profile')return{profile:body.profile,profile_yaml:'validated',target:'es-de'};
+  assert.equal(path,'/api/export/profiles');assert.equal(body.revision,version?'r'+version:'');
+  version++;return{revision:'r'+version,profiles:[{...body.profile,id:body.profile.id||'p'+version}]};
+ };
+ await b.run('exportSaveProfile()');assert.equal(b.run('nativeExportUI.draft.profile_id'),'p1');assert.equal(b.run('nativeExportUI.draft.path'),'/output');
+ assert.equal(requests[1][1].profile.name,'My images');assert.equal(requests[1][1].profile.path,undefined);
+ b.run('exportPolicyChanged()');assert.equal(b.run('nativeExportUI.draft.profile_id'),'');assert.equal(b.run('nativeExportUI.draft.editProfileID'),'p1');
+ await b.run('exportSaveProfile()');assert.equal(requests.at(-1)[1].profile.id,'p1');
+ b.element('export-saved-profile-name').value='Another variant';await b.run('exportSaveProfile(true)');
+ assert.equal(requests.at(-1)[1].profile.id,'');assert.equal(b.run('nativeExportUI.draft.profile_id'),'p3');
+ assert.equal(requests.some(([path])=>path==='/api/export/destinations'||path==='/api/export/prepare'),false);
+});
+test('saved profile selection restores policy and missing references never fall back silently',async()=>{
+ const b=browser();profileSetup(b);const policy=b.run('nativeExportUI.draft.policy');
+ b.context.catalogPost=async()=>({profile:policy,profile_yaml:'loaded'});
+ b.run('nativeExportUI.profiles=[{id:"p",name:"Saved",target:"es-de",profile_yaml:"saved"}];nativeExportUI.draft={...exportDraft(),profile_id:"p"}');
+ await b.run('exportEnsurePolicy()');assert.equal(b.run('nativeExportUI.draft.profile_name'),'Saved');assert.equal(b.run('nativeExportUI.draft.editProfileID'),'p');
+ b.run('nativeExportUI.draft={...exportDraft(),profile_id:"missing"}');await b.run('exportEnsurePolicy()');
+ assert.match(b.run('nativeExportUI.error'),/no longer exists/);assert.equal(b.run('nativeExportUI.draft.policy'),undefined);
+});
+test('named profile errors retain draft and pending YAML cannot be saved',async()=>{
+ const b=browser();profileSetup(b);b.element('export-saved-profile-name').value='Kept';
+ b.context.catalogPost=async()=>{throw Error('saved profiles changed; reload')};
+ await b.run('exportSaveProfile()');assert.match(b.run('nativeExportUI.error'),/saved profiles changed/);
+ assert.equal(b.run('nativeExportUI.draft.savedProfileName'),'Kept');assert.equal(b.run('nativeExportUI.draft.path'),'/output');
+ b.run('nativeExportUI.draft.profileRaw="invalid"');await b.run('exportSaveProfile()');assert.match(b.run('nativeExportUI.error'),/Validate your YAML/);
+});
+
 function profileSetup(b){
  b.run('state.view="export";nativeExportUI.draft={...exportDraft(),name:"Keep destination",rom_root:"/roms",path:"/output",platform:"Console",profile_name:"Custom profile",policy:{schema_version:1,titles:{mode:"regional"},launchbox:{regions:["Japan"]},selection:{description:{languages:["en"],scope:"game",sources:["launchbox"]},fields:{title:{sources:["launchbox"]}},media:{}}}};nativeExportUI.profileOptions={available_sources:["launchbox","manual.notes"],media_roles:{"es-de":[{id:"cover",label:"Cover"}]}}');
  for(const [id,value]of Object.entries({'export-destination-name':'Keep destination','export-run-target':'es-de','export-destination-path':'/output','export-rom-root':'/roms','export-run-platform':'Console','export-media-root':'','export-rom-mode':'single'}))b.element(id).value=value;
@@ -404,7 +438,7 @@ test('newly enabled images inherit artwork preference and disabled roles keep th
  assert.equal(b.run('nativeExportUI.draft.policy.selection.media.screenshot.variants'),undefined);
 });
 
-test('Save profile downloads validated current YAML without saving paths or preparing an export',async()=>{
+test('Download YAML downloads validated current YAML without saving paths or preparing an export',async()=>{
  const b=browser();profileSetup(b);let payload,blob,clicked=false,revoked=false;
  b.context.Blob=Blob;b.context.URL={createObjectURL:value=>{blob=value;return 'blob:profile'},revokeObjectURL:url=>{assert.equal(url,'blob:profile');revoked=true}};
  b.context.setTimeout=fn=>fn();const link={click(){clicked=true}};
@@ -418,7 +452,7 @@ test('Save profile downloads validated current YAML without saving paths or prep
  assert.equal(b.element('export-profile-download').disabled,false);
 });
 
-test('Save profile rejects pending or invalid YAML without a download and keeps the draft',async()=>{
+test('Download YAML rejects pending or invalid YAML without a download and keeps the draft',async()=>{
  const b=browser();profileSetup(b);let downloads=0,requests=0;
  b.context.document.createElement=()=>{downloads++;return{click(){}}};
  b.context.catalogPost=async()=>{requests++;throw Error('Invalid profile')};

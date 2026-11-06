@@ -1,5 +1,5 @@
 /* Native export on the serve host. Plans and progress are owned by Operations. */
-const nativeExportUI={reviewDrafts:new Map(),loaded:false,loading:false,busy:false,error:"",revision:"",destinations:[],host:"",os:"",draft:null,folder:null,folderVersion:0};
+const nativeExportUI={reviewDrafts:new Map(),loaded:false,loading:false,busy:false,error:"",revision:"",profilesRevision:"",profiles:[],destinations:[],host:"",os:"",draft:null,folder:null,folderVersion:0};
 const exportStates={planning:"Preparing export plan",ready:"Ready to export",needs_review:"Conflicts to resolve",exporting:"Exporting",succeeded:"Complete",incomplete:"Stopped after partial write",failed:"Could not finish"};
 function exportStageLabel(stage){const labels={catalog:"Opening library",checking:"Checking reviewed inputs",starting:"Starting",planned:"Plan ready",complete:"Complete",write:"Writing files","native fields":"Preparing frontend metadata","read destination":"Reading destination"};return labels[stage]||((stage||"Starting").replace(/^./,s=>s.toUpperCase()));}
 function exportProgressUnit(stage){
@@ -15,13 +15,14 @@ async function exportOpen(){
 }
 async function exportLoadDestinations(){
  nativeExportUI.loading=true;nativeExportUI.error="";exportRender();
- try{const data=await fetchJSON("/api/export/destinations");Object.assign(nativeExportUI,data,{loaded:true});}
+ try{const [data]=await Promise.all([fetchJSON("/api/export/destinations"),exportLoadProfiles()]);Object.assign(nativeExportUI,data,{loaded:true});}
  catch(error){nativeExportUI.error=error.message;}
  finally{nativeExportUI.loading=false;if(state.view==="export")exportRender();}
 }
 function exportCapture(){
  const f=nativeExportUI.draft;if(!f||!$("export-run-form"))return;
  for(const [key,id]of Object.entries({name:"export-destination-name",target:"export-run-target",path:"export-destination-path",rom_root:"export-rom-root",platform:"export-run-platform",media_root:"export-media-root"})){const el=$(id);if(el)f[key]=el.value;}
+ const profileName=$("export-saved-profile-name");if(profileName)f.savedProfileName=profileName.value;
  f.all=$("export-rom-mode")?.value==="all";
 }
 function exportPathField(label,id,key,hint){
@@ -49,7 +50,7 @@ function exportRender(){
  exportBind();
 }
 async function exportDestinationInput(){
- exportCapture();const f=nativeExportUI.draft,d=Object.fromEntries(["id","name","target","path","rom_root","media_root","platform","all","profile_yaml","profile_name"].map(k=>[k,f[k]]));
+ exportCapture();const f=nativeExportUI.draft,d=Object.fromEntries(["id","name","target","path","rom_root","media_root","platform","all","profile_yaml","profile_name","profile_id"].map(k=>[k,f[k]]));
  if(f.policy){const result=await exportResolvePolicy(f);d.profile_yaml=result.profile_yaml;d.profile_name=f.profile_name||"Custom profile";}
  else if(f.profile_mode==="defaults"&&!f.profile_yaml){d.profile_yaml="";d.profile_name="Library settings";}
  if(f.profile_mode==="yaml"&&!d.profile_yaml)throw Error("Choose a YAML profile first.");
@@ -68,7 +69,7 @@ async function exportSaveDestination(remove=false){
   const data=await catalogPost("/api/export/destinations",{revision:nativeExportUI.revision,destination:d,delete:remove});
   Object.assign(nativeExportUI,data);
   if(remove)nativeExportUI.draft=exportDraft();
-  else{const saved=data.destinations.find(x=>x.id===d.id||x.name===d.name);nativeExportUI.draft={...saved,policy:fallbackPolicy,profile_mode:saved.profile_yaml?"custom":"defaults"};}
+  else{const saved=data.destinations.find(x=>x.id===d.id||x.name===d.name);nativeExportUI.draft={...saved,policy:fallbackPolicy,profile_mode:saved.profile_id||saved.profile_yaml?"custom":"defaults"};}
  }catch(error){nativeExportUI.error=error.message;}
  finally{nativeExportUI.busy=false;exportRender();}
 }
@@ -76,7 +77,7 @@ async function exportPrepare(event){
  event?.preventDefault();if(nativeExportUI.busy)return;
  exportCapture();nativeExportUI.busy=true;nativeExportUI.error="";exportRender();
  try{
-  const d=await exportDestinationInput();exportRender();
+  const d=await exportDestinationInput();d.profile_id="";exportRender();
   const op=await catalogPost("/api/export/prepare",{destination:d});
   libraryRememberJob(op);libraryNavigate("operations");libraryPollOperations();
  }catch(error){nativeExportUI.error=error.message;exportRender();}
@@ -87,7 +88,7 @@ function exportBind(){
  document.querySelectorAll("[data-export-preview]").forEach(b=>b.addEventListener("click",exportPreviewProfile));
  $("export-run-form")?.addEventListener("submit",exportPrepare);
  $("export-run-form")?.addEventListener("input",exportCapture);
- for(const id of ["export-run-target","export-rom-mode"])$(id)?.addEventListener("change",()=>{exportCapture();exportRender();});
+ for(const id of ["export-run-target","export-rom-mode"])$(id)?.addEventListener("change",()=>{exportCapture();if(id==="export-run-target"){nativeExportUI.draft.profile_id="";nativeExportUI.draft.editProfileID="";nativeExportUI.draft.savedProfileName="";}exportRender();});
  $("export-destination-select")?.addEventListener("change",event=>{
   const saved=nativeExportUI.destinations.find(d=>d.id===event.target.value);
   nativeExportUI.draft=saved?{...saved,profile_mode:saved.profile_yaml?"yaml":"defaults"}:exportDraft();nativeExportUI.error="";exportRender();exportEnsurePolicy();
@@ -98,7 +99,7 @@ function exportBind(){
  $("export-profile-upload")?.addEventListener("change",async event=>{
   const file=event.target.files?.[0];if(!file)return;
   const draft=nativeExportUI.draft;
-  try{if(file.size>1048576)throw Error("Profile must be at most 1 MiB.");const content=await file.text();if(nativeExportUI.draft!==draft)return;draft.profile_yaml=content;draft.profile_name=file.name;draft.profile_mode="yaml";delete draft.policy;delete draft.profileRaw;nativeExportUI.error="";await exportEnsurePolicy();}
+  try{if(file.size>1048576)throw Error("Profile must be at most 1 MiB.");const content=await file.text();if(nativeExportUI.draft!==draft)return;draft.profile_id="";draft.editProfileID="";draft.savedProfileName="";draft.profile_yaml=content;draft.profile_name=file.name;draft.profile_mode="yaml";delete draft.policy;delete draft.profileRaw;nativeExportUI.error="";await exportEnsurePolicy();}
   catch(error){nativeExportUI.error=error.message;}exportRender();
  });
  document.querySelectorAll("[data-export-browse]").forEach(b=>b.addEventListener("click",()=>{exportCapture();exportBrowse(b.dataset.exportBrowse,nativeExportUI.draft[b.dataset.exportBrowse]);}));
@@ -202,6 +203,49 @@ function exportInstallPolicy(d,result){
  d.policy=result.profile;d.profile_yaml=result.profile_yaml;
  delete d.artworkPreference;delete d.artworkBase;delete d.disabledMedia;
 }
+
+async function exportLoadProfiles(){
+ const data=await fetchJSON("/api/export/profiles");
+ nativeExportUI.profiles=data.profiles||[];nativeExportUI.profilesRevision=data.revision||"";
+}
+function exportSelectSavedProfile(id){
+ exportCapture();const d=nativeExportUI.draft,p=nativeExportUI.profiles.find(p=>p.id===id);
+ if(!p){d.profile_id="";d.editProfileID="";d.savedProfileName="";exportRender();return;}
+ if(p.target!==d.target){nativeExportUI.error="Choose a profile for this frontend.";exportRender();return;}
+ Object.assign(d,{profile_id:p.id,editProfileID:p.id,savedProfileName:p.name,profile_name:p.name,profile_yaml:p.profile_yaml,profile_mode:"yaml"});
+ delete d.policy;delete d.profileRaw;nativeExportUI.error="";exportEnsurePolicy();
+}
+async function exportSaveProfile(copy=false,remove=false){
+ const d=nativeExportUI.draft;if(!d||nativeExportUI.busy)return;
+ exportCapture();
+ const id=copy?"":(d.editProfileID||d.profile_id||"");
+ if(remove&&!window.confirm("Remove this saved profile? Exported files are kept."))return;
+ nativeExportUI.busy=true;nativeExportUI.error="";exportRender();
+ try{
+  const result=remove?null:await exportResolvePolicy(d);
+  const name=(d.savedProfileName||"").trim();
+  if(!remove&&!name)throw Error("Give this profile a name.");
+  const data=await catalogPost("/api/export/profiles",{revision:nativeExportUI.profilesRevision,profile:remove?{id}:{id,name,target:d.target,profile_yaml:result.profile_yaml},delete:remove});
+  nativeExportUI.profiles=data.profiles;nativeExportUI.profilesRevision=data.revision;
+  if(remove){d.profile_id="";d.editProfileID="";d.savedProfileName="";d.profile_name="Custom profile";}
+  else{
+   const saved=data.profiles.find(p=>id?p.id===id:p.name===name);
+   Object.assign(d,{profile_id:saved.id,editProfileID:saved.id,savedProfileName:saved.name,profile_name:saved.name,profile_yaml:saved.profile_yaml,profile_mode:"yaml"});
+   exportInstallPolicy(d,result);
+  }
+ }catch(error){nativeExportUI.error=error.message;}
+ finally{nativeExportUI.busy=false;exportRender();}
+}
+function exportSavedProfileControls(d){
+ const id=d.editProfileID||d.profile_id||"";
+ return '<div class="export-inline"><label>Saved profile<select id="export-saved-profile"><option value="">Unsaved profile</option>'+
+ nativeExportUI.profiles.filter(p=>p.target===d.target).map(p=>'<option value="'+escapeAttr(p.id)+'" '+(id===p.id?'selected':'')+'>'+escapeHTML(p.name)+'</option>').join("")+
+ '</select></label><label>Profile name<input id="export-saved-profile-name" placeholder="e.g. Original artwork · English" value="'+escapeAttr(d.savedProfileName??(id?d.profile_name:""))+'"></label></div>'+
+ '<div class="export-profile-tools"><button type="button" class="tab-button" id="export-profile-save" '+(!d.policy?'disabled':'')+'>'+(id?'Update profile':'Save profile')+'</button>'+
+ (id?'<button type="button" class="tab-button" id="export-profile-save-copy">Save as new</button><button type="button" class="tab-button" id="export-profile-remove">Remove profile</button>':'')+
+ '<button type="button" class="tab-button" id="export-profile-reload">Reload saved</button></div>'+(id?'<small>Updating this profile also updates future exports from destinations that use it.</small>':'');
+}
+
 async function exportDownloadProfile(){
  const current=nativeExportUI.draft;if(!current||!current.policy||nativeExportUI.busy)return;
  exportCapture();const d=JSON.parse(JSON.stringify(current)),button=$("export-profile-download");button.disabled=true;
@@ -218,7 +262,7 @@ function exportProfileEditor(d){
  if(d.profileLoading)return '<section class="export-profile-editor"><h2>Selection profile</h2><p class="secondary">Loading profile…</p></section>';
  const p=d.policy;
  const toolbar='<div class="register-heading"><h2>Selection profile</h2><button type="button" class="tab-button" data-export-preview '+(!p?'disabled':'')+'>Preview in new tab ↗</button></div>'+
- '<div class="export-profile-tools"><span id="export-profile-name" class="secondary">'+escapeHTML(d.profile_name||"Library settings")+'</span><button type="button" class="tab-button" id="export-profile-reset">Reset to library settings</button><button type="button" class="tab-button" id="export-profile-download" title="Download this profile as YAML for web or CLI export" '+(!p?'disabled':'')+'>Save profile</button><label class="tab-button export-profile-upload">Load YAML<input id="export-profile-upload" type="file" accept=".yaml,.yml"></label></div>';
+ '<div class="export-profile-tools"><span id="export-profile-name" class="secondary">'+escapeHTML(d.profile_name||"Library settings")+'</span><button type="button" class="tab-button" id="export-profile-reset">Reset to library settings</button><button type="button" class="tab-button" id="export-profile-download" title="Download this profile as YAML for web or CLI export" '+(!p?'disabled':'')+'>Download YAML</button><label class="tab-button export-profile-upload">Load YAML<input id="export-profile-upload" type="file" accept=".yaml,.yml"></label></div>';
  if(!p)return '<section class="export-profile-editor">'+toolbar+'<p class="secondary">Load or reset a profile to configure it here.</p></section>';
  const supported=nativeExportUI.profileOptions?.media_roles?.[d.target]||[],choices=[...supported,...Object.keys(p.selection.media).filter(id=>!supported.some(role=>role.id===id)).map(id=>({id,label:id+" (check frontend support)"}))];
  const select=(key,label,value,options)=>'<label>'+label+'<select data-profile-field="'+key+'">'+options.map(([id,text])=>'<option value="'+id+'" '+(value===id?'selected':'')+'>'+text+'</option>').join("")+'</select></label>';
@@ -228,7 +272,7 @@ function exportProfileEditor(d){
  const label=key=>key==="description"?"Description":(key.startsWith("fields.")?"Metadata · ":"Media · ")+key.split(".")[1].replaceAll("_"," ");
  const rule=exportProfileRule(d,d.ruleKey),selected=rule.sources||[],available=[...new Set([...selected,...(nativeExportUI.profileOptions?.available_sources||[])])];
  const sources=available.map(source=>{const index=selected.indexOf(source);return '<div class="export-policy-source"><label><input type="checkbox" data-profile-source="'+escapeAttr(source)+'" '+(index>=0?'checked':'')+'>'+escapeHTML(sourceLabel(source))+'</label>'+(index>=0?'<span><button type="button" class="tab-button" data-profile-move="'+escapeAttr(source)+'" data-step="-1" '+(!index?'disabled':'')+' aria-label="Move '+escapeAttr(sourceLabel(source))+' up">↑</button><button type="button" class="tab-button" data-profile-move="'+escapeAttr(source)+'" data-step="1" '+(index===selected.length-1?'disabled':'')+' aria-label="Move '+escapeAttr(sourceLabel(source))+' down">↓</button></span>':'')+'</div>';}).join("");
- return '<section class="export-profile-editor">'+toolbar+'<div class="export-inline">'+
+ return '<section class="export-profile-editor">'+toolbar+exportSavedProfileControls(d)+'<div class="export-inline">'+
  select("titles.mode","Game titles",p.titles.mode,[["regional","Regional title"],["release","Full release name"]])+
  input("selection.description.languages","Description languages · first preferred",p.selection.description.languages)+
  select("selection.description.scope","Description from",p.selection.description.scope,[["game","Whole game"],["release","Selected release"]])+
@@ -243,7 +287,7 @@ function exportProfileEditor(d){
 }
 function exportProfileRule(d,key){return key.split(".").reduce((obj,key)=>obj[key],d.policy.selection);}
 function exportPolicyChanged(){
- const d=nativeExportUI.draft;d.profile_mode="custom";d.profile_name="Custom profile";delete d.profileRaw;d.profile_yaml="";nativeExportUI.error="";if($("export-profile-name"))$("export-profile-name").textContent=d.profile_name;
+ const d=nativeExportUI.draft;d.editProfileID=d.editProfileID||d.profile_id||"";d.profile_id="";d.profile_mode="custom";d.profile_name="Unsaved changes";delete d.profileRaw;d.profile_yaml="";nativeExportUI.error="";if($("export-profile-name"))$("export-profile-name").textContent=d.profile_name;
 }
 async function exportResolvePolicy(d){
  if(d.profileRaw!==undefined)throw Error("Validate your YAML edits before continuing.");
@@ -253,6 +297,7 @@ async function exportEnsurePolicy(){
  const d=nativeExportUI.draft;if(!d||d.policy||d.profileLoading)return;
  d.profileLoading=true;exportRender();
  try{
+  if(d.profile_id){const saved=nativeExportUI.profiles.find(p=>p.id===d.profile_id);if(!saved)throw Error("Saved profile no longer exists. Choose another profile or reset to library settings.");if(saved.target!==d.target)throw Error("Saved profile uses a different frontend.");d.profile_yaml=saved.profile_yaml;d.profile_name=saved.name;d.savedProfileName=saved.name;d.editProfileID=saved.id;}
   const result=await exportResolvePolicy(d);
   if(nativeExportUI.draft!==d)return;
   exportInstallPolicy(d,result);
@@ -275,7 +320,7 @@ async function exportPreviewProfile(){
 }
 function exportProfilePending(){
  const pending=nativeExportUI.draft?.profileRaw!==undefined;
- document.querySelectorAll("[data-profile-field], [data-profile-media], [data-profile-source], [data-profile-move], #export-profile-copy-sources, #export-profile-artwork, #export-profile-download, #export-save-destination, #export-run-form button[type=submit], [data-export-preview]").forEach(el=>{if(pending){if(el.profileDisabled===undefined)el.profileDisabled=el.disabled;el.disabled=true;}else if(el.profileDisabled!==undefined){el.disabled=el.profileDisabled;delete el.profileDisabled;}});
+ document.querySelectorAll("[data-profile-field], [data-profile-media], [data-profile-source], [data-profile-move], #export-profile-copy-sources, #export-profile-artwork, #export-profile-download, #export-profile-save, #export-profile-save-copy, #export-save-destination, #export-run-form button[type=submit], [data-export-preview]").forEach(el=>{if(pending){if(el.profileDisabled===undefined)el.profileDisabled=el.disabled;el.disabled=true;}else if(el.profileDisabled!==undefined){el.disabled=el.profileDisabled;delete el.profileDisabled;}});
  if($("export-profile-pending"))$("export-profile-pending").hidden=!pending;
 }
 function exportBindProfile(){
@@ -283,8 +328,13 @@ function exportBindProfile(){
  exportProfilePending();
  $("export-profile-artwork")?.addEventListener("change",e=>exportChangeArtwork(e.target.value));
  $("export-profile-download")?.addEventListener("click",exportDownloadProfile);
+ $("export-saved-profile")?.addEventListener("change",e=>exportSelectSavedProfile(e.target.value));
+ $("export-profile-save")?.addEventListener("click",()=>exportSaveProfile());
+ $("export-profile-save-copy")?.addEventListener("click",()=>exportSaveProfile(true));
+ $("export-profile-remove")?.addEventListener("click",()=>exportSaveProfile(false,true));
+ $("export-profile-reload")?.addEventListener("click",async()=>{exportCapture();try{await exportLoadProfiles();nativeExportUI.error="";}catch(error){nativeExportUI.error=error.message;}exportRender();});
  $("export-profile-yaml-discard")?.addEventListener("click",()=>{delete d.profileRaw;d.rawOpen=false;nativeExportUI.error="";exportRender();});
- $("export-profile-reset")?.addEventListener("click",()=>{exportCapture();delete d.policy;delete d.profileRaw;d.profile_yaml="";d.profile_mode="defaults";d.profile_name="Library settings";nativeExportUI.error="";exportEnsurePolicy();});
+ $("export-profile-reset")?.addEventListener("click",()=>{exportCapture();d.profile_id="";d.editProfileID="";d.savedProfileName="";delete d.policy;delete d.profileRaw;d.profile_yaml="";d.profile_mode="defaults";d.profile_name="Library settings";nativeExportUI.error="";exportEnsurePolicy();});
  document.querySelectorAll("[data-profile-field]").forEach(el=>el.addEventListener(el.tagName==="SELECT"?"change":"input",()=>{
   const key=el.dataset.profileField,path=key.split("."),field=path.pop(),obj=path[0]==="rule"?exportProfileRule(d,d.ruleKey):path.reduce((obj,k)=>obj[k],d.policy);
   obj[field]=["languages","regions"].includes(field)?el.value.split(",").map(s=>s.trim()).filter(Boolean):el.value;
@@ -316,7 +366,7 @@ function exportBindProfile(){
  $("export-policy-yaml")?.addEventListener("input",e=>{d.profileRaw=e.target.value;exportProfilePending();});
  $("export-profile-yaml-apply")?.addEventListener("click",async()=>{
   const raw=d.profileRaw??$("export-policy-yaml").value;
-  try{const result=await catalogPost("/api/export/profile",{target:d.target,profile_yaml:raw});if(nativeExportUI.draft!==d||d.profileRaw!==undefined&&d.profileRaw!==raw)return;exportInstallPolicy(d,result);delete d.profileRaw;d.profile_mode="custom";d.profile_name="Custom profile";nativeExportUI.error="";exportRender();}
+  try{const result=await catalogPost("/api/export/profile",{target:d.target,profile_yaml:raw});if(nativeExportUI.draft!==d||d.profileRaw!==undefined&&d.profileRaw!==raw)return;exportInstallPolicy(d,result);delete d.profileRaw;d.editProfileID=d.editProfileID||d.profile_id||"";d.profile_id="";d.profile_mode="custom";d.profile_name="Unsaved changes";nativeExportUI.error="";exportRender();}
   catch(error){if(nativeExportUI.draft===d){nativeExportUI.error=error.message;exportRender();}}
  });
 }

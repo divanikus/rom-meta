@@ -129,7 +129,8 @@ removes LaunchBox-only roles from a custom draft. Default presets are unchanged.
 
 **Artwork** is available both in native export setup and the compact preview.
 Native setup offers Loaded profile priorities, Original images first and
-Reconstructed images first; Save profile downloads its validated current YAML.
+Reconstructed images first. Save profile keeps a named policy in this library;
+Download YAML downloads its validated current policy.
 The compact preview offers Auto, Originals first and Reconstructions first. Auto retains
 existing priorities. The other choices rank explicit filename artwork labels
 inside regional priority, before source and format, and fall back when that kind
@@ -628,6 +629,15 @@ resolved `profile` using the CLI policy validator. It neither scans ROMs nor wri
 files. `POST /api/export-preview` also accepts optional `profile_yaml`; when present,
 that exact policy replaces compact controls (only `settings.target` selects the
 frontend). This keeps the separate preview tab and native plan on the same policy.
+
+Saved profiles use `GET/POST /api/export/profiles` in editable mode. GET returns
+`revision` and `profiles`; POST accepts `revision`, a `profile` with `id`
+(empty for new), `name`, `target` and `profile_yaml`, and optional `delete`.
+Names are unique ignoring case. Validation, revision checks and the shared writer
+lock precede atomic storage in `config/export-profiles.yaml`. Profiles referenced
+by a saved destination cannot be deleted. Destination requests may use
+`profile_id`; older inline policies remain supported. Preparing an export freezes
+the resolved profile, so later saved changes cannot alter an accepted plan.
 
 ## Browser statistics reference
 

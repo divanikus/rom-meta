@@ -16,6 +16,7 @@ import (
 	"rommeta/internal/catalogfs"
 	"rommeta/internal/exporter"
 	"rommeta/internal/exportjob"
+	"rommeta/internal/exportsettings"
 	"rommeta/internal/frontend"
 	"rommeta/internal/taskprogress"
 )
@@ -96,6 +97,12 @@ func (s *server) exportPlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := input.Destination
+	if err := exportsettings.ResolveDestinationProfile(s.realRoot, &d); err != nil {
+		writeError(w, 400, err)
+		return
+	}
+	// Keep an immutable policy snapshot in this operation, independent of later saved edits.
+	d.ProfileID = ""
 	if d.Name == "" {
 		d.Name = "Export"
 	}
