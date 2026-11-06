@@ -116,7 +116,7 @@ func parallelFetchSupported(job Job) bool {
 }
 
 func runLaunchBox(options Options, progress taskprogress.Func) (launchbox.ImportResult, error) {
-	importOptions := launchbox.ImportOptions{DataRoot: options.DataRoot, Platform: options.Platform, PlatformRegistry: options.PlatformRegistry, Apply: options.Apply, ForceOverwrite: options.ForceOverwrite, Progress: progress}
+	importOptions := launchbox.ImportOptions{VerifyPlatform: true, DataRoot: options.DataRoot, Platform: options.Platform, PlatformRegistry: options.PlatformRegistry, Apply: options.Apply, ForceOverwrite: options.ForceOverwrite, Progress: progress}
 	downloadURL := ""
 	config, err := store.LoadSources(options.DataRoot)
 	if err != nil {
@@ -161,7 +161,7 @@ func runLaunchBox(options Options, progress taskprogress.Func) (launchbox.Import
 }
 
 func runOpenVGDB(input Options, progress taskprogress.Func) (openvgdb.ImportResult, error) {
-	options := openvgdb.ImportOptions{DataRoot: input.DataRoot, Platform: input.Platform, PlatformRegistry: input.PlatformRegistry, Apply: input.Apply, ForceOverwrite: input.ForceOverwrite, Progress: progress}
+	options := openvgdb.ImportOptions{VerifyPlatform: true, DataRoot: input.DataRoot, Platform: input.Platform, PlatformRegistry: input.PlatformRegistry, Apply: input.Apply, ForceOverwrite: input.ForceOverwrite, Progress: progress}
 	downloadURL := ""
 	needsSourceConfig := options.DBPath == "" || (options.Apply && downloadURL == "")
 	if needsSourceConfig {
@@ -235,7 +235,7 @@ func Run(job Job, o Options, config store.SourcesConfig, progress taskprogress.F
 	case job.Source == "openvgdb" && job.Type == "metadata":
 		return runOpenVGDB(o, progress)
 	case job.Source == "igdb" && job.Type == "metadata":
-		result, err := igdb.Import(igdb.ImportOptions{DataRoot: o.DataRoot, Platform: o.Platform, PlatformRegistry: o.PlatformRegistry, Apply: o.Apply, ForceOverwrite: o.ForceOverwrite, Limit: o.Limit, RefreshRelations: o.RefreshRelations, RefreshLinks: o.RefreshLinks, LinkReview: o.LinkReview,
+		result, err := igdb.Import(igdb.ImportOptions{VerifyPlatform: true, DataRoot: o.DataRoot, Platform: o.Platform, PlatformRegistry: o.PlatformRegistry, Apply: o.Apply, ForceOverwrite: o.ForceOverwrite, Limit: o.Limit, RefreshRelations: o.RefreshRelations, RefreshLinks: o.RefreshLinks, LinkReview: o.LinkReview,
 			Progress: func(p igdb.ImportProgress) {
 				metadataProgress(p.Stage, p.Current, p.Total, p.Queries, p.Matches, p.Game)
 			}})
@@ -244,7 +244,7 @@ func Run(job Job, o Options, config store.SourcesConfig, progress taskprogress.F
 		}
 		return result, err
 	case job.Source == "screenscraper" && job.Type == "metadata":
-		result, err := screenscraper.Import(screenscraper.ImportOptions{DataRoot: o.DataRoot, Platform: o.Platform, PlatformRegistry: o.PlatformRegistry, Apply: o.Apply, ForceOverwrite: o.ForceOverwrite, Limit: o.Limit,
+		result, err := screenscraper.Import(screenscraper.ImportOptions{VerifyPlatform: true, DataRoot: o.DataRoot, Platform: o.Platform, PlatformRegistry: o.PlatformRegistry, Apply: o.Apply, ForceOverwrite: o.ForceOverwrite, Limit: o.Limit,
 			Progress: func(p screenscraper.ImportProgress) {
 				metadataProgress(p.Stage, p.Current, p.Total, p.Queries, p.Matches, p.Game)
 			}})
@@ -274,9 +274,11 @@ func Run(job Job, o Options, config store.SourcesConfig, progress taskprogress.F
 		}
 		return result, err
 	case job.Source == "emumovies" && job.Type == "video":
-		return emumovies.FetchVideo(emumovies.VideoOptions{DataRoot: o.DataRoot, Platform: o.Platform, PlatformRegistry: o.PlatformRegistry, Apply: o.Apply, Limit: o.Limit, Concurrency: concurrency, PlanPath: o.PlanPath, PlanFormat: o.PlanFormat, Progress: progress})
+		result, err := emumovies.FetchVideo(emumovies.VideoOptions{DataRoot: o.DataRoot, Platform: o.Platform, PlatformRegistry: o.PlatformRegistry, Apply: o.Apply, Limit: o.Limit, Concurrency: concurrency, PlanPath: o.PlanPath, PlanFormat: o.PlanFormat, Progress: progress})
+		return result, missingMediaPlatform(o.Platform, result.SkippedPlatforms, err)
 	case job.Source == "emumovies" && job.Type == "artwork":
-		return emumovies.FetchArtwork(emumovies.ArtworkOptions{DataRoot: o.DataRoot, Platform: o.Platform, PlatformRegistry: o.PlatformRegistry, Apply: o.Apply, MediaTypes: o.MediaTypes, Limit: o.Limit, Concurrency: concurrency, PlanPath: o.PlanPath, PlanFormat: o.PlanFormat, Progress: progress})
+		result, err := emumovies.FetchArtwork(emumovies.ArtworkOptions{DataRoot: o.DataRoot, Platform: o.Platform, PlatformRegistry: o.PlatformRegistry, Apply: o.Apply, MediaTypes: o.MediaTypes, Limit: o.Limit, Concurrency: concurrency, PlanPath: o.PlanPath, PlanFormat: o.PlanFormat, Progress: progress})
+		return result, missingMediaPlatform(o.Platform, result.SkippedPlatforms, err)
 	default:
 		notes := map[string]string{"openvgdb": "OpenVGDB", "launchbox": "LaunchBox Games Database", "igdb": "IGDB", "screenscraper": "ScreenScraper"}
 		return sourceassets.Fetch(sourceassets.Options{DataRoot: o.DataRoot, Source: job.Source, Platform: o.Platform, PlatformRegistry: o.PlatformRegistry, Apply: o.Apply, Limit: o.Limit, Concurrency: concurrency, PlanPath: o.PlanPath, PlanFormat: o.PlanFormat, PolicyScope: "review", PolicyNote: "Imported from " + notes[job.Source] + " media URLs; verify rights before sharing.", Progress: progress})

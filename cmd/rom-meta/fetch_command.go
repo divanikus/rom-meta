@@ -250,6 +250,12 @@ func runFetchJobs(out io.Writer, jobs []fetchJob, options fetchOptions, config s
 			err = runner(job, scoped, config)
 		}
 		if err != nil {
+			var unresolved *platformnames.ResolutionError
+			if errors.As(err, &unresolved) {
+				fmt.Fprintf(out, "Result: skipped; %v\n", err)
+				skipped++
+				continue
+			}
 			if errors.Is(err, screenscraper.ErrDailyQuota) {
 				quotaExceeded[job.Source] = true
 			}

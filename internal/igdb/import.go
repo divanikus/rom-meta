@@ -31,6 +31,7 @@ import (
 
 // ImportOptions controls IGDB metadata enrichment.
 type ImportOptions struct {
+	VerifyPlatform   bool // Resolve provider identity before any game lookup or write.
 	DataRoot         string
 	Platform         string
 	PlatformRegistry *platformnames.Registry
@@ -270,6 +271,11 @@ func Import(options ImportOptions) (ImportResult, error) {
 	var token accessToken
 	var cache *queryCache
 	var sourcePlatforms []string
+	resolvedRegistry := platformnames.DefaultRegistry()
+	if options.PlatformRegistry != nil {
+		resolvedRegistry = options.PlatformRegistry.Clone()
+	}
+	verifiedPlatforms := map[string]bool{}
 	setupDone := false
 	setupApply := func() error {
 		if setupDone || !options.Apply {
@@ -347,7 +353,19 @@ func Import(options ImportOptions) (ImportResult, error) {
 			return err
 		}
 
-		match, queries, cached, ok, err := searchBestMatch(client, cache, limiter, settings, token, game, terms, sourcePlatforms, options.PlatformRegistry)
+		registry := options.PlatformRegistry
+		if options.VerifyPlatform {
+			if !verifiedPlatforms[game.Platform] {
+				resolved, err := platformnames.DiscoverForSource(game.Platform, platformnames.SourceIGDB, sourcePlatforms, registry)
+				if err != nil {
+					return err
+				}
+				resolvedRegistry = resolvedRegistry.WithSourceName(game.Platform, platformnames.SourceIGDB, resolved)
+				verifiedPlatforms[game.Platform] = true
+			}
+			registry = &resolvedRegistry
+		}
+		match, queries, cached, ok, err := searchBestMatch(client, cache, limiter, settings, token, game, terms, sourcePlatforms, registry)
 		result.QueriedSearchCount += queries
 		result.CachedSearchCount += cached
 		if err != nil {
@@ -700,13 +718,14 @@ func (cache *queryCache) close() {
 }
 
 func queryPlatformNamesCached(client *http.Client, cache *queryCache, limiter *rateLimiter, settings sourceSettings, token accessToken) ([]string, bool, error) {
-	key := cacheKey("platforms", settings.APIBaseURL, "")
+	key := cacheKey("platforms-paged", settings.APIBaseURL, "")
 	if cache != nil && !cache.bypass {
-		var responseJSON string
-		row := cache.db.QueryRow(`SELECT response_json FROM igdb_platform_cache WHERE cache_key = ?`, key)
-		if err := row.Scan(&responseJSON); err == nil {
+		var responseJSON, createdAt string
+		row := cache.db.QueryRow(`SELECT response_json, created_at FROM igdb_platform_cache WHERE cache_key = ?`, key)
+		if err := row.Scan(&responseJSON, &createdAt); err == nil {
 			var platforms []string
-			if err := json.Unmarshal([]byte(responseJSON), &platforms); err == nil {
+			fetchedAt, parseErr := time.Parse(time.RFC3339Nano, createdAt)
+			if err := json.Unmarshal([]byte(responseJSON), &platforms); err == nil && len(platforms) > 0 && parseErr == nil && time.Since(fetchedAt) >= 0 && time.Since(fetchedAt) < 7*24*time.Hour {
 				return platforms, true, nil
 			}
 		} else if err != sql.ErrNoRows {
@@ -824,8 +843,27 @@ func cacheKey(kind, apiBaseURL, value string) string {
 }
 
 func queryPlatformNames(client *http.Client, apiBaseURL, clientID string, token accessToken) ([]string, error) {
-	body := `fields name;
-limit 500;`
+	var names []string
+	for offset := 0; offset < 50000; offset += 500 {
+		platforms, err := queryPlatformPage(client, apiBaseURL, clientID, token, offset)
+		if err != nil {
+			return nil, err
+		}
+		names = append(names, namedList(platforms)...)
+		if len(platforms) < 500 {
+			if len(names) == 0 {
+				return nil, fmt.Errorf("IGDB platform list returned no platforms")
+			}
+			return names, nil
+		}
+		// Keep platform pagination within IGDB's normal request rate.
+		time.Sleep(250 * time.Millisecond)
+	}
+	return nil, fmt.Errorf("IGDB platform list exceeded the pagination limit")
+}
+
+func queryPlatformPage(client *http.Client, apiBaseURL, clientID string, token accessToken, offset int) ([]apiNamed, error) {
+	body := fmt.Sprintf("fields name; sort id asc; limit 500; offset %d;", offset)
 
 	request, err := http.NewRequest(http.MethodPost, strings.TrimRight(apiBaseURL, "/")+"/platforms", strings.NewReader(body))
 	if err != nil {
@@ -850,7 +888,7 @@ limit 500;`
 	if err := json.NewDecoder(response.Body).Decode(&platforms); err != nil {
 		return nil, fmt.Errorf("IGDB platform response could not be decoded: %w", err)
 	}
-	return namedList(platforms), nil
+	return platforms, nil
 }
 
 func queryGames(client *http.Client, apiBaseURL, clientID string, token accessToken, term string) ([]apiGame, error) {

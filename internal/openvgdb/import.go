@@ -28,6 +28,7 @@ import (
 
 // ImportOptions controls OpenVGDB snapshot enrichment.
 type ImportOptions struct {
+	VerifyPlatform   bool // Resolve provider identity before any game lookup or write.
 	DataRoot         string
 	DBPath           string
 	Platform         string
@@ -181,6 +182,8 @@ func Import(options ImportOptions) (ImportResult, error) {
 
 	var db *sql.DB
 	byPlatform := map[string]platformReleaseIndex{}
+	var sourcePlatforms []string
+	resolvedPlatforms := map[string]string{}
 	setupDone := false
 	setupDB := func() error {
 		if setupDone {
@@ -191,6 +194,12 @@ func Import(options ImportOptions) (ImportResult, error) {
 		db, err = sql.Open("sqlite", dbPath)
 		if err != nil {
 			return err
+		}
+		if options.VerifyPlatform {
+			sourcePlatforms, err = readPlatformNames(db)
+			if err != nil {
+				return err
+			}
 		}
 		setupDone = true
 		return nil
@@ -226,7 +235,22 @@ func Import(options ImportOptions) (ImportResult, error) {
 			current = result.GameFileCount + result.NotFoundGameCount + 1
 		}
 		progress.Update("matching", current, total, game.Platform+" / "+game.Folder)
-		platformMatches, err := openvgdbReleases(db, game.Platform, byPlatform, options.PlatformRegistry)
+		platform := game.Platform
+		registry := options.PlatformRegistry
+		if options.VerifyPlatform {
+			platform = resolvedPlatforms[game.Platform]
+			if platform == "" {
+				platform, err = platformnames.DiscoverForSource(game.Platform, platformnames.SourceOpenVGDB, sourcePlatforms, registry)
+				if err != nil {
+					return err
+				}
+				resolvedPlatforms[game.Platform] = platform
+			}
+			// The snapshot's exact spelling is used in SQL, independently of display aliases.
+			local := platformnames.NewRegistry().WithSourceName(platform, platformnames.SourceOpenVGDB, platform)
+			registry = &local
+		}
+		platformMatches, err := openvgdbReleases(db, platform, byPlatform, registry)
 		if err != nil {
 			return err
 		}

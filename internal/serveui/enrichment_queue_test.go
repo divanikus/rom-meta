@@ -131,10 +131,10 @@ func TestEnrichmentMultiPlatformAndConcurrency(t *testing.T) {
 	if err := s.beginEnrichment(op.ID, op.Revision); err != nil {
 		t.Fatal(err)
 	}
-	waitImport(t, s, op.ID, "incomplete")
+	waitImport(t, s, op.ID, "succeeded")
 	waitQueueIdle(t, s)
-	if len(calls) != 1 || <-calls != "segacd" {
-		t.Fatal("unavailable platform source was not skipped")
+	if len(calls) != 2 || <-calls != "segacd" || <-calls != "Other" {
+		t.Fatal("both platforms must reach the provider's dynamic check")
 	}
 	input.Concurrency = 33
 	w, _ = catalogCall(t, s, "/api/catalog/enrichment-plan", input)

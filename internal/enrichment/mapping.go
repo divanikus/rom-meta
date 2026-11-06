@@ -1,33 +1,15 @@
 package enrichment
 
-import (
-	"fmt"
-	"rommeta/internal/platformnames"
-	"rommeta/internal/store"
-	"strings"
-)
+import "rommeta/internal/store"
 
-func MappingReason(job Job, platform string, registry platformnames.Registry, config store.SourcesConfig) string {
-	configured := false
-	for i := range config.Sources {
-		if config.Sources[i].Name == job.Source {
-			configured = true
-			break
-		}
-	}
-	if !configured {
-		return "source is not configured in config/sources.yaml"
-	}
-	// Hasheous identifies ROMs by evidence, independently of platform mappings.
-	if job.Source == "hasheous" {
-		return ""
-	}
-	entry, known := registry.Entry(platform)
-	if known {
-		ref := entry.Sources[job.Source]
-		if strings.TrimSpace(ref.Name) != "" || len(ref.Names) > 0 || (job.Source == "screenscraper" && strings.TrimSpace(ref.ID) != "") {
+// ConfigurationReason is deliberately local and cheap. Platform support is
+// resolved from the provider list/snapshot by the job, with normal progress and
+// retry handling. Opening a wizard never downloads databases or blocks on APIs.
+func ConfigurationReason(job Job, config store.SourcesConfig) string {
+	for _, source := range config.Sources {
+		if source.Name == job.Source {
 			return ""
 		}
 	}
-	return fmt.Sprintf("no %s platform mapping for %q; add one in config/platforms.yaml or select --source explicitly", job.Source, platform)
+	return "source is not configured in config/sources.yaml"
 }

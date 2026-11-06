@@ -75,9 +75,10 @@ Without `--source`, configured applicable providers run metadata, artwork, then 
 
 Use `--type metadata`, `artwork` or `video` for staged passes; `--limit 10` applies
 per source/type/platform where supported. LaunchBox, ScreenScraper and EmuMovies
-need entries in `fetch.<type>`. IGDB/OpenVGDB lack dedicated mappings; Hasheous
-skips cards without ROM evidence. Skips print reasons without requests or new
-`not_found` results. See [automatic selection](fetch.md).
+need entries in `fetch.<type>`. Provider platform lists are checked when each
+task starts; a missing or ambiguous identity skips without game searches or new
+`not_found` results. Hasheous skips cards without ROM evidence.
+See [automatic selection](fetch.md).
 
 New config defaults to LaunchBox/OpenVGDB/Hasheous metadata, LaunchBox/OpenVGDB
 artwork and no video. Add ScreenScraper/EmuMovies after configuring accounts;

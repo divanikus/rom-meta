@@ -81,7 +81,7 @@ func automaticFetchPlatforms(options fetchOptions) ([]string, error) {
 }
 
 func automaticFetchMappingReason(job fetchJob, platform string, registry platformnames.Registry, config store.SourcesConfig) string {
-	return enrichment.MappingReason(job, platform, registry, config)
+	return enrichment.ConfigurationReason(job, config)
 }
 
 var errFetchEvidenceFound = errors.New("fetch lookup evidence found")

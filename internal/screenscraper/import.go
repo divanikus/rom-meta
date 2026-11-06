@@ -31,6 +31,7 @@ import (
 
 // ImportOptions controls ScreenScraper metadata enrichment.
 type ImportOptions struct {
+	VerifyPlatform   bool // Resolve provider identity before any game lookup or write.
 	DataRoot         string
 	Platform         string
 	PlatformRegistry *platformnames.Registry
@@ -223,6 +224,7 @@ func Import(options ImportOptions) (ImportResult, error) {
 	}
 
 	var systems []screenScraperSystem
+	resolvedSystems := map[string]string{}
 	pacer := newSearchPacer(settings.RateLimitPerSecond)
 	setupDone := false
 	setupApply := func() error {
@@ -294,6 +296,18 @@ func Import(options ImportOptions) (ImportResult, error) {
 		}
 
 		systemID, mapped := screenScraperSystemID(game.Platform, systems, options.PlatformRegistry)
+		if options.VerifyPlatform {
+			systemID = resolvedSystems[game.Platform]
+			if systemID == "" {
+				var err error
+				systemID, err = discoverSystemID(game.Platform, systems, options.PlatformRegistry)
+				if err != nil {
+					return err
+				}
+				resolvedSystems[game.Platform] = systemID
+			}
+			mapped = true
+		}
 		if !mapped {
 			result.SkippedUnmappedCount++
 			result.UnmappedPlatforms[game.Platform]++

@@ -227,15 +227,13 @@ func (r Registry) CandidatesForSource(name, source string) []string {
 			candidates = appendUniqueString(candidates, ref.Name)
 			candidates = appendUniqueStrings(candidates, ref.Names...)
 		}
-		for _, ref := range platform.Sources {
-			candidates = appendUniqueString(candidates, ref.Name)
-			candidates = appendUniqueStrings(candidates, ref.Names...)
-		}
+		candidates = appendUniqueStrings(candidates, discoveryCandidates(platform.Sources)...)
 		candidates = appendUniqueStrings(candidates, platform.Aliases...)
 	}
 	candidates = appendUniqueString(candidates, ForSource(canonical, source))
 	candidates = appendUniqueString(candidates, Display(canonical))
 	candidates = appendUniqueString(candidates, stripKnownPrefix(canonical))
+	candidates = appendUniqueString(candidates, datSystemName(canonical))
 	candidates = appendUniqueString(candidates, canonical)
 	candidates = appendUniqueString(candidates, name)
 	return candidates

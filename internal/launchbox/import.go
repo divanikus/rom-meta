@@ -35,6 +35,7 @@ import (
 
 // ImportOptions controls LaunchBox metadata snapshot enrichment.
 type ImportOptions struct {
+	VerifyPlatform   bool // Resolve provider identity before any game lookup or write.
 	DataRoot         string
 	ZipPath          string
 	Platform         string
@@ -208,6 +209,12 @@ func Import(options ImportOptions) (ImportResult, error) {
 		platforms := map[string]bool{}
 		for _, platform := range catalogPlatforms {
 			platformName := launchboxPlatformName(platform, sourcePlatforms, options.PlatformRegistry)
+			if options.VerifyPlatform {
+				platformName, err = platformnames.DiscoverForSource(platform, platformnames.SourceLaunchBox, sourcePlatforms, options.PlatformRegistry)
+				if err != nil {
+					return err
+				}
+			}
 			resolvedPlatforms[platform] = platformName
 			platforms[platformName] = true
 		}

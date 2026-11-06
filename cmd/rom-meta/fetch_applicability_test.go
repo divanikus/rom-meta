@@ -47,11 +47,11 @@ func TestAutomaticFetchScummVMSelectionAndNoWrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"launchbox/metadata", "screenscraper/metadata", "launchbox/artwork", "screenscraper/artwork", "emumovies/artwork", "emumovies/video"}
+	want := []string{"launchbox/metadata", "openvgdb/metadata", "igdb/metadata", "screenscraper/metadata", "launchbox/artwork", "igdb/artwork", "screenscraper/artwork", "emumovies/artwork", "emumovies/video"}
 	if !reflect.DeepEqual(ran, want) {
 		t.Fatalf("ran %v, want %v; output:\n%s", ran, want, out.String())
 	}
-	for _, reason := range []string{"no igdb platform mapping", "no openvgdb platform mapping", "no pending games with usable ROM hashes", "Result: skipped;"} {
+	for _, reason := range []string{"no pending games with usable ROM hashes", "Result: skipped;"} {
 		if !strings.Contains(out.String(), reason) {
 			t.Fatalf("missing reason %q:\n%s", reason, out.String())
 		}
@@ -91,7 +91,7 @@ func TestAutomaticFetchMixedPlatformsAndLocalMapping(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"igdb:Custom Platform", "igdb:Nintendo - Nintendo 64", "launchbox:Nintendo - Nintendo 64", "launchbox:ScummVM"}
+	want := []string{"igdb:Custom Platform", "igdb:Nintendo - Nintendo 64", "igdb:ScummVM", "launchbox:Custom Platform", "launchbox:Nintendo - Nintendo 64", "launchbox:ScummVM"}
 	if !reflect.DeepEqual(ran, want) {
 		t.Fatalf("ran %v, want %v", ran, want)
 	}
@@ -140,13 +140,12 @@ func TestAutomaticFetchAllSkippedAndExplicitOverride(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := runFetchJobs(&out, jobs, options, config, func(fetchJob, fetchOptions, store.SourcesConfig) error {
-		t.Fatal("all automatic sources should be skipped")
-		return nil
+	if err := runFetchJobs(&out, jobs, options, config, func(job fetchJob, _ fetchOptions, _ store.SourcesConfig) error {
+		return &platformnames.ResolutionError{Source: job.Source, Platform: "Unknown"}
 	}); err != nil {
 		t.Fatal(err)
 	}
-	for _, reason := range []string{"no igdb platform mapping", "no launchbox platform mapping", "source is not configured"} {
+	for _, reason := range []string{"No matching platform in igdb", "No matching platform in launchbox", "source is not configured"} {
 		if !strings.Contains(out.String(), reason) {
 			t.Fatalf("missing %q: %s", reason, out.String())
 		}
@@ -180,12 +179,12 @@ func TestAutomaticFetchEvidenceProbeFindsPendingHashes(t *testing.T) {
 	}
 }
 
-func TestFetchApplyWithOnlyInapplicableDefaults(t *testing.T) {
+func TestFetchApplyWithOnlyHashlessCards(t *testing.T) {
 	root := t.TempDir()
 	if _, err := store.Init(root, store.InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	writeFetchFixture(t, filepath.Join(root, "config", "sources.yaml"), "sources:\n  igdb:\n    enabled: true\n  openvgdb:\n    enabled: true\n  hasheous:\n    enabled: true\nfetch:\n  metadata:\n    - igdb\n    - openvgdb\n    - hasheous\n")
+	writeFetchFixture(t, filepath.Join(root, "config", "sources.yaml"), "sources:\n  igdb:\n    enabled: true\n  openvgdb:\n    enabled: true\n  hasheous:\n    enabled: true\nfetch:\n  metadata:\n    - hasheous\n")
 	path := filepath.Join(root, "platforms", "ScummVM", "Game", "game.yaml")
 	original := "title: Game\n"
 	writeFetchFixture(t, path, original)

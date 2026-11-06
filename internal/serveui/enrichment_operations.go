@@ -137,7 +137,7 @@ func (s *server) enrichmentChoices(platform string) (enrichmentOptions, store.So
 				continue
 			}
 			seen[name] = true
-			reason := enrichment.MappingReason(enrichment.Job{Source: name, Type: typ}, platform, registry, config)
+			reason := enrichment.ConfigurationReason(enrichment.Job{Source: name, Type: typ}, config)
 			for _, source := range config.Sources {
 				if source.Name != name {
 					continue
@@ -383,7 +383,10 @@ func (s *server) runEnrichment(op libraryOperation, config store.SourcesConfig, 
 			issues++
 			message = enrichmentText(config, err.Error())
 			var partial *fetchstate.PartialError
-			if errors.As(err, &partial) || errors.Is(err, screenscraper.ErrDailyQuota) {
+			var unresolved *platformnames.ResolutionError
+			if errors.As(err, &unresolved) {
+				status = "skipped"
+			} else if errors.As(err, &partial) || errors.Is(err, screenscraper.ErrDailyQuota) {
 				status = "incomplete"
 			} else {
 				status = "failed"

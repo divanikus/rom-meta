@@ -31,11 +31,24 @@ not added; legacy `enabled` does not control selection.
 & $RomMeta fetch --data-root $DataRoot --platform scummvm --apply
 ```
 
-Automatic selection requires a source mapping in the embedded registry or
-`config/platforms.yaml`; ScreenScraper can use its registered system ID. Display
-names and another provider's names are insufficient. Missing mappings print a
-skip before any provider call or `not_found` write. This means RomMeta lacks a
-mapping, not that the upstream source has no game.
+Platform support is checked automatically when each task starts, using IGDB and
+ScreenScraper platform lists, LaunchBox/OpenVGDB snapshots, or EmuMovies
+directories. Opening the web wizard and reviewing tasks does not contact providers.
+A missing built-in entry no longer disables a source. Existing metadata artwork
+uses its saved media URLs rather than requiring a new platform mapping.
+
+Matching accepts a unique normalized name or alias, including the DAT convention
+`Manufacturer - System`. Case, spacing and punctuation differences such as
+`Super Acan` / `Super A'Can` are accepted; hardware suffixes remain significant.
+Explicit source names/IDs in `config/platforms.yaml` take precedence. Ambiguous
+or absent identities skip the task with a mapping hint, without game searches
+or new `not_found` records. Network/authentication errors remain failures that
+can be retried; they do not mean the platform is unsupported.
+
+API platform lists use the existing provider caches (seven days). IGDB reads all
+pages, rather than treating the first page as the complete list. Snapshot sources
+use the downloaded database itself and its derived index. No discovered mappings
+are written into your configuration.
 
 Hasheous instead checks pending cards for valid whole-ROM hashes or MAME set
 identity plus matching component SHA1. Without evidence, cards are skipped without
@@ -49,8 +62,10 @@ platform task where supported. Credentials, rate limits and quotas still apply;
 missing credentials are errors.
 
 Applied searches with no accepted match save `not_found`; automatic skips preserve
-existing results. Explicit `--source` uses manual connector matching and bypasses
-automatic applicability skips.
+existing results. Explicit `--source` selects only those connectors; metadata
+fetches still verify provider identity before looking for games. API metadata
+dry runs report planned work without calling the provider; support is verified
+when the task is applied.
 
 ## Add a reviewed mapping
 
@@ -67,9 +82,10 @@ Add verified provider names/IDs in `<data-root>/config/platforms.yaml`:
 Replace illustrative values with actual source identities. Overrides merge into
 the embedded registry; the source must still appear in `fetch.<type>`.
 
-ScummVM maps LaunchBox, ScreenScraper (123) and EmuMovies. IGDB/OpenVGDB lack a
-dedicated mapping; list-created cards normally lack Hasheous evidence. See the
-[ScummVM workflow](scummvm.md) and `rom-meta fetch --help`.
+ScummVM has aliases for LaunchBox, ScreenScraper (123) and EmuMovies. Other
+sources are checked against their current platform lists; list-created cards
+normally lack Hasheous evidence. See the [ScummVM workflow](scummvm.md) and
+`rom-meta fetch --help`.
 
 ## Reviewed identity-only IGDB links
 

@@ -75,7 +75,10 @@ and lets you adjust it before choosing sources, data types and parallel workers.
 
 1. Select sources and data types: metadata, artwork and video. Defaults come from
    the library's acquisition settings. Unavailable choices explain missing
-   credentials or platform mappings; configure those in Settings/source setup.
+   configuration or credentials. Platform support is checked automatically
+   against the source's list when its task starts; a missing built-in mapping
+   does not disable it. Unresolved identities skip without changing cards;
+   explicit names/IDs in Settings → Platform mappings can resolve them.
 2. **Review tasks** prepares the selected jobs without contacting providers.
    Review the platform and source/type list, then choose **Start fetching**.
    While another operation is active or queued, this button becomes **Enqueue**;
