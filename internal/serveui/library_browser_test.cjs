@@ -613,3 +613,22 @@ test('review polling picks up committed bindings after planning at the same revi
  const b=browser();b.run('const job={id:"j",revision:2,state:"planning",export:{totals:{issues:[]}}};exportIssues(job);job.state="ready";job.export.bindings=[{id:"input",game:"platforms/n64/Chosen",game_revision:"digest"}];exportIssues(job)');
  assert.equal(b.run('exportIssueDraft(job).bindings.size'),1);assert.equal(b.run('exportReviewDirty(job)'),false);
 });
+
+test('finished operation close buttons dismiss the selected result through the shared action',async()=>{
+ for(const kind of ['dat-import','enrichment','export']){
+  for(const state of ['succeeded','incomplete','failed','ready','planning','importing','enriching','exporting','queued']){
+   const b=browser();b.context.fixture={id:'chosen',revision:7,kind,state,filename:'Example.dat',platform:'Console',summary:{platform:'Console'},enrichment:{jobs:[],platforms:['Console']},export:{destination:{name:'Example'},written:0}};
+   const html=b.run('operationDetail(fixture)'),finished=['succeeded','incomplete','failed'].includes(state);
+   assert.equal(html.includes('aria-label="Dismiss result from Operations"'),finished,kind+' '+state);
+   if(finished)assert.match(html,/Saved files stay in place/);
+  }
+ }
+ for(const index of [0,1]){
+  const b=browser(),buttons=[b.element('close-result'),b.element('dismiss-result')];
+  b.element('operations-pane').querySelectorAll=selector=>selector==='[data-import-dismiss]'?buttons:[];
+  b.run('libraryUI.jobs=[{id:"chosen",revision:7,kind:"export",state:"succeeded",export:{destination:{name:"Example"}}}];libraryUI.selected="chosen";catalogPost=async(path,body)=>{request={path,body};return {dismissed:true}};libraryRenderOperations()');
+  await buttons[index].listeners.click();
+  assert.deepEqual(JSON.parse(b.run('JSON.stringify(request)')),{path:'/api/operations/dismiss',body:{id:'chosen',revision:7}});
+  assert.equal(b.run('libraryUI.jobs.length'),0);
+ }
+});

@@ -41,6 +41,15 @@ function operationStatus(state,label){
  const tone=({succeeded:"success",running:"active",planning:"active",importing:"active",enriching:"active",exporting:"active",queued:"queued",ready:"ready",incomplete:"warning",needs_review:"warning",needs_selection:"warning",failed:"error"})[state]||"muted";
  return '<span class="operation-status status-'+tone+'">'+escapeHTML(label)+'</span>';
 }
+function operationFinished(job){return ["succeeded","incomplete","failed"].includes(job.state);}
+function operationDismiss(job,label="Dismiss",corner=false){
+ const finished=operationFinished(job);
+ if(corner&&!finished)return "";
+ const hint="Remove this result from Operations. Saved files stay in place.";
+ const classes=corner?"tab-button operation-dismiss-close":finished?"tab-button operation-dismiss-result"+(job.state==="succeeded"?" completed":""):"tab-button";
+ return '<button type="button" class="'+classes+'" data-import-dismiss="'+escapeAttr(job.id)+'"'+(finished?' title="'+hint+'"':"")+(corner?' aria-label="Dismiss result from Operations"':"")+'>'+(corner?'<span aria-hidden="true">×</span>':escapeHTML(finished?"Dismiss result":label))+'</button>';
+}
+function operationDismissHint(job){return operationFinished(job)?'<span class="secondary operation-dismiss-hint">Dismiss removes this result from Operations. Saved files stay in place.</span>':"";}
 function operationBytes(value){
  const n=Math.max(0,Number(value)||0),units=["B","KiB","MiB","GiB","TiB"];
  const i=n>0?Math.min(4,Math.floor(Math.log(n)/Math.log(1024))):0;
@@ -113,7 +122,7 @@ function operationDetail(job){
  if(job.kind==="export")return nativeExportDetail(job);
  if(job.kind==="enrichment")return enrichmentDetail(job);
  const busy=operationBusy(job),done=job.state==="succeeded",p=job.progress||{},draft=libraryUI.drafts.get(job.id)||{},selected=draft.member??job.member??"";
- return '<article class="operation-detail"><div class="operation-eyebrow">DAT IMPORT · '+operationStatus(job.state,operationLabels[job.state]||job.state)+'</div><h2>'+escapeHTML(job.filename)+'</h2>'+
+ return '<article class="operation-detail">'+operationDismiss(job,"",true)+'<div class="operation-eyebrow">DAT IMPORT · '+operationStatus(job.state,operationLabels[job.state]||job.state)+'</div><h2>'+escapeHTML(job.filename)+'</h2>'+
  (job.member?'<p class="secondary">'+escapeHTML(job.member)+'</p>':"")+
  (busy?'<div class="operation-progress" role="status"><strong>'+escapeHTML(importStages[p.Stage]||p.Stage||"Preparing")+'</strong><span>'+escapeHTML(p.Item||"")+'</span>'+operationProgressMeter(p.Current,p.Total,importProgressUnit(p.Stage))+'<p>You can close your browser. This operation continues on the server.</p></div>':"")+
  (job.error?'<p class="operation-error" role="alert">'+escapeHTML(job.error)+'</p>':"")+
@@ -124,7 +133,7 @@ function operationDetail(job){
  '<label>Platform name <span class="secondary">(leave empty to detect)</span><input id="dat-platform" name="platform" maxlength="150" value="'+escapeAttr(draft.platform??job.platform??"")+'" placeholder="'+escapeAttr(job.summary?.platform||"Detected from the DAT")+'"></label><button class="tab-button" type="submit">'+(job.state==="failed"?"Retry — prepare plan":"Prepare plan")+'</button></details></form>':"")+
  '<div class="operation-actions">'+(job.state==="ready"?'<button class="catalog-primary" data-import-apply="'+job.id+'">Import into library</button><span class="secondary" id="dat-apply-hint">The plan has not changed your cards.</span>':"")+
  (done?'<button class="catalog-primary" data-import-open="'+job.id+'">Open '+escapeHTML(job.summary?.platform||"platform")+'</button><span class="secondary">Saved to your library.</span>':"")+
- (!busy?'<button class="tab-button" data-import-dismiss="'+job.id+'">'+(done?"Dismiss result":"Discard upload")+'</button>':"")+'</div></article>';
+ (!busy?operationDismiss(job,"Discard upload"):"")+operationDismissHint(job)+'</div></article>';
 }
 function libraryJobMenu(open=false){
  if(!catalogUI.enabled)return state.platforms?.length?'<button class="tab-button" data-new-job="preview">Preview export</button>':"";

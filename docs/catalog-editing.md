@@ -57,6 +57,13 @@ during the file upload itself. Accepted Apply retries are idempotent. Only one
 catalog writer runs at a time, including CLI edits; changed catalog/configuration
 requires a fresh plan.
 
+Finished imports, metadata fetches and exports offer **Dismiss result** and a
+matching **×** in the upper-right corner of the result card. Successful results
+highlight the bottom button in green. Both controls remove only the operation
+from the list; saved cards, downloaded media and exported files stay in place.
+Failed or incomplete results retain their retry actions. Running tasks have no
+close button; **Remove from queue** remains a separate action.
+
 Operations are scoped to this running server, shared by its authorized clients.
 There is no account-specific history or restart/reboot recovery. Inactive records
 expire after 24 hours or dismissal. Uploads are limited to 256 MiB, XML members
