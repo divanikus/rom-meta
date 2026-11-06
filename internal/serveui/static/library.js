@@ -121,7 +121,7 @@ function libraryUpdateApply(job){
 function operationDetail(job){
  if(job.kind==="export")return nativeExportDetail(job);
  if(job.kind==="enrichment")return enrichmentDetail(job);
- const busy=operationBusy(job),done=job.state==="succeeded",p=job.progress||{},draft=libraryUI.drafts.get(job.id)||{},selected=draft.member??job.member??"";
+ const busy=operationBusy(job),done=job.state==="succeeded",platform=job.summary?.platform||job.platform,canFetch=done&&catalogUI.enabled&&!!platform,p=job.progress||{},draft=libraryUI.drafts.get(job.id)||{},selected=draft.member??job.member??"";
  return '<article class="operation-detail">'+operationDismiss(job,"",true)+'<div class="operation-eyebrow">DAT IMPORT · '+operationStatus(job.state,operationLabels[job.state]||job.state)+'</div><h2>'+escapeHTML(job.filename)+'</h2>'+
  (job.member?'<p class="secondary">'+escapeHTML(job.member)+'</p>':"")+
  (busy?'<div class="operation-progress" role="status"><strong>'+escapeHTML(importStages[p.Stage]||p.Stage||"Preparing")+'</strong><span>'+escapeHTML(p.Item||"")+'</span>'+operationProgressMeter(p.Current,p.Total,importProgressUnit(p.Stage))+'<p>You can close your browser. This operation continues on the server.</p></div>':"")+
@@ -131,8 +131,9 @@ function operationDetail(job){
  (!busy&&!done?'<form id="dat-plan-form" data-operation="'+escapeAttr(job.id)+'"><details '+(!job.summary||job.state==="failed"?'open':'')+'><summary>'+(job.summary?'Change import options':'Import options')+'</summary>'+
  (job.members?.length?'<label>DAT in ZIP<select name="member" id="dat-member">'+(job.members.length>1&&!selected?'<option value="">Choose a DAT…</option>':"")+job.members.map(m=>'<option value="'+escapeAttr(m)+'" '+(m===selected?"selected":"")+'>'+escapeHTML(m)+'</option>').join("")+'</select></label>':"")+
  '<label>Platform name <span class="secondary">(leave empty to detect)</span><input id="dat-platform" name="platform" maxlength="150" value="'+escapeAttr(draft.platform??job.platform??"")+'" placeholder="'+escapeAttr(job.summary?.platform||"Detected from the DAT")+'"></label><button class="tab-button" type="submit">'+(job.state==="failed"?"Retry — prepare plan":"Prepare plan")+'</button></details></form>':"")+
- '<div class="operation-actions">'+(job.state==="ready"?'<button class="catalog-primary" data-import-apply="'+job.id+'">Import into library</button><span class="secondary" id="dat-apply-hint">The plan has not changed your cards.</span>':"")+
- (done?'<button class="catalog-primary" data-import-open="'+job.id+'">Open '+escapeHTML(job.summary?.platform||"platform")+'</button><span class="secondary">Saved to your library.</span>':"")+
+ (canFetch?'<p><strong>Next step:</strong> add descriptions, artwork and other metadata. Choose your sources in the next screen.</p>':"")+
+ '<div class="operation-actions">'+(canFetch?'<button class="catalog-primary" data-import-fetch="'+escapeAttr(job.id)+'">Fetch metadata</button>':"")+(job.state==="ready"?'<button class="catalog-primary" data-import-apply="'+job.id+'">Import into library</button><span class="secondary" id="dat-apply-hint">The plan has not changed your cards.</span>':"")+
+ (done?'<button class="tab-button" data-import-open="'+job.id+'">Open '+escapeHTML(job.summary?.platform||"platform")+'</button><span class="secondary">Saved to your library.</span>':"")+
  (!busy?operationDismiss(job,"Discard upload"):"")+operationDismissHint(job)+'</div></article>';
 }
 function libraryJobMenu(open=false){
@@ -176,12 +177,18 @@ function libraryRenderOperations(force=false){
  });
  pane.querySelectorAll("[data-import-apply]").forEach(b=>b.addEventListener("click",()=>libraryImportAction("/api/catalog/import-apply",{id:selected.id,revision:selected.revision})));
  pane.querySelectorAll("[data-import-dismiss]").forEach(b=>b.addEventListener("click",async()=>{await libraryImportAction("/api/operations/dismiss",{id:selected.id,revision:selected.revision});}));
+ pane.querySelectorAll("[data-import-fetch]").forEach(b=>b.addEventListener("click",()=>libraryFetchImported(selected)));
  pane.querySelectorAll("[data-import-open]").forEach(b=>b.addEventListener("click",async()=>{
   await libraryOpenCompleted(selected);
  }));
  if(typeof enrichmentBind==="function")enrichmentBind(selected);
  if(typeof nativeExportBindOperation==="function")nativeExportBindOperation(selected);
  librarySyncNavigation();
+}
+function libraryFetchImported(job){
+ const platform=job?.summary?.platform||job?.platform;
+ if(job?.kind!=="dat-import"||job.state!=="succeeded"||!catalogUI.enabled||!platform)return;
+ return enrichmentOpen([platform]);
 }
 async function libraryOpenCompleted(job){
  libraryNavigate("library");await selectPlatform(job.platform||job.summary?.platform);

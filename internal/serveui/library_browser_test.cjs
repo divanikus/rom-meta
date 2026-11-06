@@ -632,3 +632,22 @@ test('finished operation close buttons dismiss the selected result through the s
   assert.equal(b.run('libraryUI.jobs.length'),0);
  }
 });
+
+test('completed import offers Fetch metadata for its resolved platform without starting a job',async()=>{
+ const b=browser(),button=b.element('fetch-imported');
+ b.element('operations-pane').querySelectorAll=selector=>selector==='[data-import-fetch]'?[button]:[];
+ b.context.fetchJSON=async path=>{b.calls.push(['GET',path]);return path==='/api/operations'?b.run('libraryUI.jobs'):path==='/api/platforms'?b.run('state.platforms'):{revision:'settings',choices:[{source:'launchbox',type:'metadata',available:true,default:true}]}};
+ b.run('state.platform="Other";state.platforms=[{platform:"Imported console"},{platform:"Other"}];libraryUI.jobs=[{id:"done",kind:"dat-import",state:"succeeded",revision:2,filename:"example.dat",platform:"Original input",summary:{platform:"Imported console"}}];libraryUI.selected="done";libraryRenderOperations()');
+ assert.match(b.element('operations-pane').innerHTML,/Next step:/);assert.match(b.element('operations-pane').innerHTML,/data-import-fetch="done"/);
+ await button.listeners.click();
+ assert.equal(b.run('state.view'),'operations');
+ assert.deepEqual(JSON.parse(b.run('JSON.stringify(enrichmentUI.draft.platforms)')),['Imported console']);
+ assert.equal(b.run('enrichmentUI.draft.selected.has("launchbox:metadata")'),true);
+ assert.equal(b.calls.filter(x=>x[0]==='POST').length,0);
+ for(const status of ['ready','planning','importing','failed']){
+  b.run('libraryUI.jobs[0].state='+JSON.stringify(status));
+  assert.doesNotMatch(b.run('operationDetail(libraryUI.jobs[0])'),/data-import-fetch/);
+ }
+ b.run('libraryUI.jobs[0].state="succeeded";catalogUI.enabled=false');
+ assert.doesNotMatch(b.run('operationDetail(libraryUI.jobs[0])'),/data-import-fetch/);
+});

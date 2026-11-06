@@ -42,8 +42,11 @@ chooses a neutral dark or light palette, remembered by this browser.
    ZIP, choose the member. The optional platform name overrides detection.
 3. Review the prepared platform, card/release/fingerprint counts and sample
    releases. **Prepare plan** refreshes the preview after changing options.
-4. **Import into library** applies the reviewed plan. **Open platform** takes you
-   to the saved cards, dismisses the completed import receipt, and refreshes counts.
+4. **Import into library** applies the reviewed plan. The completed result offers
+   **Fetch metadata** as the next step: it opens source selection with the imported
+   platform already checked. Choose sources and review/start the new job there;
+   opening the wizard starts no downloads. **Open platform** takes you to the
+   saved cards, dismisses the completed import receipt, and refreshes counts.
 
 No-Intro, Redump and compatible Logiqx XML use the ordinary CLI importer, including
 library region/alias policy and preservation of existing metadata. No ROMs are
