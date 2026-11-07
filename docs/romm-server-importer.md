@@ -1,5 +1,8 @@
 # RomM server importer
 
+**Highly experimental:** RomM export has known issues. Results may be incomplete
+or incorrect.
+
 The version-specific server integration lives in
 [examples/romm-importer](../examples/romm-importer/README.md), together with Docker/
 Compose files and synthetic tests. That README owns setup, permissions, runtime

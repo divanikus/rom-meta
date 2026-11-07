@@ -1,6 +1,9 @@
 # RomM integration
 
-The supported experimental path is the separate
+**RomM export is highly experimental and has known issues.** Results may be
+incomplete or incorrect.
+
+The integration uses the separate
 [server importer example](../examples/romm-importer/README.md), with its own pinned
 RomM runtime, setup and tests. Follow the [operator guide](romm-import-guide.md).
 It enriches games already scanned in RomM from the independent RomMeta API.

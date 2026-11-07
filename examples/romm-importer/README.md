@@ -1,5 +1,8 @@
 # RomM server importer example
 
+**Highly experimental:** RomM export has known issues. Results may be incomplete
+or incorrect.
+
 A separate one-shot Python consumer of the RomMeta HTTP API. It enriches games
 already scanned in **RomM 5.4.1** using native handlers/models, DB/Redis and Resources.
 It does not patch the installed application, scan ROMs, fetch providers or move ROM

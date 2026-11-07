@@ -46,7 +46,7 @@ See [source setup](docs/source-setup.md) for accounts/credentials and
 | --- | --- | --- |
 | ES-DE | Built-in [export --target es-de](docs/frontend-export.md), local or over API | Direct creation/enrichment of gamelists and media; optional portable package |
 | LaunchBox | Built-in [export --target launchbox](docs/launchbox-export.md), local or over API | Direct creation/enrichment of cards, versions and media; optional portable package |
-| RomM | Separate [server importer example](examples/romm-importer/README.md) | Metadata and media for already-scanned games in the pinned RomM runtime |
+| RomM (**highly experimental**) | Separate [server importer example](examples/romm-importer/README.md) | Metadata and media for already-scanned games in the pinned RomM runtime |
 
 Catalog platforms use [generic ROM-set export](docs/romset-export.md), including
 new headers without code registration. IBM PC and ScummVM remain explicit export
@@ -213,8 +213,9 @@ and [input formats](docs/export-scenarios.md).
 
 **RomM:** the [server importer example](examples/romm-importer/README.md) fills
 already-scanned games through native RomM 5.4.1 handlers and Resources. It requires
-administrator setup and is version-specific and experimental; it remains a
-separate server-side integration.
+administrator setup and remains a separate, version-specific server-side
+integration. **RomM export is highly experimental and has known issues.**
+Results may be incomplete or incorrect.
 
 ## Boundaries
 

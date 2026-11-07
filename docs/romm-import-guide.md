@@ -1,5 +1,8 @@
 # Import offline metadata into RomM
 
+**Highly experimental:** RomM export has known issues. Results may be incomplete
+or incorrect.
+
 Use the prepared RomM 5.4.1 importer environment. An administrator configures
 native DB, library, Resources and catalog API access once; see
 [setup](romm-server-importer.md).
