@@ -9,7 +9,7 @@ Prepared [translations and hacks](docs/catalog-variants.md) can inherit metadata
 from their original game, with an optional exact release, while retaining their
 own fingerprints.
 
-![RomMeta library with an example game card](docs/images/0.4.0-library.jpg)
+![RomMeta web browser showing a game card with cover artwork, metadata and alternate titles](docs/images/catalog-game-card.png)
 
 **0.4.0 is pre-stable.** Command names and catalog formats may change before 1.0.
 RomMeta includes no ROMs, BIOS, provider database or downloaded artwork.
@@ -114,17 +114,60 @@ rom-meta init "/path/to/catalog"
 rom-meta serve --data-root "/path/to/catalog" --edit
 ```
 
-Open http://127.0.0.1:8787. Import a DAT with **+** beside Platforms, select one
-or several platforms to **Fetch metadata**, review **Merge** candidates, and edit
-cards in place. **Operations → Add job → Export** lets you choose ROMs, save a
-profile and destination, inspect a plan, and apply it on the server machine.
+Open http://127.0.0.1:8787. Omit `--edit` for a read-only catalog browser.
 Settings holds source priorities and library configuration; API and API docs are
-available in the header. Omit `--edit` for a read-only catalog browser.
+available in the header. The examples below use original demonstration data.
 
-Jobs continue after you close the browser. Reopen **Operations** to see their
-progress or retry failed stages. Operation history belongs to the running server;
-restarting it clears the list. Named export profiles and destinations are saved
-in the library and can also be used from the CLI.
+### Import a DAT
+
+Use **+** beside Platforms to upload a DAT or ZIP. Review the platform, game,
+release and fingerprint counts before importing. The completed job offers
+**Open platform** and **Fetch metadata** as the next steps.
+
+![DAT import plan with game, release and fingerprint counts](docs/images/0.4.0-import.jpg)
+
+### Fetch metadata for several platforms
+
+Select platforms, choose **Fetch metadata**, then pick providers, data types and
+parallel workers. Jobs run or join the queue. Close the browser and return to
+**Operations** to follow progress or retry failed stages; the server must stay
+running. Restarting it clears the operation history.
+
+![Metadata source selection for two platforms](docs/images/0.4.0-fetch.jpg)
+
+### Review duplicates together
+
+**Merge** prepares ready groups and separates decisions from conflicts. Compare
+cards with the proposed result, choose **Agree & next** or **Keep separate**, then
+apply the collected decisions together. The progress bar tracks your review;
+retaining a backup is optional and off by default.
+
+![Merge comparison with the proposed result and review progress](docs/images/0.4.0-merge.jpg)
+
+### Edit cards in place
+
+**Edit card** opens fields where their values were displayed. Edit a source record
+or keep your own named variants for export priorities. Releases contain their
+linked fingerprints; Raw edits are validated before saving. **Done** saves and
+finishes, while **Discard** abandons the draft.
+
+![In-place source editing with Done and Discard](docs/images/0.4.0-edit.jpg)
+
+### Prepare and review an export
+
+Choose **Operations → Add job → Export**, select ROMs and an ES-DE or LaunchBox
+destination, then configure the profile in the same form. Save profiles and
+destinations by name for reuse in the browser or CLI. **Preview in new tab** keeps
+the export setup open.
+
+![Export profile with language, title and artwork preferences](docs/images/0.4.0-profile.jpg)
+
+The plan shows destination changes and ROMs needing attention. Confirm name
+suggestions in bulk, choose another game, or uncheck inputs. Review also works
+when no games were recognized. **Update export plan** recalculates your choices;
+**Apply export** writes the reviewed result on the machine running `serve`.
+
+![Uncertain ROMs with suggested matches and inclusion checkboxes](docs/images/0.4.0-export-review.jpg)
 
 Follow the [illustrated web walkthrough](docs/web-walkthrough.md) or the detailed
 [library management guide](docs/catalog-editing.md). The [CLI workflow](docs/cli-workflow.md)
