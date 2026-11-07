@@ -12,7 +12,7 @@ function browser(){
   fetchJSON:async path=>{calls.push(['GET',path]);return []},catalogPost:async(path,body)=>{calls.push(['POST',path,JSON.parse(JSON.stringify(body))]);return {id:body.id,revision:body.revision,state:'importing',filename:'example.dat'}},
   platformMenuClose(){},renderPlatforms(){},sourceLabel:s=>s,setView:view=>{context.state.view=view},setExportMode:on=>{context.state.exportMode=on},catalogLeaveInline:()=>true,
   setTimeout:(fn,ms)=>{timers.push(ms);pendingTimers.set(timers.length,fn);return timers.length},clearTimeout:id=>pendingTimers.delete(id),selectPlatform:async()=>{}});
- vm.runInContext(readFileSync(require('node:path').join(__dirname,'static/export.js'),'utf8'),context);vm.runInContext(script,context);vm.runInContext(readFileSync(require('node:path').join(__dirname,'static/enrichment.js'),'utf8'),context);return {run:c=>vm.runInContext(c,context),element,calls,timers,context,runTimers(){const batch=[...pendingTimers.values()];pendingTimers.clear();for(const fn of batch)fn();}};
+ vm.runInContext(['export.js','export-review.js','export-profile.js'].map(name=>readFileSync(require('node:path').join(__dirname,'static',name),'utf8')).join(''),context);vm.runInContext(script,context);vm.runInContext(readFileSync(require('node:path').join(__dirname,'static/enrichment.js'),'utf8'),context);return {run:c=>vm.runInContext(c,context),element,calls,timers,context,runTimers(){const batch=[...pendingTimers.values()];pendingTimers.clear();for(const fn of batch)fn();}};
 }
 test('reconnection only reads server operations and finds the running job',async()=>{
  const b=browser();b.run('fetchJSON=async()=>[{id:"same-job",state:"importing",filename:"games.dat",progress:{Stage:"writing",Current:4,Total:9}}]');

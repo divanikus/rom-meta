@@ -28,8 +28,8 @@ function browser(fetch, withEditor = false) {
   if (withEditor) {
     context.MutationObserver = class { observe() {} };
     context.window = {confirm: () => true};
-    for (const name of ['catalog-register.js','catalog-edit.js']) {
-      vm.runInContext(readFileSync(require('node:path').join(__dirname,'static',name),'utf8').replace(/catalogCapabilities\(\);\s*$/, ''),context);
+    for (const names of [['catalog-register.js'],['catalog-fold.js','catalog-edit.js']]) {
+      vm.runInContext(names.map(name=>readFileSync(require('node:path').join(__dirname,'static',name),'utf8')).join('').replace(/catalogCapabilities\(\);\s*$/, ''),context);
     }
   }
   return {context, element, run: (code) => vm.runInContext(code, context)};

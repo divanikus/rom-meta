@@ -58,3 +58,13 @@ It does not create a Git tag, upload artifacts or deploy services. Test extracte
 archives and verify embedded version/checksums before publishing. Public file
 selection is explicit in `packaging/public-files.json`; the preparation helper
 copies selected tracked files without `.git` into a new directory.
+
+## Web UI source layout
+
+`internal/serveui/operations.go` owns the shared operation registry and lifecycle;
+import, fetch and export handlers own their workflow-specific execution.
+`assets.go` embeds and serves the browser assets. Merge and card editing have
+separate source files, as do export setup, match review and profile editing. They
+are concatenated into the existing `/catalog-edit.js` and `/export.js` responses
+in a fixed order; there is no extra frontend build step. Browser tests load the
+same bundles, and HTTP tests cover their routes and initialization order.

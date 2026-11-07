@@ -220,6 +220,20 @@ func summarizeExport(job *exportjob.Job) *exportTotals {
 	totals.Changes = append(totals.Changes, n.Changes[:limit]...)
 	return totals
 }
+
+// setExportPlan publishes a fully validated plan while operationsMu is held.
+// Initial scans and reviewed choices share totals/state; their guards are checked
+// by the caller before replacing the current plan.
+func (op *libraryOperation) setExportPlan(job *exportjob.Job, documents map[string]string) {
+	op.exportJob = job
+	op.exportDocuments = documents
+	op.Export.Totals = summarizeExport(job)
+	op.State = "ready"
+	if len(job.Native.Conflicts) > 0 {
+		op.State = "needs_review"
+	}
+}
+
 func (s *server) runExportPlan(op libraryOperation) {
 	d := op.Export.Destination
 	options := exporter.Options{Context: context.Background(), DataRoot: s.root, ROMRoot: d.ROMRoot, Platform: d.Platform, Target: d.Target, ProfileContent: d.ProfileYAML, Progress: s.exportProgress(op.ID, false)}
@@ -246,14 +260,8 @@ func (s *server) runExportPlan(op libraryOperation) {
 			current.Error = err.Error()
 			return
 		}
-		current.exportJob = job
 		current.exportReviewJob = job
-		current.exportDocuments = documents
-		current.Export.Totals = summarizeExport(job)
-		current.State = "ready"
-		if len(job.Native.Conflicts) > 0 {
-			current.State = "needs_review"
-		}
+		current.setExportPlan(job, documents)
 		current.Export.Progress = taskprogress.Snapshot{Stage: "planned"}
 	})
 }

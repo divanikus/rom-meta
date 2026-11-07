@@ -68,25 +68,6 @@ type enrichmentState struct {
 	Progress    taskprogress.Snapshot         `json:"progress"`
 }
 
-func cloneOperation(op *libraryOperation) libraryOperation {
-	result := *op
-	if op.Export != nil {
-		state := *op.Export
-		result.Export = &state
-	}
-	if op.Enrichment != nil {
-		state := *op.Enrichment
-		state.Jobs = append([]enrichmentTask(nil), state.Jobs...)
-		state.Platforms = append([]string(nil), state.Platforms...)
-		state.Workers = map[int]taskprogress.Snapshot{}
-		for id, p := range op.Enrichment.Workers {
-			state.Workers[id] = p
-		}
-		result.Enrichment = &state
-	}
-	return result
-}
-
 // Provider configuration is server-side. Browser input can select only known
 // source/type pairs for one exact catalog platform, never credentials or URLs.
 func (s *server) enrichmentChoices(platform string) (enrichmentOptions, store.SourcesConfig, *platformnames.Registry, error) {

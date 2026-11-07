@@ -1,7 +1,6 @@
 package serveui
 
 import (
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,30 +33,6 @@ import (
 	"rommeta/internal/taskprogress"
 )
 
-//go:embed static/index.html
-var indexHTML string
-
-//go:embed static/catalog-edit.js
-var catalogEditJS string
-
-//go:embed static/catalog-register.js
-var catalogRegisterJS string
-
-//go:embed static/catalog-edit.css
-var catalogEditCSS string
-
-//go:embed static/library.js
-var libraryJS string
-
-//go:embed static/library.css
-var libraryCSS string
-
-//go:embed static/enrichment.js
-var enrichmentJS string
-
-//go:embed static/export.js
-var nativeExportJS string
-
 // Handler returns a read-only HTTP handler for a portable metadata data root.
 func Handler(dataRoot string) (http.Handler, error) { return HandlerWithEditing(dataRoot, false) }
 
@@ -77,62 +52,7 @@ func HandlerWithEditing(dataRoot string, allowEdit bool) (http.Handler, error) {
 	server := &server{root: absRoot, realRoot: realRoot, allowEdit: allowEdit}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", server.index)
-	mux.HandleFunc("/catalog-edit.js", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			methodNotAllowed(w)
-			return
-		}
-		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-		_, _ = w.Write([]byte(catalogEditJS))
-	})
-	mux.HandleFunc("/catalog-register.js", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			methodNotAllowed(w)
-			return
-		}
-		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-		_, _ = w.Write([]byte(catalogRegisterJS))
-	})
-	mux.HandleFunc("/catalog-edit.css", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			methodNotAllowed(w)
-			return
-		}
-		w.Header().Set("Content-Type", "text/css; charset=utf-8")
-		_, _ = w.Write([]byte(catalogEditCSS))
-	})
-	mux.HandleFunc("/library.js", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			methodNotAllowed(w)
-			return
-		}
-		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-		_, _ = w.Write([]byte(libraryJS))
-	})
-	mux.HandleFunc("/library.css", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			methodNotAllowed(w)
-			return
-		}
-		w.Header().Set("Content-Type", "text/css; charset=utf-8")
-		_, _ = w.Write([]byte(libraryCSS))
-	})
-	mux.HandleFunc("/enrichment.js", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			methodNotAllowed(w)
-			return
-		}
-		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-		_, _ = w.Write([]byte(enrichmentJS))
-	})
-	mux.HandleFunc("/export.js", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			methodNotAllowed(w)
-			return
-		}
-		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-		_, _ = w.Write([]byte(nativeExportJS))
-	})
+	registerStaticAssets(mux)
 	mux.HandleFunc("/api", server.apiIndex)
 	mux.HandleFunc("/api/stats", server.stats)
 	mux.HandleFunc("/api/platforms", server.platforms)

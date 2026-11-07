@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {readFileSync}=require('node:fs');
 const vm=require('node:vm');
-const script=readFileSync(require('node:path').join(__dirname,'static/catalog-edit.js'),'utf8').replace(/catalogCapabilities\(\);\s*$/,'');
+const script=['catalog-fold.js','catalog-edit.js'].map(name=>readFileSync(require('node:path').join(__dirname,'static',name),'utf8')).join('').replace(/catalogCapabilities\(\);\s*$/,'');
 function browser(fetch){
  const elements=new Map();
  function element(id){if(!elements.has(id))elements.set(id,{innerHTML:'',textContent:'',disabled:true,open:true,checked:false,value:'',parentElement:{},classList:{toggle(){}},addEventListener(){},setAttribute(k,v){this[k]=k==='disabled'?true:v;},close(){this.open=false;},showModal(){this.open=true;},replaceChildren(){},insertAdjacentHTML(position,html){this.innerHTML+=html;}});return elements.get(id);}

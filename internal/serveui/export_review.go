@@ -150,20 +150,14 @@ func (s *server) exportReview(w http.ResponseWriter, r *http.Request) {
 				current.Error = strings.ReplaceAll(err.Error(), s.root, "library")
 				return
 			}
-			current.exportJob = job
 			current.Export.Excluded = append([]string(nil), input.Excluded...)
 			current.Export.Bindings = append([]exportjob.ManualBinding(nil), input.Bindings...)
 			// Retain original document guards as well: restoring must remain safe.
 			for path, digest := range snapshot.exportDocuments {
 				documents[path] = digest
 			}
-			current.exportDocuments = documents
-			current.Export.Totals = summarizeExport(job)
+			current.setExportPlan(job, documents)
 			current.Export.Totals.Issues = reviewedExportInputs(current.exportReviewJob, job, true, current.Export.Excluded)
-			current.State = "ready"
-			if len(job.Native.Conflicts) > 0 {
-				current.State = "needs_review"
-			}
 		})
 	}()
 	w.WriteHeader(http.StatusAccepted)
