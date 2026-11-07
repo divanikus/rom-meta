@@ -33,13 +33,13 @@ separate from input ROM/catalog trees. Do not run concurrent catalog writers.
 To build release ZIPs from a clean committed tree in PowerShell:
 
 ```powershell
-./scripts/build-release.ps1 -Version 0.3.0
+./scripts/build-release.ps1 -Version 0.4.0
 ```
 
 To build a standalone variant-helper package for Windows x64:
 
 ```powershell
-./scripts/build-release.ps1 -Version 0.3.0 -Program prepare-variants -Platform windows-amd64
+./scripts/build-release.ps1 -Version 0.4.0 -Program prepare-variants -Platform windows-amd64
 ```
 
 This creates a ZIP and SHA256SUMS under

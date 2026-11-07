@@ -43,21 +43,32 @@ func collectSourceRelationships(game *catalogGame, source string, match *yaml.No
 }
 
 // withEditionEvidence resolves source-scoped, explicit edition chains within
-// one catalog platform. Conflicting parents and cycles produce no family.
+// one catalog platform. Ordinary duplicate discovery requires independent game
+// identity evidence; relationship-only families belong to explicit edition review.
+// Conflicting parents and cycles produce no family.
 func withEditionEvidence(games []catalogGame, only bool) []catalogGame {
 	parents := map[string]string{}
 	present := map[string]bool{}
+	scopedGames := map[string][]int{}
 	conflicts := map[string]bool{}
 	key := func(source, id string) string { return source + "\x00" + id }
-	for _, game := range games {
+	for i, game := range games {
 		allowed := map[string]bool{}
 		for _, e := range game.Evidence {
 			allowed[key(e.Source, e.Value)] = true
 		}
 		for _, e := range game.RelationshipIDs {
 			if allowed[key(e.Source, e.Value)] {
-				present[key(e.Source, e.Value)] = true
+				id := key(e.Source, e.Value)
+				present[id] = true
+				scopedGames[id] = append(scopedGames[id], i)
 			}
+		}
+	}
+	for _, game := range games {
+		allowed := map[string]bool{}
+		for _, e := range game.Evidence {
+			allowed[key(e.Source, e.Value)] = true
 		}
 		for _, r := range game.Relationships {
 			if !r.Relationship.CanFoldEdition() {
@@ -66,6 +77,18 @@ func withEditionEvidence(games []catalogGame, only bool) []catalogGame {
 			from, to := key(r.Source, r.ID), key(r.Source, r.Relationship.TargetID)
 			if !allowed[from] {
 				continue
+			}
+			if !only {
+				confirmed := false
+				for _, i := range scopedGames[to] {
+					if regionalPairProof(game, games[i], false) {
+						confirmed = true
+						break
+					}
+				}
+				if !confirmed {
+					continue
+				}
 			}
 			if existing := parents[from]; existing != "" && existing != to {
 				conflicts[from] = true

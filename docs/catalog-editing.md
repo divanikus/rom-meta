@@ -132,7 +132,7 @@ unavailable source/platform combinations appear as skipped tasks.
 
 ## Export on the server machine
 
-With `serve --edit`, **Export** opens a native export setup for ES-DE or
+With `serve --edit`, **Operations → Add job → Export** opens a native export setup for ES-DE or
 LaunchBox. The CLI remains available through the same exporter.
 
 1. Choose a saved destination or enter a name, frontend and absolute destination
@@ -177,6 +177,8 @@ LaunchBox. The CLI remains available through the same exporter.
    match actions are disabled until checked again. **Uncheck unresolved** skips
    inputs still without a confirmed match; **Reset choices** clears manual choices
    and checks all inputs. These actions and search share one toolbar.
+   Review is available even when no ROM was recognized. Excluding every input
+   produces a no-op plan with no native files to write.
    Unrecognized translated ROMs
    can show **Suggested by name** cards: full titles and aliases are compared
    after removing filename tags. **Accept match** and **Choose game** sit together
@@ -299,7 +301,7 @@ fields. Explicitly scoped manual descriptions never borrow from another release,
 even when provider description scope is Whole game. Use per-language descriptions
 for translations; shared description text applies to all languages.
 
-Enable and order variants in **Export → Selection profile → Source priorities**, or save
+Enable and order variants in **Operations → Add job → Export → Selection profile → Source priorities**, or save
 library defaults in **Settings → Source priorities**. New variants start disabled.
 Saved export profiles reference stable IDs, so renaming keeps their selection
 valid. Title, developer, publisher, date, genres, players and descriptions use the same
@@ -355,7 +357,7 @@ choices. Prepared derivative titles retain their own identity; ordinary version
 disambiguation still adds region/revision/language where needed. LaunchBox uses
 the selected primary version's source title for its parent game.
 
-Open **Export → Edit browser profile** to preview the saved projection. The
+In export setup, choose **Preview in new tab** to preview the profile. The
 compact preview bar groups frontend, language and media choices; **Advanced**
 contains source priorities. **Use this profile →** returns to export setup with
 those choices. The card editor has no separate export-preview action.

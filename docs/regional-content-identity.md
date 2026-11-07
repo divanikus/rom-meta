@@ -46,9 +46,13 @@ has no direct confirmation. An ambiguous component is held as a whole rather
 than partitioned by an arbitrary traversal order.
 
 `edition_of`, `expanded_edition_of`, remake/remaster and expansion relationships
-are content boundaries. `port_of` and shared edition-family ancestry are only
-discovery evidence. `--editions-only` inspects those families; it does not permit
-merging different content. Xbox product serials remain discovery hints requiring
+are content boundaries. `port_of` and shared edition-family ancestry do not
+establish game identity.
+Ordinary duplicate discovery uses these relationships only with independent
+regional identity evidence; related titles alone do not create merge candidates.
+Explicit CLI `--editions-only` still inspects relationship families, with different
+content held for review. Source relationships remain saved in the catalog.
+Xbox product serials remain discovery hints requiring
 interactive review whenever independent regional proof is missing.
 
 ## Import and refresh

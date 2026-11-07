@@ -150,3 +150,42 @@ func TestEditionFoldApplyKeepsDifferentContentSeparate(t *testing.T) {
 		t.Fatal("changed other platform")
 	}
 }
+
+func TestDefaultDiscoveryDoesNotSuggestRelationshipOnlyGames(t *testing.T) {
+	for _, kind := range []string{"port_of", "edition_of", "expanded_edition_of"} {
+		t.Run(kind, func(t *testing.T) {
+			games := []catalogGame{
+				relationFixture(t, "Starfighter Plus", "1", "", ""),
+				relationFixture(t, "Starfighter Alpha", "2", kind, "1"),
+				relationFixture(t, "Starfighter Remix", "3", kind, "2"),
+			}
+			if got := buildGroups(withEditionEvidence(games, false), newRegionRules(nil, nil), nil); len(got) != 0 {
+				t.Fatalf("relationships alone suggested different games: %+v", got)
+			}
+			if got := editionGroups(games); len(got) != 1 || got[0].HoldReason == "" {
+				t.Fatalf("explicit edition review must retain a held family: %+v", got)
+			}
+		})
+	}
+}
+
+func TestDefaultDiscoveryKeepsIndependentlyConfirmedDuplicates(t *testing.T) {
+	games := []catalogGame{
+		relationFixture(t, "Orbit", "1", "", ""),
+		relationFixture(t, "Orbit", "2", "port_of", "1"),
+	}
+	for i := range games {
+		games[i].Evidence = append(games[i].Evidence, Evidence{Source: "launchbox", Field: "database_id", Value: "100"})
+	}
+	games = withEditionEvidence(games, false)
+	if got := buildGroups(games, newRegionRules(nil, nil), nil); len(got) != 1 {
+		t.Fatalf("independent identity proof lost: %+v", got)
+	}
+	found := false
+	for _, e := range games[1].Evidence {
+		found = found || e.Field == "edition_family"
+	}
+	if !found {
+		t.Fatal("confirmed edition evidence lost")
+	}
+}

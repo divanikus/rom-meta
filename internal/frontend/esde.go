@@ -282,6 +282,11 @@ func buildESDE(p *Plan, manifest frontenddata.Selection) error {
 		if err != nil {
 			return err
 		}
+		// A structured export may still need manual matches, or exclude every input.
+		// Keep its review plan without rewriting an empty/existing gamelist.
+		if len(addedEntries) == 0 && p.source != nil && p.source.Library != nil {
+			continue
+		}
 		replacements := map[int][]byte{}
 		var additions [][]byte
 		for _, e := range newList.children {
@@ -382,7 +387,7 @@ func buildESDE(p *Plan, manifest frontenddata.Selection) error {
 			}
 		}
 	}
-	if len(p.Changes) == 0 {
+	if len(p.Changes) == 0 && (p.source == nil || p.source.Library == nil) {
 		return fmt.Errorf("package has no supported ES-DE entries")
 	}
 	return nil

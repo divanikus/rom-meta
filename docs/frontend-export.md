@@ -5,7 +5,7 @@ games and enriches existing entries using a prepared local catalog or the same
 catalog API. ROMs and catalog payloads remain unchanged. Choose the destination and
 inspect the plan; add `--apply` to write the planned destination files.
 
-For a guided workflow on the machine running serve, use **Export** in
+For a guided workflow on the machine running serve, use **Operations → Add job → Export** in
 `serve --edit`: saved destinations, ROM/profile selection, a reviewed native plan
 and reconnectable Operations progress. See [browser export](catalog-editing.md#export-on-the-server-machine).
 CLI local/API export remains fully supported.

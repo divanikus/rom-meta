@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -250,5 +251,82 @@ func TestSuggestedTranslationNeedsExplicitReview(t *testing.T) {
 	restored := waitImport(t, s, op.ID, "ready")
 	if len(restored.Export.Totals.Issues[0].Suggestions) != 1 || restored.Export.Totals.Matched != 1 {
 		t.Fatal("suggestion lost after reset")
+	}
+}
+
+// A scan with no recognized ROMs must reach review, including the all-excluded case.
+func TestWebExportWithNoRecognizedGamesCanReviewAndApply(t *testing.T) {
+	for _, target := range []string{"es-de", "launchbox"} {
+		t.Run(target, func(t *testing.T) {
+			s, _, d := webExportFixture(t, target)
+			if err := os.Remove(filepath.Join(d.ROMRoot, "Orbit.z64")); err != nil {
+				t.Fatal(err)
+			}
+			writeEnrichmentFixture(t, filepath.Join(d.ROMRoot, "Unknown.z64"), "unknown synthetic payload")
+			// Generic ROM-set inputs omit unrecognized native cards until reviewed.
+			if err := os.Rename(filepath.Join(s.root, "platforms", "n64"), filepath.Join(s.root, "platforms", "pce")); err != nil {
+				t.Fatal(err)
+			}
+			d.Platform = "pce"
+			writeEnrichmentFixture(t, filepath.Join(s.root, "platforms", "pce", "_platform.yaml"), "name: NEC - PC Engine - TurboGrafx 16\n")
+			beforeROM := exportFiles(t, d.ROMRoot)
+			beforeCatalog := exportFiles(t, filepath.Join(s.root, "platforms", "pce", "Orbit"))
+			beforeDestination := exportFiles(t, d.Path)
+			op := webExportPlan(t, s, d)
+			op = waitImport(t, s, op.ID, "ready")
+			if op.Export.Totals.Matched != 0 || op.Export.Totals.Unmatched != 1 || op.Export.Totals.Files != 0 {
+				t.Fatal(op.Export.Totals)
+			}
+			id := d.Platform + "\nUnknown.z64"
+			options, code := matchOptions(t, s, op, id, "platforms/pce/Orbit")
+			if code != 200 || options.Target == nil {
+				t.Fatal(code, options)
+			}
+			binding := exportjob.ManualBinding{ID: id, ManualMatch: exporter.ManualMatch{Game: options.Target.Game, GameRevision: options.Target.GameRevision}}
+			// Excluding everything is a valid no-op, not a malformed native package.
+			w, _ := catalogCall(t, s, "/api/export/review", exportReviewRequest{ID: op.ID, Revision: op.Revision, Excluded: []string{id}})
+			if w.Code != 202 {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			excluded := waitImport(t, s, op.ID, "ready")
+			if excluded.Export.Totals.Files != 0 || len(excluded.exportJob.Native.Changes) != 0 {
+				t.Fatal(excluded.Export.Totals)
+			}
+			w, _ = catalogCall(t, s, "/api/export/apply", importAction{ID: op.ID, Revision: excluded.Revision})
+			if w.Code != 202 {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			waitImport(t, s, op.ID, "succeeded")
+			if !reflect.DeepEqual(beforeDestination, exportFiles(t, d.Path)) {
+				t.Fatal("empty export wrote output")
+			}
+			// A fresh scan can bind the same unmatched ROM, reset, and bind again.
+			op = webExportPlan(t, s, d)
+			op = waitImport(t, s, op.ID, "ready")
+			for _, bindings := range [][]exportjob.ManualBinding{{binding}, nil, {binding}} {
+				w, _ = catalogCall(t, s, "/api/export/review", exportReviewRequest{ID: op.ID, Revision: op.Revision, Bindings: bindings})
+				if w.Code != 202 {
+					t.Fatal(w.Code, w.Body.String())
+				}
+				op = waitImport(t, s, op.ID, "ready")
+				if op.Export.Totals.Matched != len(bindings) {
+					t.Fatal(op.Export.Totals)
+				}
+			}
+			if !reflect.DeepEqual(beforeDestination, exportFiles(t, d.Path)) {
+				t.Fatal("review wrote output")
+			}
+			w, _ = catalogCall(t, s, "/api/export/apply", importAction{ID: op.ID, Revision: op.Revision})
+			if w.Code != 202 {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			waitImport(t, s, op.ID, "succeeded")
+			if !strings.Contains(fmt.Sprint(exportFiles(t, d.Path)), "Orbit") {
+				t.Fatal("manual export missing")
+			}
+			if !reflect.DeepEqual(beforeROM, exportFiles(t, d.ROMRoot)) || !reflect.DeepEqual(beforeCatalog, exportFiles(t, filepath.Join(s.root, "platforms", "pce", "Orbit"))) {
+				t.Fatal("export changed inputs")
+			}
+		})
 	}
 }

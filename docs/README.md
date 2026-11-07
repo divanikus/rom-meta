@@ -1,6 +1,7 @@
 # Documentation
 
-Start with the [operator walkthrough](cli-workflow.md) and
+Start with the [illustrated web walkthrough](web-walkthrough.md),
+[CLI walkthrough](cli-workflow.md) and
 [export scenarios](export-scenarios.md).
 
 | Task | Guide |
@@ -21,4 +22,4 @@ Start with the [operator walkthrough](cli-workflow.md) and
 | Integrate another program | [Catalog HTTP API](catalog-api.md); running server `/docs` |
 | Import into RomM | [Server example/setup](../examples/romm-importer/README.md), [operator guide](romm-import-guide.md) |
 | Review covers or IGDB links | [Cover selection/refresh](cover-refresh.md), [identity links](igdb-links.md) |
-| Release/build | [0.3.0 notes](releases/0.3.0.md), [0.2.0 notes](releases/0.2.0.md), [contributing](../CONTRIBUTING.md) |
+| Release/build | [0.4.0 notes](releases/0.4.0.md), [earlier releases](https://github.com/divanikus/rom-meta/releases), [contributing](../CONTRIBUTING.md) |

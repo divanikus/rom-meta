@@ -9,9 +9,9 @@ Prepared [translations and hacks](docs/catalog-variants.md) can inherit metadata
 from their original game, with an optional exact release, while retaining their
 own fingerprints.
 
-![RomMeta web browser showing a game card with cover artwork, metadata and alternate titles](docs/images/catalog-game-card.png)
+![RomMeta library with an example game card](docs/images/0.4.0-library.jpg)
 
-**0.2.0 is pre-stable.** Command names and catalog formats may change before 1.0.
+**0.4.0 is pre-stable.** Command names and catalog formats may change before 1.0.
 RomMeta includes no ROMs, BIOS, provider database or downloaded artwork.
 
 ## Catalog inputs
@@ -107,29 +107,28 @@ Repeat fetch to resume; run catalog writers sequentially. See the
 [operator workflow](docs/cli-workflow.md) for recovery and review, or
 `rom-meta help <command>` for flags.
 
-## Browse
+## Manage your library in the browser
 
 ```shell
-rom-meta serve --data-root "/path/to/catalog"
+rom-meta init "/path/to/catalog"
+rom-meta serve --data-root "/path/to/catalog" --edit
 ```
 
-Open http://127.0.0.1:8787 for the read-only browser. Local browsing requires no
-token or profile. Stats starts with one platform; full-catalog scans are explicit,
-show progress and support cancellation. HDD/network scans can take minutes.
-Video loads on playback. The ordinary view includes saved game fields and source
-evidence. Choose **Export → Build profile visually** to adjust one shared
-frontend/language/media profile while browsing; **Save profile** downloads YAML
-for CLI export.
-Advanced offers discovered sources and frontend-supported media types. Cards
-show metadata, Sources and then Media together in Overview; Releases & fingerprints
-and Raw have separate tabs. Registered file names, sizes and hashes load on demand;
-export mode shows selected media and a native XML preview. Variants use readable
-translation labels.
-Add `--edit` for DAT import, enrichment, card/source editing, reviewed folds and
-native export on the serve host. **Export** saves named destinations, selects ROMs
-and a profile, then prepares a plan before applying. Uncertain ROMs can be assigned
-to a library game and optional release during review. **Operations** keeps progress
-available after browser closure. See [library management](docs/catalog-editing.md).
+Open http://127.0.0.1:8787. Import a DAT with **+** beside Platforms, select one
+or several platforms to **Fetch metadata**, review **Merge** candidates, and edit
+cards in place. **Operations → Add job → Export** lets you choose ROMs, save a
+profile and destination, inspect a plan, and apply it on the server machine.
+Settings holds source priorities and library configuration; API and API docs are
+available in the header. Omit `--edit` for a read-only catalog browser.
+
+Jobs continue after you close the browser. Reopen **Operations** to see their
+progress or retry failed stages. Operation history belongs to the running server;
+restarting it clears the list. Named export profiles and destinations are saved
+in the library and can also be used from the CLI.
+
+Follow the [illustrated web walkthrough](docs/web-walkthrough.md) or the detailed
+[library management guide](docs/catalog-editing.md). The [CLI workflow](docs/cli-workflow.md)
+remains a complete alternative.
 
 ## HTTP API
 
@@ -156,8 +155,8 @@ rom-meta export --target launchbox --platform nes --data-root "D:\Catalog" --rom
 Review recognition, coverage and destination changes, then repeat with `--apply`.
 The command adds missing entries and fills empty metadata/media, preserving
 favorites, statistics, emulator choices and existing nonempty fields. Close the
-frontend before applying; replaced files are backed up automatically. ROMs and
-the catalog remain unchanged. Preview does not copy or download media.
+frontend before applying. Export adds missing data without creating hidden backups;
+ROMs and the catalog remain unchanged. Preview does not copy or download media.
 
 Use `--api "http://catalog-host:8787"` instead of `--data-root` for a remote catalog,
 `--platforms`/`--all` for several systems (short or long folder names; see
@@ -187,6 +186,7 @@ separate server-side integration.
 ## Documentation and development
 
 - [Documentation index](docs/README.md)
+- [0.4.0 release notes](docs/releases/0.4.0.md)
 - [0.3.0 release notes](docs/releases/0.3.0.md)
 - [0.2.0 release notes](docs/releases/0.2.0.md)
 - [Contributing and verification](CONTRIBUTING.md)

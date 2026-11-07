@@ -436,7 +436,7 @@ func buildLaunchBox(p *Plan) error {
 			}
 		}
 	}
-	if count == 0 {
+	if count == 0 && (p.source == nil || p.source.Library == nil) {
 		return fmt.Errorf("package contains no LaunchBox game cards")
 	}
 	if len(p.Conflicts) > 0 {
